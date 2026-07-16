@@ -1,0 +1,131 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+
+import 'package:indi_combustible/core/exportador_service.dart';
+import 'package:indi_combustible/core/foto_picker.dart';
+import 'package:indi_combustible/core/providers.dart';
+import 'package:indi_combustible/core/recordatorio_service.dart';
+import 'package:indi_combustible/core/session_storage.dart';
+import 'package:indi_combustible/core/ticket_ocr_service.dart';
+import 'package:indi_combustible/core/token_storage.dart';
+import 'package:indi_combustible/models/perfil.dart';
+import 'package:indi_combustible/router/app_router.dart';
+import 'package:indi_combustible/theme/app_theme.dart';
+
+/// Fakes en memoria para las dependencias que usan canales de plataforma
+/// no disponibles en widget tests (secure storage, cámara, OCR,
+/// notificaciones locales, compartir archivos).
+
+class FakeTokenStorage extends TokenStorage {
+  String? _token;
+
+  @override
+  Future<void> guardarToken(String token) async => _token = token;
+
+  @override
+  Future<String?> leerToken() async => _token;
+
+  @override
+  Future<void> borrarToken() async => _token = null;
+}
+
+class FakeSessionStorage extends SessionStorage {
+  Perfil? _perfil;
+
+  @override
+  Future<void> guardarPerfil(Perfil perfil) async => _perfil = perfil;
+
+  @override
+  Future<Perfil?> leerPerfil() async => _perfil;
+
+  @override
+  Future<void> borrarPerfil() async => _perfil = null;
+}
+
+/// Simula una foto tomada al instante, sin abrir la cámara real.
+class FakeFotoPicker implements FotoPicker {
+  int contador = 0;
+
+  @override
+  Future<String?> tomarFoto() async => 'foto-fake-${contador++}.jpg';
+}
+
+class FakeTicketOcrService implements TicketOcrService {
+  const FakeTicketOcrService({this.litros = 40.0, this.importe = 959.60});
+
+  final double litros;
+  final double importe;
+
+  @override
+  Future<ResultadoOcrTicket> leerTicket(String rutaFoto) async {
+    return ResultadoOcrTicket(litros: litros, importe: importe);
+  }
+}
+
+/// No programa notificaciones reales — solo registra qué se pidió, para
+/// poder verificarlo en las pruebas si hace falta.
+class FakeRecordatorioService implements RecordatorioService {
+  final programados = <String, DateTime>{};
+  final cancelados = <String>[];
+
+  @override
+  Future<void> programarRecordatorioCerrarDia({
+    required String cargaId,
+    required DateTime cuando,
+  }) async {
+    programados[cargaId] = cuando;
+  }
+
+  @override
+  Future<void> cancelarRecordatorio(String cargaId) async {
+    cancelados.add(cargaId);
+    programados.remove(cargaId);
+  }
+}
+
+/// No escribe archivos ni abre la hoja de compartir — solo registra el
+/// último CSV generado, para poder verificar su contenido en las pruebas.
+class FakeExportadorService implements ExportadorService {
+  String? ultimoNombreArchivo;
+  String? ultimoContenidoCsv;
+
+  @override
+  Future<void> exportarCsv({required String nombreArchivo, required String contenidoCsv}) async {
+    ultimoNombreArchivo = nombreArchivo;
+    ultimoContenidoCsv = contenidoCsv;
+  }
+}
+
+ProviderContainer makeTestContainer({List<Override> overridesExtra = const []}) {
+  return ProviderContainer(overrides: [
+    tokenStorageProvider.overrideWithValue(FakeTokenStorage()),
+    sessionStorageProvider.overrideWithValue(FakeSessionStorage()),
+    fotoPickerProvider.overrideWithValue(FakeFotoPicker()),
+    ticketOcrServiceProvider.overrideWithValue(const FakeTicketOcrService()),
+    recordatorioServiceProvider.overrideWithValue(FakeRecordatorioService()),
+    exportadorServiceProvider.overrideWithValue(FakeExportadorService()),
+    ...overridesExtra,
+  ]);
+}
+
+Future<GoRouter> pumpTestApp(
+  WidgetTester tester, {
+  required ProviderContainer container,
+  ScrollBehavior? scrollBehavior,
+}) async {
+  final router = container.read(appRouterProvider);
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp.router(
+        routerConfig: router,
+        theme: AppTheme.light(),
+        scrollBehavior: scrollBehavior,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return router;
+}
