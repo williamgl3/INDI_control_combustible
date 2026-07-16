@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
-import '../../../models/perfil.dart';
 import '../../../models/solicitud_autorizacion.dart';
 import '../../../theme/app_radii.dart';
 import '../../../theme/app_theme.dart';
@@ -29,9 +28,12 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
   /// `null` representa el filtro "Todas".
   EstadoSolicitud? _filtro;
 
-  Future<void> _revisar(SolicitudAutorizacion solicitud, Perfil chofer) async {
-    final resuelta =
-        await RevisarSolicitudDialog.show(context, solicitud: solicitud, chofer: chofer);
+  Future<void> _revisar(SolicitudAutorizacion solicitud, String nombreChofer) async {
+    final resuelta = await RevisarSolicitudDialog.show(
+      context,
+      solicitud: solicitud,
+      nombreChofer: nombreChofer,
+    );
     if (resuelta == true && mounted) setState(() {});
   }
 
@@ -43,7 +45,6 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
     ref.watch(operacionesTickProvider);
 
     final solicitudes = repo.todasLasSolicitudes;
-    final choferesPorId = {for (final c in choferes) c.id: c};
     final nombresPorChoferId = {for (final c in choferes) c.id: c.nombreCompleto};
 
     final pendientes = solicitudes.where((s) => s.estado == EstadoSolicitud.pendiente).length;
@@ -126,13 +127,14 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
                   : 'No hay solicitudes con este filtro.',
             )
           else ...[
-            ...mostradas.map((s) => _SolicitudTile(
-                  solicitud: s,
-                  nombreChofer: nombresPorChoferId[s.choferId] ?? s.choferId,
-                  onRevisar: choferesPorId[s.choferId] == null
-                      ? null
-                      : () => _revisar(s, choferesPorId[s.choferId]!),
-                )),
+            ...mostradas.map((s) {
+              final nombreChofer = nombresPorChoferId[s.choferId] ?? s.choferId;
+              return _SolicitudTile(
+                solicitud: s,
+                nombreChofer: nombreChofer,
+                onRevisar: () => _revisar(s, nombreChofer),
+              );
+            }),
             if (filtradas.length > mostradas.length)
               Padding(
                 padding: const EdgeInsets.only(top: 4),

@@ -1,8 +1,8 @@
 import '../models/carga.dart';
 import '../models/cierre_dia.dart';
-import '../models/perfil.dart';
 import '../models/precio_combustible.dart';
 import '../models/solicitud_autorizacion.dart';
+import '../models/vehiculo.dart';
 import '../core/semana_util.dart';
 
 /// Repositorio MOCK de operaciones (solicitudes de autorización y cargas
@@ -98,11 +98,12 @@ class MockOperacionesRepository {
     return propias;
   }
 
-  /// Suma de litros ya autorizados (solicitudes aprobadas) para un chofer
-  /// EN LA SEMANA ACTUAL (lunes-domingo) — ver [inicioDeSemana].
-  double litrosAutorizadosAcumulados(String choferId) {
+  /// Suma de litros ya autorizados (solicitudes aprobadas) para un
+  /// VEHÍCULO (no un chofer — varios choferes pueden compartirlo) EN LA
+  /// SEMANA ACTUAL (lunes-domingo) — ver [inicioDeSemana].
+  double litrosAutorizadosAcumulados(String vehiculoId) {
     final hoy = DateTime.now();
-    return _solicitudesAprobadasDe(choferId)
+    return _solicitudesAprobadasDeVehiculo(vehiculoId)
         .where((s) => estaEnSemanaDe(s.creadaEn, hoy))
         .fold(0.0, (suma, s) => suma + (s.litrosAutorizados ?? s.litrosSolicitados));
   }
@@ -121,48 +122,51 @@ class MockOperacionesRepository {
 
   double get presupuestoRestante => presupuestoSemanalTotal - presupuestoEjercido;
 
-  List<SolicitudAutorizacion> _solicitudesAprobadasDe(String choferId) {
+  List<SolicitudAutorizacion> _solicitudesAprobadasDeVehiculo(String vehiculoId) {
     return _solicitudes
-        .where((s) => s.choferId == choferId && s.estado == EstadoSolicitud.aprobada)
+        .where((s) => s.vehiculoId == vehiculoId && s.estado == EstadoSolicitud.aprobada)
         .toList();
   }
 
-  bool _tieneHistorialSuficiente(String choferId) {
-    return _solicitudesAprobadasDe(choferId).length >= _historialMinimo;
+  bool _tieneHistorialSuficiente(String vehiculoId) {
+    return _solicitudesAprobadasDeVehiculo(vehiculoId).length >= _historialMinimo;
   }
 
-  /// Máximo autorizado históricamente — el "patrón habitual" del chofer.
-  double _consumoHabitualDe(String choferId) {
-    final historial = _solicitudesAprobadasDe(choferId);
+  /// Máximo autorizado históricamente — el "patrón habitual" de consumo
+  /// de este VEHÍCULO (no del chofer que lo maneje ese día).
+  double _consumoHabitualDe(String vehiculoId) {
+    final historial = _solicitudesAprobadasDeVehiculo(vehiculoId);
     if (historial.isEmpty) return 0;
     return historial
         .map((s) => s.litrosAutorizados ?? s.litrosSolicitados)
         .reduce((a, b) => a > b ? a : b);
   }
 
-  bool _seSaleDePatron(String choferId, double litrosPedidos) {
-    if (!_tieneHistorialSuficiente(choferId)) return true;
-    return litrosPedidos > _consumoHabitualDe(choferId) * _margenPatron;
+  bool _seSaleDePatron(String vehiculoId, double litrosPedidos) {
+    if (!_tieneHistorialSuficiente(vehiculoId)) return true;
+    return litrosPedidos > _consumoHabitualDe(vehiculoId) * _margenPatron;
   }
 
-  /// Crea una solicitud. Se auto-aprueba SOLO si el chofer ya tiene
-  /// historial confiable (≥4 solicitudes aprobadas), lo que pide no se
-  /// sale de su patrón habitual, y no rebasa el presupuesto semanal en
-  /// pesos disponible — cualquier otro caso queda pendiente de revisión
-  /// manual (ver [resolverSolicitud]). El tope semanal en litros del
-  /// vehículo NO bloquea aquí: queda como referencia visible para el
-  /// admin al revisar.
+  /// Crea una solicitud para un [vehiculo] elegido en el momento (no es
+  /// fijo del chofer). Se auto-aprueba SOLO si ESE VEHÍCULO ya tiene
+  /// historial confiable (≥4 solicitudes aprobadas), lo pedido no se sale
+  /// de su patrón habitual de consumo, y no rebasa el presupuesto semanal
+  /// en pesos disponible — cualquier otro caso queda pendiente de
+  /// revisión manual (ver [resolverSolicitud]). El tope semanal en
+  /// litros del vehículo NO bloquea aquí: queda como referencia visible
+  /// para el admin al revisar.
   Future<SolicitudAutorizacion> enviarSolicitud({
-    required Perfil chofer,
+    required String choferId,
+    required Vehiculo vehiculo,
     required double litrosSolicitados,
     bool esUrgente = false,
     String? motivoChofer,
   }) async {
     await Future.delayed(const Duration(milliseconds: 400));
 
-    final costoEstimado = litrosSolicitados * _precioDe(chofer.vehiculo!.tipoCombustible);
-    final tieneHistorial = _tieneHistorialSuficiente(chofer.id);
-    final seSalePatron = _seSaleDePatron(chofer.id, litrosSolicitados);
+    final costoEstimado = litrosSolicitados * _precioDe(vehiculo.tipoCombustible);
+    final tieneHistorial = _tieneHistorialSuficiente(vehiculo.id);
+    final seSalePatron = _seSaleDePatron(vehiculo.id, litrosSolicitados);
     final presupuestoOk = costoEstimado <= presupuestoRestante;
 
     final seAutoAprueba = tieneHistorial && !seSalePatron && presupuestoOk;
@@ -170,11 +174,11 @@ class MockOperacionesRepository {
     String? comentario;
     if (!seAutoAprueba) {
       if (!tieneHistorial) {
-        comentario = 'Aún no tienes historial suficiente — un administrativo '
-            'revisará esta solicitud.';
+        comentario = 'Este vehículo aún no tiene historial suficiente — un '
+            'administrativo revisará esta solicitud.';
       } else if (seSalePatron) {
-        comentario = 'Pediste más de lo habitual para ti — un administrativo '
-            'revisará esta solicitud.';
+        comentario = 'Se pidió más de lo habitual para este vehículo — un '
+            'administrativo revisará esta solicitud.';
       } else {
         comentario = 'Se excede el presupuesto semanal disponible — un '
             'administrativo revisará esta solicitud.';
@@ -183,7 +187,8 @@ class MockOperacionesRepository {
 
     final solicitud = SolicitudAutorizacion(
       id: 'sol-${_idSeq++}',
-      choferId: chofer.id,
+      choferId: choferId,
+      vehiculoId: vehiculo.id,
       litrosSolicitados: litrosSolicitados,
       costoEstimado: costoEstimado,
       estado: seAutoAprueba ? EstadoSolicitud.aprobada : EstadoSolicitud.pendiente,
@@ -198,6 +203,16 @@ class MockOperacionesRepository {
 
     _solicitudes.add(solicitud);
     return solicitud;
+  }
+
+  /// Busca una solicitud por su folio (ej. para precargar el vehículo
+  /// elegido al momento de comprobar la carga). `null` si no existe.
+  SolicitudAutorizacion? solicitudPorFolio(String folio) {
+    try {
+      return _solicitudes.firstWhere((s) => s.folioAutorizacion == folio);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Resolución MANUAL de una solicitud pendiente por un administrativo:
@@ -230,6 +245,7 @@ class MockOperacionesRepository {
   /// registro de auditoría.
   Future<Carga> registrarCarga({
     required String choferId,
+    required String vehiculoId,
     required String folioAutorizacion,
     required double litrosCargados,
     required double kmAlCargar,
@@ -242,6 +258,7 @@ class MockOperacionesRepository {
     final carga = Carga(
       id: 'carga-${_idSeq++}',
       choferId: choferId,
+      vehiculoId: vehiculoId,
       folioAutorizacion: folioAutorizacion,
       litrosCargados: litrosCargados,
       kmAlCargar: kmAlCargar,

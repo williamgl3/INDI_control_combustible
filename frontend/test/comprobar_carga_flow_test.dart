@@ -19,6 +19,15 @@ Future<void> _fijarStepper(WidgetTester tester, String etiqueta, String valor) a
   await tester.pumpAndSettle();
 }
 
+/// Abre el selector "¿Qué vehículo vas a usar?" (ver SelectorVehiculo) y
+/// elige la unidad sembrada en el mock por su etiqueta visible.
+Future<void> _elegirVehiculo(WidgetTester tester, String etiquetaVehiculo) async {
+  await tester.tap(find.byType(DropdownButtonFormField<String>));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(etiquetaVehiculo).last);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets(
       'chofer registra su carga (con fotos) y luego cierra su día, viendo el rendimiento',
@@ -37,7 +46,9 @@ void main() {
     // pendiente de revisión manual (no se auto-aprueba).
     await tester.tap(find.text('Solicitar carga de combustible'));
     await tester.pumpAndSettle();
+    await _elegirVehiculo(tester, 'Vehículo · ABC-123');
     await tester.enterText(find.widgetWithText(TextFormField, 'Litros solicitados'), '40');
+    await tester.ensureVisible(find.text('Enviar solicitud'));
     await tester.tap(find.text('Enviar solicitud'));
     await tester.pumpAndSettle();
 

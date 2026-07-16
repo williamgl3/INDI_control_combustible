@@ -4,9 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
+import '../../models/vehiculo.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/selector_vehiculo.dart';
 
 class SolicitarCargaScreen extends ConsumerStatefulWidget {
   const SolicitarCargaScreen({super.key});
@@ -20,6 +22,7 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
   final _litrosController = TextEditingController();
   final _motivoController = TextEditingController();
 
+  Vehiculo? _vehiculo;
   bool _esUrgente = false;
   bool _cargando = false;
   String? _errorGeneral;
@@ -33,6 +36,10 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
 
   Future<void> _enviar() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_vehiculo == null) {
+      setState(() => _errorGeneral = 'Elige qué vehículo vas a usar.');
+      return;
+    }
     if (_esUrgente && _motivoController.text.trim().isEmpty) {
       setState(() => _errorGeneral = 'Al pedir combustible urgente, cuéntanos por qué.');
       return;
@@ -46,7 +53,8 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
     try {
       final perfil = ref.read(sessionProvider)!;
       final solicitud = await ref.read(operacionesRepositoryProvider).enviarSolicitud(
-            chofer: perfil,
+            choferId: perfil.id,
+            vehiculo: _vehiculo!,
             litrosSolicitados: double.parse(_litrosController.text.trim()),
             esUrgente: _esUrgente,
             motivoChofer: _motivoController.text.trim().isEmpty
@@ -67,7 +75,6 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final vehiculo = ref.watch(sessionProvider)!.vehiculo!;
 
     return Scaffold(
       appBar: AppBar(
@@ -87,26 +94,29 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: colors.surfaceAlt,
-                        borderRadius: AppRadii.cardRadius,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.local_shipping_outlined, color: colors.textSecondary),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              '${vehiculo.tipoUnidad} · ${vehiculo.placaONumeroEconomico} · '
-                              '${vehiculo.tipoCombustible}',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          ),
-                        ],
-                      ),
+                    SelectorVehiculo(
+                      vehiculoSeleccionado: _vehiculo,
+                      onSeleccionar: (v) => setState(() => _vehiculo = v),
                     ),
+                    if (_vehiculo != null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: colors.surfaceAlt,
+                          borderRadius: AppRadii.cardRadius,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.local_gas_station_outlined,
+                                color: colors.textSecondary, size: 18),
+                            const SizedBox(width: 8),
+                            Text(_vehiculo!.tipoCombustible,
+                                style: Theme.of(context).textTheme.bodySmall),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     Text('¿Cuántos litros necesitas?',
                         style: Theme.of(context).textTheme.titleLarge),
@@ -118,7 +128,6 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
                         suffixText: 'L',
                       ),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      autofocus: true,
                       validator: (v) {
                         final valor = v?.trim() ?? '';
                         if (valor.isEmpty) return 'Ingresa los litros que necesitas.';

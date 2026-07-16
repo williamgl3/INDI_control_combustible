@@ -5,10 +5,12 @@ import 'package:go_router/go_router.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
 import '../../core/ticket_ocr_service.dart';
+import '../../models/vehiculo.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/captura_foto_field.dart';
+import '../../widgets/selector_vehiculo.dart';
 import '../../widgets/stepper_numerico.dart';
 
 /// Registro 1 del día: se llena justo después de cargar combustible,
@@ -27,6 +29,7 @@ class ComprobarCargaScreen extends ConsumerStatefulWidget {
 class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
   final _gasolineraController = TextEditingController();
 
+  Vehiculo? _vehiculo;
   double _litrosCargados = 0;
   double _kmAlCargar = 0;
   String? _fotoTicketPath;
@@ -37,6 +40,18 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
   bool _cargandoFotoTablero = false;
   bool _enviando = false;
   String? _errorGeneral;
+
+  @override
+  void initState() {
+    super.initState();
+    // Precarga el vehículo elegido al solicitar — el chofer puede
+    // corregirlo aquí si en el camino le tocó otra unidad.
+    final solicitud =
+        ref.read(operacionesRepositoryProvider).solicitudPorFolio(widget.folioAutorizacion);
+    if (solicitud != null) {
+      _vehiculo = ref.read(vehiculosRepositoryProvider).porId(solicitud.vehiculoId);
+    }
+  }
 
   @override
   void dispose() {
@@ -80,6 +95,7 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
   }
 
   bool get _formularioCompleto =>
+      _vehiculo != null &&
       _litrosCargados > 0 &&
       _kmAlCargar > 0 &&
       _gasolineraController.text.trim().isNotEmpty &&
@@ -88,7 +104,8 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
 
   Future<void> _enviar() async {
     if (!_formularioCompleto) {
-      setState(() => _errorGeneral = 'Completa los litros, el km, la gasolinera y ambas fotos.');
+      setState(() => _errorGeneral =
+          'Completa el vehículo, los litros, el km, la gasolinera y ambas fotos.');
       return;
     }
 
@@ -101,6 +118,7 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
       final perfil = ref.read(sessionProvider)!;
       final carga = await ref.read(operacionesRepositoryProvider).registrarCarga(
             choferId: perfil.id,
+            vehiculoId: _vehiculo!.id,
             folioAutorizacion: widget.folioAutorizacion,
             litrosCargados: _litrosCargados,
             kmAlCargar: _kmAlCargar,
@@ -156,6 +174,11 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
                             style: Theme.of(context).textTheme.titleMedium),
                       ],
                     ),
+                  ),
+                  const SizedBox(height: 20),
+                  SelectorVehiculo(
+                    vehiculoSeleccionado: _vehiculo,
+                    onSeleccionar: (v) => setState(() => _vehiculo = v),
                   ),
                   const SizedBox(height: 20),
                   CapturaFotoField(

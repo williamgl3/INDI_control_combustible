@@ -19,6 +19,7 @@ class SolicitudAutorizacion {
   const SolicitudAutorizacion({
     required this.id,
     required this.choferId,
+    required this.vehiculoId,
     required this.litrosSolicitados,
     required this.estado,
     required this.creadaEn,
@@ -34,6 +35,11 @@ class SolicitudAutorizacion {
 
   final String id;
   final String choferId;
+
+  /// El vehículo elegido para esta solicitud — se elige cada vez, no es
+  /// fijo del chofer (ver `Vehiculo`).
+  final String vehiculoId;
+
   final double litrosSolicitados;
   final EstadoSolicitud estado;
   final DateTime creadaEn;
@@ -73,6 +79,7 @@ class SolicitudAutorizacion {
   SolicitudAutorizacion copyWith({
     String? id,
     String? choferId,
+    String? vehiculoId,
     double? litrosSolicitados,
     EstadoSolicitud? estado,
     DateTime? creadaEn,
@@ -88,6 +95,7 @@ class SolicitudAutorizacion {
     return SolicitudAutorizacion(
       id: id ?? this.id,
       choferId: choferId ?? this.choferId,
+      vehiculoId: vehiculoId ?? this.vehiculoId,
       litrosSolicitados: litrosSolicitados ?? this.litrosSolicitados,
       estado: estado ?? this.estado,
       creadaEn: creadaEn ?? this.creadaEn,
@@ -107,6 +115,7 @@ class SolicitudAutorizacion {
     return SolicitudAutorizacion(
       id: json['id'] as String,
       choferId: json['choferId'] as String,
+      vehiculoId: json['vehiculoId'] as String,
       litrosSolicitados: (json['litrosSolicitados'] as num).toDouble(),
       estado: EstadoSolicitud.values.byName(json['estado'] as String),
       creadaEn: DateTime.parse(json['creadaEn'] as String),
@@ -125,6 +134,7 @@ class SolicitudAutorizacion {
     return {
       'id': id,
       'choferId': choferId,
+      'vehiculoId': vehiculoId,
       'litrosSolicitados': litrosSolicitados,
       'estado': estado.name,
       'creadaEn': creadaEn.toIso8601String(),

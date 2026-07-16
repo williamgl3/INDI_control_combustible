@@ -25,10 +25,6 @@ class AuthController {
     required String correo,
     required String usuario,
     required String password,
-    required String tipoUnidad,
-    required String modelo,
-    required String placaONumeroEconomico,
-    required String tipoCombustible,
   }) async {
     final perfil = await _ref.read(authRepositoryProvider).registrarChofer(
           nombreCompleto: nombreCompleto,
@@ -36,10 +32,6 @@ class AuthController {
           correo: correo,
           usuario: usuario,
           password: password,
-          tipoUnidad: tipoUnidad,
-          modelo: modelo,
-          placaONumeroEconomico: placaONumeroEconomico,
-          tipoCombustible: tipoCombustible,
         );
     await _completarSesion(perfil);
   }

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/mock_auth_repository.dart';
 import '../data/mock_operaciones_repository.dart';
+import '../data/mock_vehiculos_repository.dart';
 import 'exportador_service.dart';
 import 'foto_picker.dart';
 import 'recordatorio_service.dart';
@@ -31,6 +32,12 @@ final operacionesRepositoryProvider = Provider<MockOperacionesRepository>((ref) 
 /// `ref.watch(operacionesRepositoryProvider)`, y cualquier acción que
 /// mute el repositorio debe incrementar este contador al terminar.
 final operacionesTickProvider = StateProvider<int>((ref) => 0);
+
+/// TODO-BACKEND: reemplazar por el catálogo real de vehículos cuando el
+/// backend esté listo, manteniendo la misma interfaz pública.
+final vehiculosRepositoryProvider = Provider<MockVehiculosRepository>((ref) {
+  return MockVehiculosRepository();
+});
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 

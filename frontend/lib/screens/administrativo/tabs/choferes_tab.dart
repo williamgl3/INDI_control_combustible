@@ -65,8 +65,6 @@ class _ChoferTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final vehiculo = chofer.vehiculo!;
-
     return Material(
       color: colors.surface,
       borderRadius: AppRadii.cardRadius,
@@ -97,7 +95,7 @@ class _ChoferTile extends StatelessWidget {
                     Text(chofer.nombreCompleto, style: Theme.of(context).textTheme.titleSmall),
                     const SizedBox(height: 2),
                     Text(
-                      '${vehiculo.tipoUnidad} · ${vehiculo.placaONumeroEconomico}',
+                      '@${chofer.usuario}',
                       style: Theme.of(context)
                           .textTheme
                           .bodySmall

@@ -2,16 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
-import '../../../models/perfil.dart';
+import '../../../models/vehiculo.dart';
 import '../../../theme/app_radii.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/estado_vacio.dart';
 import '../../../widgets/stat_tile.dart';
-import '../editar_chofer_dialog.dart';
+import '../editar_vehiculo_dialog.dart';
 
-/// Pestaña "Vehículos": un vehículo/maquinaria por chofer (no hay
-/// catálogo separado — cada chofer registra el suyo), con acceso directo
-/// a editar su tope semanal.
+/// Pestaña "Vehículos": catálogo compartido de la obra, administrado por
+/// el personal administrativo (no cada chofer) — un chofer elige de aquí
+/// qué unidad usa en cada solicitud/comprobación de carga, ya que varios
+/// choferes pueden compartir o rotar de vehículo.
 class VehiculosTab extends ConsumerStatefulWidget {
   const VehiculosTab({super.key});
 
@@ -20,35 +21,62 @@ class VehiculosTab extends ConsumerStatefulWidget {
 }
 
 class _VehiculosTabState extends ConsumerState<VehiculosTab> {
-  Future<void> _editarTope(Perfil chofer) async {
-    final guardado = await EditarChoferDialog.show(context, chofer);
+  Future<void> _agregar() async {
+    final guardado = await EditarVehiculoDialog.show(context);
+    if (guardado == true && mounted) setState(() {});
+  }
+
+  Future<void> _editar(Vehiculo vehiculo) async {
+    final guardado = await EditarVehiculoDialog.show(context, vehiculo: vehiculo);
     if (guardado == true && mounted) setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final choferes = ref.watch(authRepositoryProvider).listarChoferes();
+    final vehiculos = ref.watch(vehiculosRepositoryProvider).todos;
     ref.watch(operacionesTickProvider);
 
-    final sinTope = choferes.where((c) => (c.vehiculo?.topeSemanal ?? 0) <= 0).length;
+    final sinTope = vehiculos.where((v) => v.esNuevaSinFormalizar).length;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Vehículos', style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 4),
-          Text('Un vehículo o maquinaria por chofer, con su tope semanal en litros.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colors.textSecondary)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Vehículos', style: Theme.of(context).textTheme.headlineSmall),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Catálogo de vehículos y maquinaria de la obra, con su tope semanal.',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: colors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: _agregar,
+                icon: const Icon(Icons.add),
+                label: const Text('Agregar'),
+              ),
+            ],
+          ),
           const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
                 child: StatTile(
                   icono: Icons.local_shipping_outlined,
-                  valor: '${choferes.length}',
+                  valor: '${vehiculos.length}',
                   etiqueta: 'Vehículos',
                 ),
               ),
@@ -63,13 +91,13 @@ class _VehiculosTabState extends ConsumerState<VehiculosTab> {
             ],
           ),
           const SizedBox(height: 24),
-          if (choferes.isEmpty)
+          if (vehiculos.isEmpty)
             const EstadoVacio(
               icono: Icons.local_shipping_outlined,
               mensaje: 'Aún no hay vehículos registrados.',
             )
           else
-            ...choferes.map((c) => _VehiculoTile(chofer: c, onEditar: () => _editarTope(c))),
+            ...vehiculos.map((v) => _VehiculoTile(vehiculo: v, onEditar: () => _editar(v))),
         ],
       ),
     );
@@ -77,16 +105,15 @@ class _VehiculosTabState extends ConsumerState<VehiculosTab> {
 }
 
 class _VehiculoTile extends StatelessWidget {
-  const _VehiculoTile({required this.chofer, required this.onEditar});
+  const _VehiculoTile({required this.vehiculo, required this.onEditar});
 
-  final Perfil chofer;
+  final Vehiculo vehiculo;
   final VoidCallback onEditar;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final vehiculo = chofer.vehiculo!;
-    final sinTope = vehiculo.topeSemanal <= 0;
+    final sinTope = vehiculo.esNuevaSinFormalizar;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -108,12 +135,12 @@ class _VehiculoTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${vehiculo.tipoUnidad} · ${vehiculo.placaONumeroEconomico}',
+                  '${vehiculo.tipoUnidad} · ${vehiculo.identificador}',
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${vehiculo.tipoCombustible} · Responsable: ${chofer.nombreCompleto}',
+                  vehiculo.tipoCombustible,
                   style: Theme.of(context)
                       .textTheme
                       .bodySmall
@@ -131,7 +158,7 @@ class _VehiculoTile extends StatelessWidget {
               ],
             ),
           ),
-          OutlinedButton(onPressed: onEditar, child: const Text('Editar tope')),
+          OutlinedButton(onPressed: onEditar, child: const Text('Editar')),
         ],
       ),
     );

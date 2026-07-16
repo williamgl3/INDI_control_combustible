@@ -68,6 +68,7 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
     ref.watch(operacionesTickProvider);
     final choferes = ref.watch(authRepositoryProvider).listarChoferes();
     final choferesPorId = {for (final c in choferes) c.id: c};
+    final vehiculosRepo = ref.watch(vehiculosRepositoryProvider);
 
     final hoy = DateTime.now();
     final cargas =
@@ -76,7 +77,7 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
     final filas = cargas.map((carga) {
       final cierre = repo.cierreDe(carga);
       final chofer = choferesPorId[carga.choferId];
-      final vehiculo = chofer?.vehiculo;
+      final vehiculo = vehiculosRepo.porId(carga.vehiculoId);
       final precioPorLitro = vehiculo == null
           ? 0.0
           : repo.precios
@@ -89,6 +90,7 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
         carga: carga,
         cierre: cierre,
         chofer: chofer,
+        vehiculo: vehiculo,
         rendimiento: cierre == null ? null : repo.rendimientoDe(cierre),
         precioPorLitro: precioPorLitro,
       );
@@ -243,8 +245,8 @@ class _TablaConcentrado extends StatelessWidget {
                   celdas: [
                     formatearFechaCorta(fila.carga.creadaEn).split(',').first,
                     fila.chofer?.nombreCompleto ?? fila.carga.choferId,
-                    fila.chofer?.vehiculo?.modelo ?? '—',
-                    fila.chofer?.vehiculo?.placaONumeroEconomico ?? '—',
+                    fila.vehiculo?.modelo ?? fila.vehiculo?.tipoUnidad ?? '—',
+                    fila.vehiculo?.identificador ?? '—',
                     fila.rendimiento == null
                         ? '—'
                         : fila.rendimiento!.kmRecorridos.toStringAsFixed(0),
@@ -253,7 +255,7 @@ class _TablaConcentrado extends StatelessWidget {
                         ? 'n/a'
                         : fila.rendimiento!.rendimiento!.toStringAsFixed(1),
                     fila.precioPorLitro.toStringAsFixed(2),
-                    fila.chofer?.vehiculo?.tipoCombustible ?? '—',
+                    fila.vehiculo?.tipoCombustible ?? '—',
                     '\$${fila.importe.toStringAsFixed(2)}',
                     fila.ticketPendiente ? 'pend.' : '✓',
                   ],

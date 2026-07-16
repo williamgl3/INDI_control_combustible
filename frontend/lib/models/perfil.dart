@@ -1,17 +1,16 @@
 import 'package:flutter/foundation.dart';
 
-import 'vehiculo.dart';
-
 /// Rol del usuario autenticado. Solo existen estos dos roles.
 enum RolUsuario { chofer, administrativo }
 
 /// Perfil de un usuario autenticado.
 ///
-/// Si [rol] es [RolUsuario.chofer], [vehiculo] siempre está presente:
-/// sus datos se capturan una sola vez en /registro-chofer, en la misma
-/// transacción que crea el perfil, y quedan embebidos aquí (no como
-/// referencia a un catálogo externo). Esto permite precargarlos en
-/// /chofer/comprobar sin volver a pedirlos.
+/// Ya NO incluye un vehículo embebido: los vehículos viven en un
+/// catálogo compartido (`Vehiculo`, administrado por el área
+/// administrativa) porque varios choferes pueden usar distintas unidades
+/// en días distintos — fijar un vehículo por chofer generaba
+/// incongruencias. El chofer elige su vehículo en cada solicitud/
+/// comprobación de carga, no al registrarse.
 ///
 /// Dato que vendrá del backend en el futuro (hoy solo existe vía mocks).
 @immutable
@@ -23,11 +22,7 @@ class Perfil {
     required this.correo,
     required this.edad,
     required this.rol,
-    this.vehiculo,
-  }) : assert(
-          rol != RolUsuario.chofer || vehiculo != null,
-          'Un perfil de chofer siempre debe tener vehículo embebido.',
-        );
+  });
 
   final String id;
   final String usuario;
@@ -35,9 +30,6 @@ class Perfil {
   final String correo;
   final int edad;
   final RolUsuario rol;
-
-  /// Solo presente (y obligatorio) cuando [rol] == [RolUsuario.chofer].
-  final Vehiculo? vehiculo;
 
   bool get esChofer => rol == RolUsuario.chofer;
   bool get esAdministrativo => rol == RolUsuario.administrativo;
@@ -49,7 +41,6 @@ class Perfil {
     String? correo,
     int? edad,
     RolUsuario? rol,
-    Vehiculo? vehiculo,
   }) {
     return Perfil(
       id: id ?? this.id,
@@ -58,7 +49,6 @@ class Perfil {
       correo: correo ?? this.correo,
       edad: edad ?? this.edad,
       rol: rol ?? this.rol,
-      vehiculo: vehiculo ?? this.vehiculo,
     );
   }
 
@@ -70,9 +60,6 @@ class Perfil {
       correo: json['correo'] as String,
       edad: json['edad'] as int,
       rol: RolUsuario.values.byName(json['rol'] as String),
-      vehiculo: json['vehiculo'] == null
-          ? null
-          : Vehiculo.fromJson(json['vehiculo'] as Map<String, dynamic>),
     );
   }
 
@@ -84,7 +71,6 @@ class Perfil {
       'correo': correo,
       'edad': edad,
       'rol': rol.name,
-      'vehiculo': vehiculo?.toJson(),
     };
   }
 
@@ -96,11 +82,9 @@ class Perfil {
         other.nombreCompleto == nombreCompleto &&
         other.correo == correo &&
         other.edad == edad &&
-        other.rol == rol &&
-        other.vehiculo == vehiculo;
+        other.rol == rol;
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, usuario, nombreCompleto, correo, edad, rol, vehiculo);
+  int get hashCode => Object.hash(id, usuario, nombreCompleto, correo, edad, rol);
 }

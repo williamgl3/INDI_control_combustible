@@ -6,6 +6,7 @@ import '../../core/auth_controller.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
 import '../../models/solicitud_autorizacion.dart';
+import '../../models/vehiculo.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
@@ -39,16 +40,12 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
     // pero este widget puede reconstruirse un frame antes de que el
     // router lo retire — evita el crash mientras tanto.
     if (perfil == null) return const SizedBox.shrink();
-    final vehiculo = perfil.vehiculo!;
     final repo = ref.watch(operacionesRepositoryProvider);
+    final vehiculosRepo = ref.watch(vehiculosRepositoryProvider);
     ref.watch(operacionesTickProvider); // fuerza rebuild tras mutaciones externas
 
     final solicitudes = repo.solicitudesDeChofer(perfil.id);
     final cargas = repo.cargasDeChofer(perfil.id);
-    final usado = repo.litrosAutorizadosAcumulados(perfil.id);
-    final tope = vehiculo.topeSemanal;
-    final disponible = (tope - usado).clamp(0, tope == 0 ? 0 : double.infinity);
-    final progreso = tope > 0 ? (usado / tope).clamp(0, 1).toDouble() : 0.0;
 
     final foliosComprobados = cargas.map((c) => c.folioAutorizacion).toSet();
     final pendienteDeComprobar = solicitudes.where(
@@ -60,6 +57,15 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
     final folioPendiente =
         pendienteDeComprobar.isEmpty ? null : pendienteDeComprobar.first.folioAutorizacion;
     final cargaAbiertaDeHoy = repo.cargaAbiertaDeHoy(perfil.id);
+
+    // El tope semanal ya no es del chofer, es del vehículo que esté
+    // usando hoy — solo se muestra si ya cargó combustible hoy.
+    final vehiculoDeHoy =
+        cargaAbiertaDeHoy == null ? null : vehiculosRepo.porId(cargaAbiertaDeHoy.vehiculoId);
+    final usado = vehiculoDeHoy == null ? 0.0 : repo.litrosAutorizadosAcumulados(vehiculoDeHoy.id);
+    final tope = vehiculoDeHoy?.topeSemanal ?? 0;
+    final disponible = (tope - usado).clamp(0, tope == 0 ? 0 : double.infinity);
+    final progreso = tope > 0 ? (usado / tope).clamp(0, 1).toDouble() : 0.0;
 
     return Scaffold(
       body: SafeArea(
@@ -84,7 +90,7 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '${vehiculo.tipoUnidad} · ${vehiculo.placaONumeroEconomico}',
+                            'Control de combustible en obra',
                             style: Theme.of(context)
                                 .textTheme
                                 .bodyMedium
@@ -106,13 +112,23 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    TarjetaTopeSemanal(
-                      tope: tope,
-                      usado: usado,
-                      disponible: disponible.toDouble(),
-                      progreso: progreso,
-                    ),
-                    const SizedBox(height: 20),
+                    if (vehiculoDeHoy != null) ...[
+                      Text(
+                        'Hoy usas: ${vehiculoDeHoy.tipoUnidad} · ${vehiculoDeHoy.identificador}',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: colors.textSecondary),
+                      ),
+                      const SizedBox(height: 8),
+                      TarjetaTopeSemanal(
+                        tope: tope,
+                        usado: usado,
+                        disponible: disponible.toDouble(),
+                        progreso: progreso,
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                     if (folioPendiente != null) ...[
                       _TarjetaCargaPendiente(
                         folio: folioPendiente,
@@ -152,7 +168,10 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
                         mensaje: 'Aún no tienes solicitudes de carga.',
                       )
                     else
-                      ...solicitudes.take(8).map((s) => _SolicitudTile(solicitud: s)),
+                      ...solicitudes.take(8).map((s) => _SolicitudTile(
+                            solicitud: s,
+                            vehiculo: vehiculosRepo.porId(s.vehiculoId),
+                          )),
                   ],
                 ),
               ),
@@ -269,9 +288,10 @@ class _TarjetaCerrarDia extends StatelessWidget {
 }
 
 class _SolicitudTile extends StatelessWidget {
-  const _SolicitudTile({required this.solicitud});
+  const _SolicitudTile({required this.solicitud, required this.vehiculo});
 
   final SolicitudAutorizacion solicitud;
+  final Vehiculo? vehiculo;
 
   @override
   Widget build(BuildContext context) {
@@ -295,11 +315,15 @@ class _SolicitudTile extends StatelessWidget {
                 Text('${solicitud.litrosSolicitados.toStringAsFixed(1)} L solicitados',
                     style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 2),
-                Text(fecha,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: colors.textMuted)),
+                Text(
+                  vehiculo == null
+                      ? fecha
+                      : '$fecha · ${vehiculo!.tipoUnidad} ${vehiculo!.identificador}',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: colors.textMuted),
+                ),
                 if (solicitud.comentario != null) ...[
                   const SizedBox(height: 4),
                   Text(solicitud.comentario!,

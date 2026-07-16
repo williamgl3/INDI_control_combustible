@@ -8,11 +8,10 @@ import '../../data/mock_auth_repository.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_theme.dart';
 
-/// TODO-SPEC: opciones de tipo de unidad y tipo de combustible son
-/// PLACEHOLDER (no hay enum cerrado confirmado en SPEC.md todavía).
-const _tiposUnidad = ['Camión', 'Camioneta', 'Maquinaria'];
-const _tiposCombustible = ['Diésel', 'Gasolina'];
-
+/// Registro de chofer: SOLO datos personales. El vehículo ya no se
+/// captura aquí — se elige del catálogo compartido en cada solicitud/
+/// comprobación de carga, porque distintos choferes pueden usar
+/// distintas unidades en días distintos (ver /chofer/solicitar).
 class RegistroChoferScreen extends ConsumerStatefulWidget {
   const RegistroChoferScreen({super.key});
 
@@ -29,11 +28,6 @@ class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
   final _usuarioController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmarPasswordController = TextEditingController();
-  final _modeloController = TextEditingController();
-  final _placaController = TextEditingController();
-
-  String _tipoUnidad = _tiposUnidad.first;
-  String _tipoCombustible = _tiposCombustible.first;
 
   bool _cargando = false;
   String? _errorGeneral;
@@ -46,8 +40,6 @@ class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
     _usuarioController.dispose();
     _passwordController.dispose();
     _confirmarPasswordController.dispose();
-    _modeloController.dispose();
-    _placaController.dispose();
     super.dispose();
   }
 
@@ -66,10 +58,6 @@ class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
             correo: _correoController.text.trim(),
             usuario: _usuarioController.text.trim(),
             password: _passwordController.text,
-            tipoUnidad: _tipoUnidad,
-            modelo: _modeloController.text.trim(),
-            placaONumeroEconomico: _placaController.text.trim(),
-            tipoCombustible: _tipoCombustible,
           );
       // El guard de rutas redirige automáticamente a /chofer al detectar la sesión.
     } on AuthException catch (e) {
@@ -102,6 +90,12 @@ class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text('Datos personales', style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 4),
+                    Text(
+                      'El vehículo que uses lo eliges cada vez que solicites '
+                      'combustible, no se registra aquí.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _nombreController,
@@ -142,47 +136,6 @@ class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
                       obscureText: true,
                       validator: (v) =>
                           Validators.confirmarPassword(v, _passwordController.text),
-                    ),
-                    const SizedBox(height: 32),
-                    Text('Datos de tu vehículo/maquinaria',
-                        style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Estos datos quedan asociados a tu cuenta y se usarán para '
-                      'precargar tus solicitudes de carga.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      initialValue: _tipoUnidad,
-                      decoration: const InputDecoration(labelText: 'Tipo de unidad'),
-                      items: _tiposUnidad
-                          .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                          .toList(),
-                      onChanged: (v) => setState(() => _tipoUnidad = v!),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _modeloController,
-                      decoration: const InputDecoration(labelText: 'Modelo / descripción'),
-                      validator: (v) => Validators.requerido(v, etiqueta: 'El modelo'),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _placaController,
-                      decoration:
-                          const InputDecoration(labelText: 'Placa o número económico'),
-                      validator: (v) =>
-                          Validators.requerido(v, etiqueta: 'La placa o número económico'),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      initialValue: _tipoCombustible,
-                      decoration: const InputDecoration(labelText: 'Tipo de combustible'),
-                      items: _tiposCombustible
-                          .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                          .toList(),
-                      onChanged: (v) => setState(() => _tipoCombustible = v!),
                     ),
                     if (_errorGeneral != null) ...[
                       const SizedBox(height: 16),

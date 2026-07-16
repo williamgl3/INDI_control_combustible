@@ -3,6 +3,7 @@ import 'package:csv/csv.dart';
 import '../../../models/carga.dart';
 import '../../../models/cierre_dia.dart';
 import '../../../models/perfil.dart';
+import '../../../models/vehiculo.dart';
 import '../../../widgets/fecha_formato.dart';
 
 /// Una fila resuelta del concentrado: una [Carga] (registro 1) más su
@@ -17,6 +18,7 @@ class FilaConcentrado {
     required this.carga,
     required this.cierre,
     required this.chofer,
+    required this.vehiculo,
     required this.rendimiento,
     required this.precioPorLitro,
   });
@@ -24,6 +26,9 @@ class FilaConcentrado {
   final Carga carga;
   final CierreDia? cierre;
   final Perfil? chofer;
+  // El vehículo se resuelve por `carga.vehiculoId`, no por el chofer —
+  // un chofer puede haber usado distintas unidades en días distintos.
+  final Vehiculo? vehiculo;
   final RendimientoDia? rendimiento;
   final double precioPorLitro;
 
@@ -57,13 +62,13 @@ String construirCsvConcentrado(
       [
         formatearFechaCorta(fila.carga.creadaEn),
         fila.chofer?.nombreCompleto ?? fila.carga.choferId,
-        fila.chofer?.vehiculo?.modelo ?? '',
-        fila.chofer?.vehiculo?.placaONumeroEconomico ?? '',
+        fila.vehiculo?.modelo ?? fila.vehiculo?.tipoUnidad ?? '',
+        fila.vehiculo?.identificador ?? '',
         fila.rendimiento?.kmRecorridos.toStringAsFixed(0) ?? '',
         fila.carga.litrosCargados.toStringAsFixed(1),
         fila.rendimiento?.rendimiento?.toStringAsFixed(1) ?? '',
         fila.precioPorLitro.toStringAsFixed(2),
-        fila.chofer?.vehiculo?.tipoCombustible ?? '',
+        fila.vehiculo?.tipoCombustible ?? '',
         fila.importe.toStringAsFixed(2),
         fila.ticketPendiente ? 'Pendiente' : 'OK',
       ],

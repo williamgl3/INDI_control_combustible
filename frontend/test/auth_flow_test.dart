@@ -130,10 +130,6 @@ void main() {
     await tester.enterText(find.widgetWithText(TextFormField, 'Contraseña'), 'password123');
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Confirmar contraseña'), 'password123');
-    await tester.enterText(
-        find.widgetWithText(TextFormField, 'Modelo / descripción'), 'Ford F-150 2019');
-    await tester.enterText(
-        find.widgetWithText(TextFormField, 'Placa o número económico'), 'XYZ-987');
 
     await tester.ensureVisible(find.text('Crear cuenta'));
     await tester.tap(find.text('Crear cuenta'));

@@ -4,8 +4,9 @@ import 'package:flutter/foundation.dart';
 /// gasolinera, referenciando el folio de una [SolicitudAutorizacion]
 /// previamente aprobada.
 ///
-/// Usa el modelo/placa embebidos en el [Perfil] del chofer (precargados
-/// tras el login) en lugar de volver a capturarlos. [creadaEn] la pone el
+/// El vehículo se elige/confirma en este momento (no es fijo del
+/// chofer — ver `Vehiculo`), por si en el camino le tocó una unidad
+/// distinta a la que eligió al solicitar. [creadaEn] la pone el
 /// dispositivo automáticamente al momento de enviar — el chofer no puede
 /// editarla, para que sirva como registro de auditoría.
 /// Dato que vendrá del backend; hoy solo existe vía mocks.
@@ -14,6 +15,7 @@ class Carga {
   const Carga({
     required this.id,
     required this.choferId,
+    required this.vehiculoId,
     required this.folioAutorizacion,
     required this.litrosCargados,
     required this.kmAlCargar,
@@ -27,6 +29,11 @@ class Carga {
 
   final String id;
   final String choferId;
+
+  /// El vehículo confirmado al momento de cargar — puede diferir del que
+  /// se eligió al solicitar, si en el camino le tocó otra unidad.
+  final String vehiculoId;
+
   final String folioAutorizacion;
   final double litrosCargados;
 
@@ -62,6 +69,7 @@ class Carga {
   Carga copyWith({
     String? id,
     String? choferId,
+    String? vehiculoId,
     String? folioAutorizacion,
     double? litrosCargados,
     double? kmAlCargar,
@@ -75,6 +83,7 @@ class Carga {
     return Carga(
       id: id ?? this.id,
       choferId: choferId ?? this.choferId,
+      vehiculoId: vehiculoId ?? this.vehiculoId,
       folioAutorizacion: folioAutorizacion ?? this.folioAutorizacion,
       litrosCargados: litrosCargados ?? this.litrosCargados,
       kmAlCargar: kmAlCargar ?? this.kmAlCargar,
@@ -92,6 +101,7 @@ class Carga {
     return Carga(
       id: json['id'] as String,
       choferId: json['choferId'] as String,
+      vehiculoId: json['vehiculoId'] as String,
       folioAutorizacion: json['folioAutorizacion'] as String,
       litrosCargados: (json['litrosCargados'] as num).toDouble(),
       kmAlCargar: (json['kmAlCargar'] as num).toDouble(),
@@ -108,6 +118,7 @@ class Carga {
     return {
       'id': id,
       'choferId': choferId,
+      'vehiculoId': vehiculoId,
       'folioAutorizacion': folioAutorizacion,
       'litrosCargados': litrosCargados,
       'kmAlCargar': kmAlCargar,

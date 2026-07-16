@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 
 import 'package:indi_combustible/core/session_provider.dart';
 import 'package:indi_combustible/models/perfil.dart';
-import 'package:indi_combustible/models/vehiculo.dart';
 import 'package:indi_combustible/router/app_router.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
 
@@ -57,13 +56,6 @@ void main() {
             correo: 'juan@example.com',
             edad: 30,
             rol: RolUsuario.chofer,
-            vehiculo: Vehiculo(
-              tipoUnidad: 'camión',
-              modelo: 'NPR 2020',
-              placaONumeroEconomico: 'ABC-123',
-              tipoCombustible: 'diésel',
-              topeSemanal: 500,
-            ),
           ),
         );
     await tester.pumpAndSettle();
@@ -98,13 +90,6 @@ void main() {
             correo: 'juan@example.com',
             edad: 30,
             rol: RolUsuario.chofer,
-            vehiculo: Vehiculo(
-              tipoUnidad: 'camión',
-              modelo: 'NPR 2020',
-              placaONumeroEconomico: 'ABC-123',
-              tipoCombustible: 'diésel',
-              topeSemanal: 500,
-            ),
           ),
         );
     final router = await pumpApp(tester, container: container);

@@ -49,10 +49,26 @@ Future<void> _irASeccion(WidgetTester tester, String etiqueta) async {
 }
 
 void main() {
-  testWidgets('admin ve el detalle de un chofer y actualiza su tope semanal',
-      (tester) async {
+  testWidgets(
+      'admin ve el detalle de un chofer con su historial de vehículos usados, '
+      'y edita el tope de un vehículo desde el catálogo', (tester) async {
     final container = makeTestContainer();
     addTearDown(container.dispose);
+
+    // El chofer usa el vehículo sembrado (veh-1) para que aparezca en su
+    // historial — el vehículo ya no es un dato fijo del perfil.
+    final chofer1 = container.read(authRepositoryProvider).listarChoferes().firstWhere(
+          (c) => c.usuario == 'chofer1',
+        );
+    final vehiculo1 = container.read(vehiculosRepositoryProvider).todos.first;
+    await tester.runAsync(() async {
+      await container.read(operacionesRepositoryProvider).enviarSolicitud(
+            choferId: chofer1.id,
+            vehiculo: vehiculo1,
+            litrosSolicitados: 100,
+          );
+    });
+
     await pumpTestApp(tester, container: container, scrollBehavior: _SinEstiramientoDeScroll());
     await _loginComoAdmin(tester);
 
@@ -64,24 +80,24 @@ void main() {
     await tester.tap(find.text('Juan Pérez'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Editar tope semanal'), findsOneWidget);
-
-    await tester.tap(find.text('Editar tope semanal'));
-    await tester.pumpAndSettle();
-
-    final dialog = find.byType(Dialog);
-    final campoTope = find.descendant(
-        of: dialog, matching: find.widgetWithText(TextFormField, 'Tope semanal'));
-    await tester.enterText(campoTope, '700');
-    await tester.tap(find.descendant(of: dialog, matching: find.text('Guardar')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('0.0 L usados de 700.0 L'), findsOneWidget);
+    expect(find.text('Vehículos usados'), findsOneWidget);
+    expect(find.textContaining(vehiculo1.identificador), findsWidgets);
 
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
     await _irASeccion(tester, 'Vehículos');
+    await tester.ensureVisible(find.text('Editar').first);
+    await tester.tap(find.text('Editar').first);
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(Dialog);
+    final campoTope = find.descendant(
+        of: dialog, matching: find.widgetWithText(TextFormField, 'Tope semanal (déjalo vacío si aún no se asigna)'));
+    await tester.enterText(campoTope, '700');
+    await tester.tap(find.descendant(of: dialog, matching: find.text('Guardar')));
+    await tester.pumpAndSettle();
+
     expect(find.text('Tope: 700 L/semana'), findsOneWidget);
   });
 
@@ -119,6 +135,7 @@ void main() {
     final chofer1 = container.read(authRepositoryProvider).listarChoferes().firstWhere(
           (c) => c.usuario == 'chofer1',
         );
+    final vehiculo1 = container.read(vehiculosRepositoryProvider).todos.first;
     final repo = container.read(operacionesRepositoryProvider);
     // chofer1 no tiene historial todavía, así que ambas quedan pendientes
     // de revisión manual (no se auto-aprueban) — ver
@@ -126,8 +143,8 @@ void main() {
     // runAsync: enviarSolicitud usa Future.delayed real; sin esto, el
     // reloj falso de testWidgets nunca avanza y el await se cuelga.
     await tester.runAsync(() async {
-      await repo.enviarSolicitud(chofer: chofer1, litrosSolicitados: 100);
-      await repo.enviarSolicitud(chofer: chofer1, litrosSolicitados: 50);
+      await repo.enviarSolicitud(choferId: chofer1.id, vehiculo: vehiculo1, litrosSolicitados: 100);
+      await repo.enviarSolicitud(choferId: chofer1.id, vehiculo: vehiculo1, litrosSolicitados: 50);
     });
 
     await pumpTestApp(tester, container: container, scrollBehavior: _SinEstiramientoDeScroll());
@@ -195,24 +212,26 @@ void main() {
   // como función pura contra FilaConcentrado, sin montar el árbol de
   // widgets.
   test('construirCsvConcentrado arma encabezado, filas y totales', () {
-    final chofer = Perfil(
+    final chofer = const Perfil(
       id: 'chofer-1',
       usuario: 'chofer1',
       nombreCompleto: 'Juan Pérez',
       correo: 'chofer1@example.com',
       edad: 30,
       rol: RolUsuario.chofer,
-      vehiculo: const Vehiculo(
-        tipoUnidad: 'Camión',
-        modelo: 'Chevrolet NPR 2020',
-        placaONumeroEconomico: 'ABC-123',
-        tipoCombustible: 'Diésel',
-        topeSemanal: 500,
-      ),
+    );
+    const vehiculo = Vehiculo(
+      id: 'veh-1',
+      tipoUnidad: 'Camión',
+      modelo: 'Chevrolet NPR 2020',
+      identificador: 'ABC-123',
+      tipoCombustible: 'Diésel',
+      topeSemanal: 500,
     );
     final carga = Carga(
       id: 'carga-1',
       choferId: chofer.id,
+      vehiculoId: vehiculo.id,
       folioAutorizacion: 'FA-test',
       litrosCargados: 40,
       kmAlCargar: 1000,
@@ -231,6 +250,7 @@ void main() {
       carga: carga,
       cierre: cierre,
       chofer: chofer,
+      vehiculo: vehiculo,
       rendimiento: const RendimientoDia(kmRecorridos: 400, rendimiento: 10.0),
       precioPorLitro: 24.50,
     );
@@ -261,6 +281,7 @@ void main() {
     final repo = MockOperacionesRepository();
     final carga = await repo.registrarCarga(
       choferId: 'chofer-test',
+      vehiculoId: 'veh-test',
       folioAutorizacion: 'FA-test',
       litrosCargados: 40,
       kmAlCargar: 1000,

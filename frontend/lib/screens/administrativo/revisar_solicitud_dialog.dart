@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
-import '../../models/perfil.dart';
 import '../../models/solicitud_autorizacion.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
@@ -16,20 +15,20 @@ class RevisarSolicitudDialog extends ConsumerStatefulWidget {
   const RevisarSolicitudDialog({
     super.key,
     required this.solicitud,
-    required this.chofer,
+    required this.nombreChofer,
   });
 
   final SolicitudAutorizacion solicitud;
-  final Perfil chofer;
+  final String nombreChofer;
 
   static Future<bool?> show(
     BuildContext context, {
     required SolicitudAutorizacion solicitud,
-    required Perfil chofer,
+    required String nombreChofer,
   }) {
     return showDialog<bool>(
       context: context,
-      builder: (_) => RevisarSolicitudDialog(solicitud: solicitud, chofer: chofer),
+      builder: (_) => RevisarSolicitudDialog(solicitud: solicitud, nombreChofer: nombreChofer),
     );
   }
 
@@ -87,7 +86,7 @@ class _RevisarSolicitudDialogState extends ConsumerState<RevisarSolicitudDialog>
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final vehiculo = widget.chofer.vehiculo!;
+    final vehiculo = ref.read(vehiculosRepositoryProvider).porId(widget.solicitud.vehiculoId);
     final repo = ref.read(operacionesRepositoryProvider);
 
     return Dialog(
@@ -100,11 +99,13 @@ class _RevisarSolicitudDialogState extends ConsumerState<RevisarSolicitudDialog>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(widget.chofer.nombreCompleto, style: Theme.of(context).textTheme.titleLarge),
+              Text(widget.nombreChofer, style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 4),
               Text(
-                '${vehiculo.tipoUnidad} · ${vehiculo.placaONumeroEconomico} · '
-                '${vehiculo.tipoCombustible}',
+                vehiculo == null
+                    ? 'Vehículo no encontrado'
+                    : '${vehiculo.tipoUnidad} · ${vehiculo.identificador} · '
+                        '${vehiculo.tipoCombustible}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
               ),
               if (widget.solicitud.esUrgente) ...[
@@ -142,7 +143,7 @@ class _RevisarSolicitudDialogState extends ConsumerState<RevisarSolicitudDialog>
                   Expanded(
                     child: _DatoReferencia(
                       etiqueta: 'Tope vehículo',
-                      valor: vehiculo.topeSemanal > 0
+                      valor: (vehiculo != null && vehiculo.topeSemanal > 0)
                           ? '${vehiculo.topeSemanal.toStringAsFixed(0)} L'
                           : 'Sin asignar',
                     ),
