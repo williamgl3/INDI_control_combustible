@@ -1,0 +1,176 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/providers.dart';
+import '../../core/session_provider.dart';
+import '../../router/route_paths.dart';
+import '../../theme/app_radii.dart';
+import '../../theme/app_theme.dart';
+
+class SolicitarCargaScreen extends ConsumerStatefulWidget {
+  const SolicitarCargaScreen({super.key});
+
+  @override
+  ConsumerState<SolicitarCargaScreen> createState() => _SolicitarCargaScreenState();
+}
+
+class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _litrosController = TextEditingController();
+  final _motivoController = TextEditingController();
+
+  bool _esUrgente = false;
+  bool _cargando = false;
+  String? _errorGeneral;
+
+  @override
+  void dispose() {
+    _litrosController.dispose();
+    _motivoController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _enviar() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_esUrgente && _motivoController.text.trim().isEmpty) {
+      setState(() => _errorGeneral = 'Al pedir combustible urgente, cuéntanos por qué.');
+      return;
+    }
+
+    setState(() {
+      _cargando = true;
+      _errorGeneral = null;
+    });
+
+    try {
+      final perfil = ref.read(sessionProvider)!;
+      final solicitud = await ref.read(operacionesRepositoryProvider).enviarSolicitud(
+            chofer: perfil,
+            litrosSolicitados: double.parse(_litrosController.text.trim()),
+            esUrgente: _esUrgente,
+            motivoChofer: _motivoController.text.trim().isEmpty
+                ? null
+                : _motivoController.text.trim(),
+          );
+      ref.read(operacionesTickProvider.notifier).state++;
+      if (mounted) {
+        context.replace(RoutePaths.choferRespuesta, extra: solicitud);
+      }
+    } catch (e) {
+      setState(() => _errorGeneral = 'No pudimos enviar tu solicitud. Intenta de nuevo.');
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final vehiculo = ref.watch(sessionProvider)!.vehiculo!;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Solicitar carga'),
+        leading: BackButton(onPressed: () => context.pop()),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Form(
+                key: _formKey,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: colors.surfaceAlt,
+                        borderRadius: AppRadii.cardRadius,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.local_shipping_outlined, color: colors.textSecondary),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              '${vehiculo.tipoUnidad} · ${vehiculo.placaONumeroEconomico} · '
+                              '${vehiculo.tipoCombustible}',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text('¿Cuántos litros necesitas?',
+                        style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _litrosController,
+                      decoration: const InputDecoration(
+                        labelText: 'Litros solicitados',
+                        suffixText: 'L',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      autofocus: true,
+                      validator: (v) {
+                        final valor = v?.trim() ?? '';
+                        if (valor.isEmpty) return 'Ingresa los litros que necesitas.';
+                        final n = double.tryParse(valor);
+                        if (n == null || n <= 0) return 'Ingresa un número válido mayor a 0.';
+                        return null;
+                      },
+                      onFieldSubmitted: (_) => _enviar(),
+                    ),
+                    const SizedBox(height: 16),
+                    Material(
+                      color: colors.surfaceAlt,
+                      borderRadius: AppRadii.cardRadius,
+                      child: SwitchListTile(
+                        shape: RoundedRectangleBorder(borderRadius: AppRadii.cardRadius),
+                        value: _esUrgente,
+                        onChanged: (v) => setState(() => _esUrgente = v),
+                        title: const Text('Es urgente (lo necesito hoy)'),
+                        subtitle: const Text('Si no, se planea para mañana'),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _motivoController,
+                      decoration: InputDecoration(
+                        labelText: _esUrgente ? '¿Por qué? (obligatorio)' : '¿Por qué? (opcional)',
+                        hintText: 'Ej. voy hasta el frente de obra…',
+                      ),
+                      maxLines: 2,
+                    ),
+                    if (_errorGeneral != null) ...[
+                      const SizedBox(height: 12),
+                      Text(_errorGeneral!, style: TextStyle(color: colors.error)),
+                    ],
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: _cargando ? null : _enviar,
+                      child: _cargando
+                          ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Enviar solicitud'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
