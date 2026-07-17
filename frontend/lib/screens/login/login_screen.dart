@@ -6,6 +6,7 @@ import '../../core/auth_controller.dart';
 import '../../core/validators.dart';
 import '../../data/mock_auth_repository.dart';
 import '../../router/route_paths.dart';
+import '../../theme/app_gradients.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
 import 'admin_login_dialog.dart';
@@ -71,17 +72,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // TODO-SPEC: gradiente de header PLACEHOLDER hasta tener SPEC.md.
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [colors.info, colors.primary],
-                      ),
-                    ),
+                    decoration: BoxDecoration(gradient: AppGradients.primary(colors)),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -207,8 +201,7 @@ class _AccesoAdministradorButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    // TODO-SPEC: acento morado PLACEHOLDER para diferenciar del flujo de chofer.
-    const acento = Color(0xFF7C3AED);
+    final acento = colors.accentAdmin;
 
     return Material(
       color: acento.withValues(alpha: 0.06),
@@ -225,8 +218,8 @@ class _AccesoAdministradorButton extends StatelessWidget {
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: acento.withValues(alpha: 0.15),
-                child: const Icon(Icons.admin_panel_settings, color: acento),
+                backgroundColor: acento,
+                child: Icon(Icons.shield_outlined, color: colors.primaryOn),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -256,13 +249,24 @@ class _RegistroChoferButton extends StatelessWidget {
     final colors = context.colors;
 
     return Material(
-      color: colors.primary,
+      color: Colors.transparent,
       borderRadius: AppRadii.cardRadius,
       child: InkWell(
         onTap: onTap,
         borderRadius: AppRadii.cardRadius,
-        child: Padding(
+        child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            gradient: AppGradients.primary(colors),
+            borderRadius: AppRadii.cardRadius,
+            boxShadow: [
+              BoxShadow(
+                color: colors.primary.withValues(alpha: 0.3),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
           child: Row(
             children: [
               CircleAvatar(

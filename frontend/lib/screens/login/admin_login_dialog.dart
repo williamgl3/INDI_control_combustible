@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth_controller.dart';
 import '../../core/validators.dart';
 import '../../data/mock_auth_repository.dart';
+import '../../theme/app_gradients.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
 
@@ -80,7 +81,7 @@ class _AdminLoginDialogState extends ConsumerState<AdminLoginDialog> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: colors.primary,
+                  gradient: AppGradients.admin(colors),
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(AppRadii.card),
                     topRight: Radius.circular(AppRadii.card),
@@ -89,8 +90,8 @@ class _AdminLoginDialogState extends ConsumerState<AdminLoginDialog> {
                 child: Row(
                   children: [
                     CircleAvatar(
-                      backgroundColor: colors.primaryOn.withValues(alpha: 0.15),
-                      child: Icon(Icons.admin_panel_settings, color: colors.primaryOn),
+                      backgroundColor: colors.primaryOn.withValues(alpha: 0.2),
+                      child: Icon(Icons.shield_outlined, color: colors.primaryOn),
                     ),
                     const SizedBox(width: 12),
                     Expanded(

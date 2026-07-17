@@ -7,10 +7,10 @@ import 'package:flutter/material.dart';
 class AppRadii {
   const AppRadii._();
 
-  static const double card = 16;
-  static const double input = 12;
+  static const double card = 20;
+  static const double input = 14;
   static const double badge = 999; // pill
-  static const double navButton = 12;
+  static const double navButton = 14;
 
   static const BorderRadius cardRadius = BorderRadius.all(Radius.circular(card));
   static const BorderRadius inputRadius = BorderRadius.all(Radius.circular(input));

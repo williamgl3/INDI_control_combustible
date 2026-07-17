@@ -15,23 +15,23 @@ class EstadoSolicitudBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final (color, texto) = switch (estado) {
-      EstadoSolicitud.pendiente => (colors.warning, 'Pendiente'),
-      EstadoSolicitud.aprobada => (colors.success, 'Aprobada'),
-      EstadoSolicitud.rechazada => (colors.error, 'Rechazada'),
+      EstadoSolicitud.pendiente => (colors.warning, 'En espera'),
+      EstadoSolicitud.aprobada => (colors.success, 'Autorizado'),
+      EstadoSolicitud.rechazada => (colors.error, 'Rechazado'),
     };
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: color.withValues(alpha: 0.14),
         borderRadius: AppRadii.badgeRadius,
       ),
       child: Text(
-        texto,
+        texto.toUpperCase(),
         style: Theme.of(context)
             .textTheme
             .labelSmall
-            ?.copyWith(color: color, fontWeight: FontWeight.w700),
+            ?.copyWith(color: color, fontWeight: FontWeight.w800, letterSpacing: 0.4),
       ),
     );
   }

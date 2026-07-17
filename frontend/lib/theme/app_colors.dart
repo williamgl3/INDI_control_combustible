@@ -22,6 +22,12 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.warning,
     required this.error,
     required this.info,
+    required this.accentAdmin,
+    required this.accentAdminDark,
+    required this.sidebarBackground,
+    required this.sidebarSurfaceAlt,
+    required this.sidebarText,
+    required this.sidebarTextMuted,
   });
 
   final Color background;
@@ -37,6 +43,18 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color warning;
   final Color error;
   final Color info;
+  // Acento morado/índigo reservado para lo relacionado con el flujo de
+  // administrador (modal de acceso, sidebar del panel) — distingue
+  // visualmente ese flujo del azul de marca usado para chofer.
+  final Color accentAdmin;
+  final Color accentAdminDark;
+  // El sidebar del panel administrativo es intencionalmente oscuro en
+  // ambos temas (claro/oscuro) — es una superficie de marca fija, no una
+  // superficie que siga el tema del sistema.
+  final Color sidebarBackground;
+  final Color sidebarSurfaceAlt;
+  final Color sidebarText;
+  final Color sidebarTextMuted;
 
   /// TODO-SPEC: paleta claro placeholder.
   static const light = AppColors(
@@ -47,12 +65,18 @@ class AppColors extends ThemeExtension<AppColors> {
     textPrimary: Color(0xFF1A1D21),
     textSecondary: Color(0xFF4B5563),
     textMuted: Color(0xFF8A8F98),
-    primary: Color(0xFF1E40AF),
+    primary: Color(0xFF1D4ED8),
     primaryOn: Color(0xFFFFFFFF),
     success: Color(0xFF16A34A),
     warning: Color(0xFFCA8A04),
     error: Color(0xFFDC2626),
-    info: Color(0xFF2563EB),
+    info: Color(0xFF3B82F6),
+    accentAdmin: Color(0xFF7C3AED),
+    accentAdminDark: Color(0xFF4F46E5),
+    sidebarBackground: Color(0xFF0F172A),
+    sidebarSurfaceAlt: Color(0xFF1E293B),
+    sidebarText: Color(0xFFF8FAFC),
+    sidebarTextMuted: Color(0xFF94A3B8),
   );
 
   /// TODO-SPEC: paleta oscuro placeholder, preparada para el futuro modo oscuro.
@@ -70,6 +94,12 @@ class AppColors extends ThemeExtension<AppColors> {
     warning: Color(0xFFEAB308),
     error: Color(0xFFEF4444),
     info: Color(0xFF60A5FA),
+    accentAdmin: Color(0xFF9333EA),
+    accentAdminDark: Color(0xFF6366F1),
+    sidebarBackground: Color(0xFF0F172A),
+    sidebarSurfaceAlt: Color(0xFF1E293B),
+    sidebarText: Color(0xFFF8FAFC),
+    sidebarTextMuted: Color(0xFF94A3B8),
   );
 
   @override
@@ -87,6 +117,12 @@ class AppColors extends ThemeExtension<AppColors> {
     Color? warning,
     Color? error,
     Color? info,
+    Color? accentAdmin,
+    Color? accentAdminDark,
+    Color? sidebarBackground,
+    Color? sidebarSurfaceAlt,
+    Color? sidebarText,
+    Color? sidebarTextMuted,
   }) {
     return AppColors(
       background: background ?? this.background,
@@ -102,6 +138,12 @@ class AppColors extends ThemeExtension<AppColors> {
       warning: warning ?? this.warning,
       error: error ?? this.error,
       info: info ?? this.info,
+      accentAdmin: accentAdmin ?? this.accentAdmin,
+      accentAdminDark: accentAdminDark ?? this.accentAdminDark,
+      sidebarBackground: sidebarBackground ?? this.sidebarBackground,
+      sidebarSurfaceAlt: sidebarSurfaceAlt ?? this.sidebarSurfaceAlt,
+      sidebarText: sidebarText ?? this.sidebarText,
+      sidebarTextMuted: sidebarTextMuted ?? this.sidebarTextMuted,
     );
   }
 
@@ -122,6 +164,12 @@ class AppColors extends ThemeExtension<AppColors> {
       warning: Color.lerp(warning, other.warning, t)!,
       error: Color.lerp(error, other.error, t)!,
       info: Color.lerp(info, other.info, t)!,
+      accentAdmin: Color.lerp(accentAdmin, other.accentAdmin, t)!,
+      accentAdminDark: Color.lerp(accentAdminDark, other.accentAdminDark, t)!,
+      sidebarBackground: Color.lerp(sidebarBackground, other.sidebarBackground, t)!,
+      sidebarSurfaceAlt: Color.lerp(sidebarSurfaceAlt, other.sidebarSurfaceAlt, t)!,
+      sidebarText: Color.lerp(sidebarText, other.sidebarText, t)!,
+      sidebarTextMuted: Color.lerp(sidebarTextMuted, other.sidebarTextMuted, t)!,
     );
   }
 }

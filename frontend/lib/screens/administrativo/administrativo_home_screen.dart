@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth_controller.dart';
+import '../../core/session_provider.dart';
 import '../../theme/app_breakpoints.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/gradient_header.dart';
@@ -112,19 +113,10 @@ class _AdministrativoHomeScreenState extends ConsumerState<AdministrativoHomeScr
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              NavigationRail(
-                selectedIndex: indiceSeleccionado,
-                onDestinationSelected: (i) => setState(() => _seccion = _destinos[i].seccion),
-                labelType: NavigationRailLabelType.all,
-                backgroundColor: colors.surface,
-                destinations: _destinos
-                    .map((d) => NavigationRailDestination(
-                          icon: Icon(d.icono),
-                          label: Text(d.etiqueta),
-                        ))
-                    .toList(),
+              _SidebarAdmin(
+                indiceSeleccionado: indiceSeleccionado,
+                onSeleccionar: (i) => setState(() => _seccion = _destinos[i].seccion),
               ),
-              VerticalDivider(width: 1, color: colors.border),
               Expanded(child: contenido),
             ],
           ),
@@ -140,6 +132,141 @@ class _AdministrativoHomeScreenState extends ConsumerState<AdministrativoHomeScr
         destinations: _destinos
             .map((d) => NavigationDestination(icon: Icon(d.icono), label: d.etiqueta))
             .toList(),
+      ),
+    );
+  }
+}
+
+/// Sidebar oscuro del panel administrativo (escritorio/tablet) — marca +
+/// navegación + el admin en sesión, en vez del `NavigationRail` claro por
+/// defecto de Material.
+class _SidebarAdmin extends ConsumerWidget {
+  const _SidebarAdmin({required this.indiceSeleccionado, required this.onSeleccionar});
+
+  final int indiceSeleccionado;
+  final ValueChanged<int> onSeleccionar;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = context.colors;
+    final admin = ref.watch(sessionProvider);
+
+    return Container(
+      width: 240,
+      color: colors.sidebarBackground,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [colors.info, colors.primary]),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.local_gas_station, color: colors.primaryOn, size: 20),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'INDI Combustible',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(color: colors.sidebarText),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          for (var i = 0; i < _destinos.length; i++)
+            _ItemSidebar(
+              destino: _destinos[i],
+              seleccionado: i == indiceSeleccionado,
+              onTap: () => onSeleccionar(i),
+            ),
+          const Spacer(),
+          if (admin != null)
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: colors.sidebarSurfaceAlt,
+                    child: Text(
+                      admin.nombreCompleto.isNotEmpty ? admin.nombreCompleto[0] : '?',
+                      style: TextStyle(color: colors.sidebarText, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      admin.nombreCompleto,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: colors.sidebarTextMuted),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemSidebar extends StatelessWidget {
+  const _ItemSidebar({required this.destino, required this.seleccionado, required this.onTap});
+
+  final _Destino destino;
+  final bool seleccionado;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+      child: Material(
+        color: seleccionado ? colors.primary : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  destino.icono,
+                  size: 20,
+                  color: seleccionado ? colors.primaryOn : colors.sidebarTextMuted,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    destino.etiqueta,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: seleccionado ? colors.primaryOn : colors.sidebarText,
+                          fontWeight: seleccionado ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

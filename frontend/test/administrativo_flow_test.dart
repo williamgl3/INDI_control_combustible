@@ -176,13 +176,13 @@ void main() {
     await tester.tap(find.text('Aprobadas'));
     await tester.pumpAndSettle();
     expect(find.byType(EstadoSolicitudBadge), findsOneWidget);
-    expect(find.text('Aprobada'), findsOneWidget);
+    expect(find.text('AUTORIZADO'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Rechazadas'));
     await tester.tap(find.text('Rechazadas'));
     await tester.pumpAndSettle();
     expect(find.byType(EstadoSolicitudBadge), findsOneWidget);
-    expect(find.text('Rechazada'), findsOneWidget);
+    expect(find.text('RECHAZADO'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Pendientes'));
     await tester.tap(find.text('Pendientes'));
