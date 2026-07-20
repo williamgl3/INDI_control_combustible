@@ -1,23 +1,13 @@
 import '../models/perfil.dart';
-
-/// Excepción lanzada por [MockAuthRepository] cuando una operación falla,
-/// con un mensaje ya listo para mostrar al usuario.
-class AuthException implements Exception {
-  AuthException(this.mensaje);
-  final String mensaje;
-
-  @override
-  String toString() => mensaje;
-}
+import 'auth_repository.dart';
 
 /// Repositorio de autenticación MOCK.
 ///
 /// Simula las respuestas del servidor (login, registro de chofer,
 /// recuperar contraseña) con datos en memoria y una demora artificial.
-/// Cuando el backend esté listo, esta clase se reemplaza por una
-/// implementación real con la misma interfaz — las pantallas no deberían
-/// necesitar cambios.
-class MockAuthRepository {
+/// Útil para tests de widgets (evita depender de un backend real) y como
+/// referencia de la interfaz que implementa `ApiAuthRepository`.
+class MockAuthRepository implements AuthRepository {
   MockAuthRepository();
 
   /// Usuarios de prueba precargados para poder probar el login sin pasar
@@ -48,20 +38,25 @@ class MockAuthRepository {
     ),
   };
 
-  Future<Perfil> login({required String usuario, required String password}) async {
+  @override
+  Future<ResultadoAuth> login({
+    required String usuario,
+    required String password,
+  }) async {
     await Future.delayed(const Duration(milliseconds: 500));
     final registro = _usuarios[usuario];
     if (registro == null || registro.password != password) {
       throw AuthException('Usuario o contraseña incorrectos.');
     }
-    return registro.perfil;
+    return (perfil: registro.perfil, token: 'mock-token-${registro.perfil.id}');
   }
 
   /// Crea el perfil de un chofer nuevo — solo datos personales. El
   /// vehículo ya NO se captura aquí: se elige del catálogo compartido
   /// (`Vehiculo`) en cada solicitud/comprobación de carga, porque
   /// distintos choferes pueden usar distintas unidades en días distintos.
-  Future<Perfil> registrarChofer({
+  @override
+  Future<ResultadoAuth> registrarChofer({
     required String nombreCompleto,
     required int edad,
     required String correo,
@@ -81,10 +76,11 @@ class MockAuthRepository {
       rol: RolUsuario.chofer,
     );
     _usuarios[usuario] = (password: password, perfil: perfil);
-    return perfil;
+    return (perfil: perfil, token: 'mock-token-${perfil.id}');
   }
 
   /// Lista de choferes registrados, para el panel administrativo.
+  @override
   List<Perfil> listarChoferes() {
     return _usuarios.values
         .map((r) => r.perfil)
@@ -92,18 +88,27 @@ class MockAuthRepository {
         .toList();
   }
 
+  /// Ya están "cargados" desde el constructor — no hace nada.
+  @override
+  Future<void> cargarChoferes() async {}
+
   /// Simula la solicitud de recuperación de contraseña.
   ///
   /// TODO-SPEC: no implementado en la app original; aquí se define un
   /// mock funcional. Solo falla si el usuario/correo no existe entre los
   /// usuarios de prueba, para poder probar el caso de error en UI.
+  @override
   Future<void> recuperarPassword({required String usuarioOCorreo}) async {
     await Future.delayed(const Duration(milliseconds: 500));
     final existe = _usuarios.values.any(
-      (r) => r.perfil.usuario == usuarioOCorreo || r.perfil.correo == usuarioOCorreo,
+      (r) =>
+          r.perfil.usuario == usuarioOCorreo ||
+          r.perfil.correo == usuarioOCorreo,
     );
     if (!existe) {
-      throw AuthException('No encontramos una cuenta con ese usuario o correo.');
+      throw AuthException(
+        'No encontramos una cuenta con ese usuario o correo.',
+      );
     }
   }
 }

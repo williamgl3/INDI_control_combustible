@@ -6,6 +6,9 @@ import 'package:go_router/go_router.dart';
 import 'package:indi_combustible/core/providers.dart';
 import 'package:indi_combustible/core/session_storage.dart';
 import 'package:indi_combustible/core/token_storage.dart';
+import 'package:indi_combustible/data/mock_auth_repository.dart';
+import 'package:indi_combustible/data/mock_operaciones_repository.dart';
+import 'package:indi_combustible/data/mock_vehiculos_repository.dart';
 import 'package:indi_combustible/models/perfil.dart';
 import 'package:indi_combustible/router/app_router.dart';
 import 'package:indi_combustible/router/route_paths.dart';
@@ -45,6 +48,9 @@ ProviderContainer _makeContainer() {
   return ProviderContainer(overrides: [
     tokenStorageProvider.overrideWithValue(_FakeTokenStorage()),
     sessionStorageProvider.overrideWithValue(_FakeSessionStorage()),
+    authRepositoryProvider.overrideWithValue(MockAuthRepository()),
+    operacionesRepositoryProvider.overrideWithValue(MockOperacionesRepository()),
+    vehiculosRepositoryProvider.overrideWithValue(MockVehiculosRepository()),
   ]);
 }
 
@@ -105,7 +111,7 @@ void main() {
         'admin1');
     await tester.enterText(
         find.descendant(
-            of: dialog, matching: find.widgetWithText(TextFormField, '••••••••')),
+            of: dialog, matching: find.widgetWithText(TextFormField, 'Contraseña')),
         'admin1234');
     await tester.tap(find.descendant(of: dialog, matching: find.text('Ingresar')));
     await tester.pumpAndSettle();

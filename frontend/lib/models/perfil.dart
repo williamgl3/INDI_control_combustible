@@ -86,5 +86,6 @@ class Perfil {
   }
 
   @override
-  int get hashCode => Object.hash(id, usuario, nombreCompleto, correo, edad, rol);
+  int get hashCode =>
+      Object.hash(id, usuario, nombreCompleto, correo, edad, rol);
 }

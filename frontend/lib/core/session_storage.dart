@@ -15,7 +15,7 @@ import '../models/perfil.dart';
 /// donde se construyan Login/Registro.
 class SessionStorage {
   SessionStorage({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   final FlutterSecureStorage _storage;
 

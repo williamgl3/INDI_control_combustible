@@ -13,7 +13,8 @@ DateTime inicioDeSemana(DateTime fecha) {
 }
 
 /// Primer instante de la semana SIGUIENTE — límite superior exclusivo.
-DateTime finDeSemana(DateTime fecha) => inicioDeSemana(fecha).add(const Duration(days: 7));
+DateTime finDeSemana(DateTime fecha) =>
+    inicioDeSemana(fecha).add(const Duration(days: 7));
 
 /// `true` si [fecha] cae en la misma semana (lunes-domingo) que
 /// [semanaDeReferencia].

@@ -10,6 +10,9 @@ import 'package:indi_combustible/core/recordatorio_service.dart';
 import 'package:indi_combustible/core/session_storage.dart';
 import 'package:indi_combustible/core/ticket_ocr_service.dart';
 import 'package:indi_combustible/core/token_storage.dart';
+import 'package:indi_combustible/data/mock_auth_repository.dart';
+import 'package:indi_combustible/data/mock_operaciones_repository.dart';
+import 'package:indi_combustible/data/mock_vehiculos_repository.dart';
 import 'package:indi_combustible/models/perfil.dart';
 import 'package:indi_combustible/router/app_router.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
@@ -98,6 +101,10 @@ class FakeExportadorService implements ExportadorService {
   }
 }
 
+/// Los repositorios reales (`Api*Repository`) hacen peticiones HTTP de
+/// verdad — en los tests de widgets se sustituyen por los Mocks en
+/// memoria, para no depender de un backend real ni colgar esperando una
+/// respuesta de red.
 ProviderContainer makeTestContainer({List<Override> overridesExtra = const []}) {
   return ProviderContainer(overrides: [
     tokenStorageProvider.overrideWithValue(FakeTokenStorage()),
@@ -106,6 +113,9 @@ ProviderContainer makeTestContainer({List<Override> overridesExtra = const []}) 
     ticketOcrServiceProvider.overrideWithValue(const FakeTicketOcrService()),
     recordatorioServiceProvider.overrideWithValue(FakeRecordatorioService()),
     exportadorServiceProvider.overrideWithValue(FakeExportadorService()),
+    authRepositoryProvider.overrideWithValue(MockAuthRepository()),
+    operacionesRepositoryProvider.overrideWithValue(MockOperacionesRepository()),
+    vehiculosRepositoryProvider.overrideWithValue(MockVehiculosRepository()),
     ...overridesExtra,
   ]);
 }

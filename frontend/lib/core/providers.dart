@@ -1,8 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/mock_auth_repository.dart';
-import '../data/mock_operaciones_repository.dart';
-import '../data/mock_vehiculos_repository.dart';
+import '../data/api_auth_repository.dart';
+import '../data/api_client.dart';
+import '../data/api_operaciones_repository.dart';
+import '../data/api_vehiculos_repository.dart';
+import '../data/auth_repository.dart';
+import '../data/operaciones_repository.dart';
+import '../data/vehiculos_repository.dart';
 import 'exportador_service.dart';
 import 'foto_picker.dart';
 import 'recordatorio_service.dart';
@@ -10,16 +14,16 @@ import 'session_storage.dart';
 import 'ticket_ocr_service.dart';
 import 'token_storage.dart';
 
-/// TODO-SPEC / TODO-BACKEND: reemplazar por el repositorio real de auth
-/// cuando el backend esté listo, manteniendo la misma interfaz pública.
-final authRepositoryProvider = Provider<MockAuthRepository>((ref) {
-  return MockAuthRepository();
+final apiClientProvider = Provider<ApiClient>((ref) {
+  return ApiClient(tokenStorage: ref.watch(tokenStorageProvider));
 });
 
-/// TODO-BACKEND: reemplazar por el repositorio real de solicitudes/cargas
-/// cuando el backend esté listo, manteniendo la misma interfaz pública.
-final operacionesRepositoryProvider = Provider<MockOperacionesRepository>((ref) {
-  return MockOperacionesRepository();
+final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  return ApiAuthRepository(ref.watch(apiClientProvider));
+});
+
+final operacionesRepositoryProvider = Provider<OperacionesRepository>((ref) {
+  return ApiOperacionesRepository(ref.watch(apiClientProvider));
 });
 
 /// [MockOperacionesRepository] es un objeto mutable en memoria, no un
@@ -33,25 +37,30 @@ final operacionesRepositoryProvider = Provider<MockOperacionesRepository>((ref) 
 /// mute el repositorio debe incrementar este contador al terminar.
 final operacionesTickProvider = StateProvider<int>((ref) => 0);
 
-/// TODO-BACKEND: reemplazar por el catálogo real de vehículos cuando el
-/// backend esté listo, manteniendo la misma interfaz pública.
-final vehiculosRepositoryProvider = Provider<MockVehiculosRepository>((ref) {
-  return MockVehiculosRepository();
+final vehiculosRepositoryProvider = Provider<VehiculosRepository>((ref) {
+  return ApiVehiculosRepository(ref.watch(apiClientProvider));
 });
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 
-final sessionStorageProvider = Provider<SessionStorage>((ref) => SessionStorage());
+final sessionStorageProvider = Provider<SessionStorage>(
+  (ref) => SessionStorage(),
+);
 
 /// TODO-BACKEND: si más adelante se sube la foto a un servidor, esta
 /// interfaz no cambia — solo la implementación.
-final fotoPickerProvider = Provider<FotoPicker>((ref) => const ImagePickerFotoPicker());
+final fotoPickerProvider = Provider<FotoPicker>(
+  (ref) => const ImagePickerFotoPicker(),
+);
 
-final ticketOcrServiceProvider =
-    Provider<TicketOcrService>((ref) => const MlKitTicketOcrService());
+final ticketOcrServiceProvider = Provider<TicketOcrService>(
+  (ref) => const MlKitTicketOcrService(),
+);
 
-final recordatorioServiceProvider =
-    Provider<RecordatorioService>((ref) => LocalRecordatorioService());
+final recordatorioServiceProvider = Provider<RecordatorioService>(
+  (ref) => LocalRecordatorioService(),
+);
 
-final exportadorServiceProvider =
-    Provider<ExportadorService>((ref) => const ArchivoExportadorService());
+final exportadorServiceProvider = Provider<ExportadorService>(
+  (ref) => const ArchivoExportadorService(),
+);

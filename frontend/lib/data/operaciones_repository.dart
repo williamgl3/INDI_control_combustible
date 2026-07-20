@@ -1,0 +1,95 @@
+import '../models/carga.dart';
+import '../models/cierre_dia.dart';
+import '../models/perfil.dart';
+import '../models/precio_combustible.dart';
+import '../models/solicitud_autorizacion.dart';
+import '../models/vehiculo.dart';
+
+/// Interfaz común de operaciones (solicitudes, cargas, cierres, precios) —
+/// implementada por [MockOperacionesRepository] (datos en memoria) y por
+/// la implementación real que habla con el backend.
+abstract class OperacionesRepository {
+  double get presupuestoSemanalTotal;
+  String get etiquetaSemanaActual;
+  List<PrecioCombustible> get precios;
+  double get presupuestoEjercido;
+  double get presupuestoRestante;
+  List<SolicitudAutorizacion> get todasLasSolicitudes;
+  List<Carga> get todasLasCargas;
+
+  /// Trae/actualiza todo lo que necesita esta sesión desde el backend:
+  /// para un chofer, sus propias solicitudes/cargas/cierres; para un
+  /// administrativo, el listado completo. Se llama tras iniciar sesión
+  /// (ver `AuthController._cargarDatosIniciales`).
+  Future<void> cargarDatosIniciales({required Perfil perfil});
+
+  List<SolicitudAutorizacion> solicitudesDeChofer(String choferId);
+  List<Carga> cargasDeChofer(String choferId);
+  List<CierreDia> cierresDeChofer(String choferId);
+
+  /// Litros ya autorizados de [vehiculoId] en la semana actual — ver
+  /// [cargarAcumuladoDeVehiculo]; `0` si todavía no se ha cargado.
+  double litrosAutorizadosAcumulados(String vehiculoId);
+
+  /// Trae del backend el acumulado semanal de litros de un vehículo
+  /// específico (no se puede derivar en el cliente: un chofer solo ve
+  /// sus propias solicitudes, y el tope es del vehículo, compartido
+  /// entre varios choferes).
+  Future<void> cargarAcumuladoDeVehiculo(String vehiculoId);
+
+  Future<PrecioCombustible> actualizarPrecio({
+    required String tipoCombustible,
+    required double nuevoPrecio,
+  });
+
+  Future<SolicitudAutorizacion> enviarSolicitud({
+    required String choferId,
+    required Vehiculo vehiculo,
+    required double litrosSolicitados,
+    bool esUrgente = false,
+    String? motivoChofer,
+  });
+
+  SolicitudAutorizacion? solicitudPorFolio(String folio);
+
+  Future<SolicitudAutorizacion> resolverSolicitud({
+    required String solicitudId,
+    required bool aprobar,
+    required String resueltaPor,
+    double? litrosAutorizados,
+    String? motivo,
+  });
+
+  Future<Carga> registrarCarga({
+    required String choferId,
+    required String vehiculoId,
+    required String folioAutorizacion,
+    required double litrosCargados,
+    required double kmAlCargar,
+    required String gasolinera,
+    String? fotoTicketPath,
+    String? fotoTableroPath,
+    double? litrosDetectadosOcr,
+  });
+
+  Carga? cargaAbiertaDeHoy(String choferId);
+
+  Future<CierreDia> cerrarDia({
+    required String choferId,
+    required String cargaId,
+    required double kmFinal,
+    required String fotoTableroPath,
+  });
+
+  Carga? cargaDe(CierreDia cierre);
+  CierreDia? cierreDe(Carga carga);
+  RendimientoDia? rendimientoDe(CierreDia cierre);
+
+  /// Historial de lecturas (km u horómetro) de un vehículo — ver
+  /// [cargarHistorialLecturas]; vacío si todavía no se ha cargado.
+  List<({DateTime fecha, double lectura})> historialLecturas(String vehiculoId);
+
+  /// Trae del backend el historial de lecturas de un vehículo específico
+  /// — usado por el módulo de Mantenimiento preventivo (solo admin).
+  Future<void> cargarHistorialLecturas(String vehiculoId);
+}
