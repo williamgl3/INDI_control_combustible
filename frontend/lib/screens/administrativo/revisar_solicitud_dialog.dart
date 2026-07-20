@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
+import '../../data/api_client.dart';
 import '../../models/solicitud_autorizacion.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_text_styles.dart';
@@ -91,6 +92,8 @@ class _RevisarSolicitudDialogState
           );
       ref.read(operacionesTickProvider.notifier).state++;
       if (mounted) Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _errorGeneral = e.mensaje);
     } finally {
       if (mounted) setState(() => _cargando = false);
     }

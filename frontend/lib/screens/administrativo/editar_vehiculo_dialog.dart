@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/catalogos_vehiculo.dart';
 import '../../core/providers.dart';
+import '../../data/api_client.dart';
 import '../../models/vehiculo.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_dialog.dart';
@@ -97,6 +98,8 @@ class _EditarVehiculoDialogState extends ConsumerState<EditarVehiculoDialog> {
       }
       ref.read(operacionesTickProvider.notifier).state++;
       if (mounted) Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _errorGeneral = e.mensaje);
     } finally {
       if (mounted) setState(() => _cargando = false);
     }

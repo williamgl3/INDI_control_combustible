@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
+import '../../data/api_client.dart';
 import '../../models/vehiculo.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_radii.dart';
@@ -73,6 +74,8 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
       if (mounted) {
         context.replace(RoutePaths.choferRespuesta, extra: solicitud);
       }
+    } on ApiException catch (e) {
+      setState(() => _errorGeneral = e.mensaje);
     } catch (e) {
       setState(
         () =>

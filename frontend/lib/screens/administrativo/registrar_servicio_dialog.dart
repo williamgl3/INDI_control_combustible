@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/catalogos_vehiculo.dart';
 import '../../core/providers.dart';
+import '../../data/api_client.dart';
 import '../../models/vehiculo.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_dialog.dart';
@@ -47,6 +48,7 @@ class _RegistrarServicioDialogState
   );
 
   bool _cargando = false;
+  String? _errorGeneral;
 
   @override
   void dispose() {
@@ -57,7 +59,10 @@ class _RegistrarServicioDialogState
   Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _cargando = true);
+    setState(() {
+      _cargando = true;
+      _errorGeneral = null;
+    });
     try {
       await ref
           .read(vehiculosRepositoryProvider)
@@ -68,6 +73,8 @@ class _RegistrarServicioDialogState
           );
       ref.read(operacionesTickProvider.notifier).state++;
       if (mounted) Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _errorGeneral = e.mensaje);
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -119,6 +126,15 @@ class _RegistrarServicioDialogState
               },
               onFieldSubmitted: (_) => _guardar(),
             ),
+            if (_errorGeneral != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorGeneral!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: context.colors.error,
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
             Row(
               children: [

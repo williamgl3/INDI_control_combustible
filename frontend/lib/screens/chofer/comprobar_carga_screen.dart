@@ -6,6 +6,7 @@ import '../../core/catalogos_vehiculo.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
 import '../../core/ticket_ocr_service.dart';
+import '../../data/api_client.dart';
 import '../../models/vehiculo.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_radii.dart';
@@ -145,6 +146,8 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
             cuando: carga.creadaEn.add(const Duration(hours: 8)),
           );
       if (mounted) context.go(RoutePaths.chofer);
+    } on ApiException catch (e) {
+      setState(() => _errorGeneral = e.mensaje);
     } catch (e) {
       setState(
         () =>

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/catalogos_vehiculo.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
+import '../../data/api_client.dart';
 import '../../models/carga.dart';
 import '../../models/cierre_dia.dart';
 import '../../theme/app_radii.dart';
@@ -79,6 +80,8 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
           .read(recordatorioServiceProvider)
           .cancelarRecordatorio(widget.carga.id);
       if (mounted) setState(() => _resultado = resultado);
+    } on ApiException catch (e) {
+      setState(() => _errorGeneral = e.mensaje);
     } catch (e) {
       setState(
         () => _errorGeneral = 'No pudimos cerrar tu día. Intenta de nuevo.',

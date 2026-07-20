@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/catalogos_vehiculo.dart';
 import '../../core/providers.dart';
+import '../../data/api_client.dart';
 import '../../models/vehiculo.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_dialog.dart';
@@ -34,6 +35,7 @@ class _ReportarVehiculoNuevoDialogState
   String _tipoUnidad = tiposUnidadVehiculo.first;
   String _tipoCombustible = tiposCombustibleVehiculo.first;
   bool _cargando = false;
+  String? _errorGeneral;
 
   @override
   void dispose() {
@@ -44,16 +46,25 @@ class _ReportarVehiculoNuevoDialogState
   Future<void> _reportar() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _cargando = true);
-    final vehiculo = await ref
-        .read(vehiculosRepositoryProvider)
-        .reportarNuevo(
-          tipoUnidad: _tipoUnidad,
-          identificador: _identificadorController.text.trim(),
-          tipoCombustible: _tipoCombustible,
-        );
-    ref.read(operacionesTickProvider.notifier).state++;
-    if (mounted) Navigator.of(context).pop(vehiculo);
+    setState(() {
+      _cargando = true;
+      _errorGeneral = null;
+    });
+    try {
+      final vehiculo = await ref
+          .read(vehiculosRepositoryProvider)
+          .reportarNuevo(
+            tipoUnidad: _tipoUnidad,
+            identificador: _identificadorController.text.trim(),
+            tipoCombustible: _tipoCombustible,
+          );
+      ref.read(operacionesTickProvider.notifier).state++;
+      if (mounted) Navigator.of(context).pop(vehiculo);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _errorGeneral = e.mensaje);
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
   }
 
   @override
@@ -116,6 +127,15 @@ class _ReportarVehiculoNuevoDialogState
                   .toList(),
               onChanged: (v) => setState(() => _tipoCombustible = v!),
             ),
+            if (_errorGeneral != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorGeneral!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.error),
+              ),
+            ],
             const SizedBox(height: 20),
             Row(
               children: [

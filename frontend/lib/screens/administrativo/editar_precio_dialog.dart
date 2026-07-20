@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
+import '../../data/api_client.dart';
 import '../../models/precio_combustible.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/app_dialog.dart';
 
 /// Modal para que un administrativo actualice el precio por litro de un
@@ -30,6 +32,7 @@ class _EditarPrecioDialogState extends ConsumerState<EditarPrecioDialog> {
   );
 
   bool _cargando = false;
+  String? _errorGeneral;
 
   @override
   void dispose() {
@@ -40,19 +43,30 @@ class _EditarPrecioDialogState extends ConsumerState<EditarPrecioDialog> {
   Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _cargando = true);
-    await ref
-        .read(operacionesRepositoryProvider)
-        .actualizarPrecio(
-          tipoCombustible: widget.precio.tipoCombustible,
-          nuevoPrecio: double.parse(_precioController.text.trim()),
-        );
-    ref.read(operacionesTickProvider.notifier).state++;
-    if (mounted) Navigator.of(context).pop(true);
+    setState(() {
+      _cargando = true;
+      _errorGeneral = null;
+    });
+    try {
+      await ref
+          .read(operacionesRepositoryProvider)
+          .actualizarPrecio(
+            tipoCombustible: widget.precio.tipoCombustible,
+            nuevoPrecio: double.parse(_precioController.text.trim()),
+          );
+      ref.read(operacionesTickProvider.notifier).state++;
+      if (mounted) Navigator.of(context).pop(true);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _errorGeneral = e.mensaje);
+    } finally {
+      if (mounted) setState(() => _cargando = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
+
     return AppDialogShell(
       maxWidth: 380,
       child: Form(
@@ -89,6 +103,15 @@ class _EditarPrecioDialogState extends ConsumerState<EditarPrecioDialog> {
               },
               onFieldSubmitted: (_) => _guardar(),
             ),
+            if (_errorGeneral != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorGeneral!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.error),
+              ),
+            ],
             const SizedBox(height: 20),
             Row(
               children: [
