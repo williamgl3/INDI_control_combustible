@@ -12,6 +12,7 @@ import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/grouped_section.dart';
 import '../../widgets/selector_vehiculo.dart';
+import '../../widgets/stepper_numerico.dart';
 
 class SolicitarCargaScreen extends ConsumerStatefulWidget {
   const SolicitarCargaScreen({super.key});
@@ -23,17 +24,16 @@ class SolicitarCargaScreen extends ConsumerStatefulWidget {
 
 class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _litrosController = TextEditingController();
   final _motivoController = TextEditingController();
 
   Vehiculo? _vehiculo;
+  double _litros = 0;
   bool _esUrgente = false;
   bool _cargando = false;
   String? _errorGeneral;
 
   @override
   void dispose() {
-    _litrosController.dispose();
     _motivoController.dispose();
     super.dispose();
   }
@@ -42,6 +42,10 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
     if (!_formKey.currentState!.validate()) return;
     if (_vehiculo == null) {
       setState(() => _errorGeneral = 'Elige qué vehículo vas a usar.');
+      return;
+    }
+    if (_litros <= 0) {
+      setState(() => _errorGeneral = 'Ingresa los litros que necesitas.');
       return;
     }
     if (_esUrgente && _motivoController.text.trim().isEmpty) {
@@ -64,7 +68,7 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
           .enviarSolicitud(
             choferId: perfil.id,
             vehiculo: _vehiculo!,
-            litrosSolicitados: double.parse(_litrosController.text.trim()),
+            litrosSolicitados: _litros,
             esUrgente: _esUrgente,
             motivoChofer: _motivoController.text.trim().isEmpty
                 ? null
@@ -142,27 +146,13 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _litrosController,
-                      decoration: const InputDecoration(
-                        labelText: 'Litros solicitados',
-                        suffixText: 'L',
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      validator: (v) {
-                        final valor = v?.trim() ?? '';
-                        if (valor.isEmpty) {
-                          return 'Ingresa los litros que necesitas.';
-                        }
-                        final n = double.tryParse(valor);
-                        if (n == null || n <= 0) {
-                          return 'Ingresa un número válido mayor a 0.';
-                        }
-                        return null;
-                      },
-                      onFieldSubmitted: (_) => _enviar(),
+                    StepperNumerico(
+                      etiqueta: 'Litros solicitados',
+                      valor: _litros,
+                      sufijo: 'L',
+                      paso: 1,
+                      decimales: 1,
+                      onChanged: (v) => setState(() => _litros = v),
                     ),
                     const SizedBox(height: 16),
                     GroupedSection(

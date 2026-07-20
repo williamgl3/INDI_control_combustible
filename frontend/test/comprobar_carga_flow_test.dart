@@ -47,7 +47,7 @@ void main() {
     await tester.tap(find.text('Solicitar carga de combustible'));
     await tester.pumpAndSettle();
     await _elegirVehiculo(tester, 'Vehículo · ABC-123');
-    await tester.enterText(find.widgetWithText(TextFormField, 'Litros solicitados'), '40');
+    await _fijarStepper(tester, 'Litros solicitados', '40');
     await tester.ensureVisible(find.text('Enviar solicitud'));
     await tester.tap(find.text('Enviar solicitud'));
     await tester.pumpAndSettle();
