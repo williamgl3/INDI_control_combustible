@@ -7,6 +7,7 @@ import '../data/api_vehiculos_repository.dart';
 import '../data/auth_repository.dart';
 import '../data/operaciones_repository.dart';
 import '../data/vehiculos_repository.dart';
+import 'auth_controller.dart';
 import 'exportador_service.dart';
 import 'foto_picker.dart';
 import 'recordatorio_service.dart';
@@ -46,6 +47,14 @@ final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());
 final sessionStorageProvider = Provider<SessionStorage>(
   (ref) => SessionStorage(),
 );
+
+/// Se lee una sola vez al arrancar la app (ver `main.dart`) para restaurar
+/// una sesión guardada de una vez anterior — mientras esto no resuelve,
+/// `MyApp` muestra una pantalla de carga en vez del router, para no
+/// mandar al usuario al login por un instante y luego saltar a su sección.
+final restaurarSesionProvider = FutureProvider<void>((ref) {
+  return ref.read(authControllerProvider).restaurarSesionAlIniciar();
+});
 
 /// TODO-BACKEND: si más adelante se sube la foto a un servidor, esta
 /// interfaz no cambia — solo la implementación.

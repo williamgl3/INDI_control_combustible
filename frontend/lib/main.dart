@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/providers.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
 
@@ -10,6 +11,31 @@ void main() {
 
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Mientras se resuelve `restaurarSesionProvider` (lee token+perfil
+    // guardados de una sesión anterior) se muestra una pantalla de carga
+    // en vez del router — si no, el usuario vería el login destellar un
+    // instante antes de saltar a su sección.
+    final restauracion = ref.watch(restaurarSesionProvider);
+
+    if (restauracion.isLoading) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        home: const Scaffold(
+          body: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    return const _AppConRouter();
+  }
+}
+
+class _AppConRouter extends ConsumerWidget {
+  const _AppConRouter();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

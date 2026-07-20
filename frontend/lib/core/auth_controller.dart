@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/auth_repository.dart';
+import '../models/perfil.dart';
 import 'providers.dart';
 import 'session_provider.dart';
 
@@ -53,12 +54,29 @@ class AuthController {
     _ref.read(sessionProvider.notifier).cerrarSesion();
   }
 
+  /// Se llama una sola vez al arrancar la app (ver `restaurarSesionProvider`
+  /// en providers.dart): si hay un token+perfil guardados de una sesión
+  /// anterior, la restaura y precarga sus datos — sin esto, el usuario
+  /// volvería al login en cada reinicio de la app aunque su sesión siga
+  /// vigente.
+  Future<void> restaurarSesionAlIniciar() async {
+    final token = await _ref.read(tokenStorageProvider).leerToken();
+    final perfil = await _ref.read(sessionStorageProvider).leerPerfil();
+    if (token == null || perfil == null) return;
+
+    _ref.read(sessionProvider.notifier).iniciarSesion(perfil);
+    await _precargarDatos(perfil);
+  }
+
   Future<void> _completarSesion(ResultadoAuth resultado) async {
     final perfil = resultado.perfil;
     await _ref.read(tokenStorageProvider).guardarToken(resultado.token);
     await _ref.read(sessionStorageProvider).guardarPerfil(perfil);
     _ref.read(sessionProvider.notifier).iniciarSesion(perfil);
+    await _precargarDatos(perfil);
+  }
 
+  Future<void> _precargarDatos(Perfil perfil) async {
     // Con la sesión ya lista (token guardado, así que el ApiClient lo
     // manda en cada petición), se precarga todo lo que las pantallas
     // leen de forma síncrona de los repositorios (ver
