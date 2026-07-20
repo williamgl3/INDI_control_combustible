@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/catalogos_vehiculo.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
 import '../../core/ticket_ocr_service.dart';
@@ -23,7 +24,8 @@ class ComprobarCargaScreen extends ConsumerStatefulWidget {
   final String folioAutorizacion;
 
   @override
-  ConsumerState<ComprobarCargaScreen> createState() => _ComprobarCargaScreenState();
+  ConsumerState<ComprobarCargaScreen> createState() =>
+      _ComprobarCargaScreenState();
 }
 
 class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
@@ -46,10 +48,13 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
     super.initState();
     // Precarga el vehículo elegido al solicitar — el chofer puede
     // corregirlo aquí si en el camino le tocó otra unidad.
-    final solicitud =
-        ref.read(operacionesRepositoryProvider).solicitudPorFolio(widget.folioAutorizacion);
+    final solicitud = ref
+        .read(operacionesRepositoryProvider)
+        .solicitudPorFolio(widget.folioAutorizacion);
     if (solicitud != null) {
-      _vehiculo = ref.read(vehiculosRepositoryProvider).porId(solicitud.vehiculoId);
+      _vehiculo = ref
+          .read(vehiculosRepositoryProvider)
+          .porId(solicitud.vehiculoId);
     }
   }
 
@@ -104,8 +109,10 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
 
   Future<void> _enviar() async {
     if (!_formularioCompleto) {
-      setState(() => _errorGeneral =
-          'Completa el vehículo, los litros, el km, la gasolinera y ambas fotos.');
+      setState(
+        () => _errorGeneral =
+            'Completa el vehículo, los litros, el km, la gasolinera y ambas fotos.',
+      );
       return;
     }
 
@@ -116,7 +123,9 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
 
     try {
       final perfil = ref.read(sessionProvider)!;
-      final carga = await ref.read(operacionesRepositoryProvider).registrarCarga(
+      final carga = await ref
+          .read(operacionesRepositoryProvider)
+          .registrarCarga(
             choferId: perfil.id,
             vehiculoId: _vehiculo!.id,
             folioAutorizacion: widget.folioAutorizacion,
@@ -129,13 +138,18 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
           );
       ref.read(operacionesTickProvider.notifier).state++;
       // TODO-SPEC: 8 horas es un placeholder para "fin de jornada".
-      await ref.read(recordatorioServiceProvider).programarRecordatorioCerrarDia(
+      await ref
+          .read(recordatorioServiceProvider)
+          .programarRecordatorioCerrarDia(
             cargaId: carga.id,
             cuando: carga.creadaEn.add(const Duration(hours: 8)),
           );
       if (mounted) context.go(RoutePaths.chofer);
     } catch (e) {
-      setState(() => _errorGeneral = 'No pudimos registrar tu carga. Intenta de nuevo.');
+      setState(
+        () =>
+            _errorGeneral = 'No pudimos registrar tu carga. Intenta de nuevo.',
+      );
     } finally {
       if (mounted) setState(() => _enviando = false);
     }
@@ -144,6 +158,8 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final porHorometro =
+        _vehiculo != null && esUnidadPorHorometro(_vehiculo!.tipoUnidad);
 
     return Scaffold(
       appBar: AppBar(
@@ -168,10 +184,15 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.confirmation_number_outlined, color: colors.textSecondary),
+                        Icon(
+                          Icons.confirmation_number_outlined,
+                          color: colors.textSecondary,
+                        ),
                         const SizedBox(width: 12),
-                        Text('Folio ${widget.folioAutorizacion}',
-                            style: Theme.of(context).textTheme.titleMedium),
+                        Text(
+                          'Folio ${widget.folioAutorizacion}',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
                       ],
                     ),
                   ),
@@ -182,7 +203,9 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
                   ),
                   const SizedBox(height: 20),
                   CapturaFotoField(
-                    etiqueta: 'Foto del tablero (km al cargar)',
+                    etiqueta: porHorometro
+                        ? 'Foto del tablero (horómetro al cargar)'
+                        : 'Foto del tablero (km al cargar)',
                     icono: Icons.speed_outlined,
                     rutaFoto: _fotoTableroPath,
                     cargando: _cargandoFotoTablero,
@@ -198,7 +221,10 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
                   ),
                   if (_resultadoOcr != null && !_resultadoOcr!.sinDatos) ...[
                     const SizedBox(height: 8),
-                    _AvisoOcr(resultado: _resultadoOcr!, litrosEscritos: _litrosCargados),
+                    _AvisoOcr(
+                      resultado: _resultadoOcr!,
+                      litrosEscritos: _litrosCargados,
+                    ),
                   ],
                   const SizedBox(height: 20),
                   StepperNumerico(
@@ -211,9 +237,11 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
                   ),
                   const SizedBox(height: 16),
                   StepperNumerico(
-                    etiqueta: 'Km al cargar (según el tablero)',
+                    etiqueta: porHorometro
+                        ? 'Horómetro al cargar (según el tablero)'
+                        : 'Km al cargar (según el tablero)',
                     valor: _kmAlCargar,
-                    sufijo: 'km',
+                    sufijo: porHorometro ? 'h' : 'km',
                     paso: 1,
                     decimales: 0,
                     onChanged: (v) => setState(() => _kmAlCargar = v),
@@ -226,7 +254,12 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
                   ),
                   if (_errorGeneral != null) ...[
                     const SizedBox(height: 12),
-                    Text(_errorGeneral!, style: TextStyle(color: colors.error)),
+                    Text(
+                      _errorGeneral!,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: colors.error),
+                    ),
                   ],
                   const SizedBox(height: 24),
                   ElevatedButton(
@@ -258,7 +291,8 @@ class _AvisoOcr extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final coincide = resultado.litros != null &&
+    final coincide =
+        resultado.litros != null &&
         (resultado.litros! - litrosEscritos).abs() <= 1.5;
     final color = coincide ? colors.success : colors.warning;
 
@@ -270,16 +304,22 @@ class _AvisoOcr extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(coincide ? Icons.check_circle_outline : Icons.info_outline, color: color, size: 18),
+          Icon(
+            coincide ? Icons.check_circle_outline : Icons.info_outline,
+            color: color,
+            size: 18,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               resultado.litros != null
                   ? (coincide
-                      ? 'El ticket parece decir ${resultado.litros!.toStringAsFixed(1)} L — coincide.'
-                      : 'El ticket parece decir ${resultado.litros!.toStringAsFixed(1)} L — revisa el dato.')
+                        ? 'El ticket parece decir ${resultado.litros!.toStringAsFixed(1)} L — coincide.'
+                        : 'El ticket parece decir ${resultado.litros!.toStringAsFixed(1)} L — revisa el dato.')
                   : 'No se pudo leer el ticket automáticamente, no afecta tu envío.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: color),
             ),
           ),
         ],

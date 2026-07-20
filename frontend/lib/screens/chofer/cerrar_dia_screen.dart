@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/catalogos_vehiculo.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
 import '../../models/carga.dart';
@@ -45,12 +46,16 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
 
   Future<void> _enviar() async {
     if (_kmFinal <= widget.carga.kmAlCargar) {
-      setState(() => _errorGeneral =
-          'El km final debe ser mayor al km de cuando cargaste (${widget.carga.kmAlCargar.toStringAsFixed(0)}).');
+      setState(
+        () => _errorGeneral =
+            'La lectura final debe ser mayor a la de cuando cargaste (${widget.carga.kmAlCargar.toStringAsFixed(0)}).',
+      );
       return;
     }
     if (_fotoTableroPath == null) {
-      setState(() => _errorGeneral = 'Toma la foto del tablero con el km final.');
+      setState(
+        () => _errorGeneral = 'Toma la foto del tablero con la lectura final.',
+      );
       return;
     }
 
@@ -70,10 +75,14 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
       );
       final resultado = repo.rendimientoDe(cierre);
       ref.read(operacionesTickProvider.notifier).state++;
-      await ref.read(recordatorioServiceProvider).cancelarRecordatorio(widget.carga.id);
+      await ref
+          .read(recordatorioServiceProvider)
+          .cancelarRecordatorio(widget.carga.id);
       if (mounted) setState(() => _resultado = resultado);
     } catch (e) {
-      setState(() => _errorGeneral = 'No pudimos cerrar tu día. Intenta de nuevo.');
+      setState(
+        () => _errorGeneral = 'No pudimos cerrar tu día. Intenta de nuevo.',
+      );
     } finally {
       if (mounted) setState(() => _enviando = false);
     }
@@ -82,6 +91,12 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final vehiculo = ref
+        .watch(vehiculosRepositoryProvider)
+        .porId(widget.carga.vehiculoId);
+    final porHorometro =
+        vehiculo != null && esUnidadPorHorometro(vehiculo.tipoUnidad);
+    final unidad = porHorometro ? 'h' : 'km';
 
     return Scaffold(
       appBar: AppBar(
@@ -95,7 +110,10 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: _resultado != null
-                  ? _ResultadoCierre(resultado: _resultado!)
+                  ? _ResultadoCierre(
+                      resultado: _resultado!,
+                      porHorometro: porHorometro,
+                    )
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       mainAxisSize: MainAxisSize.min,
@@ -108,12 +126,15 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.speed_outlined, color: colors.textSecondary),
+                              Icon(
+                                Icons.speed_outlined,
+                                color: colors.textSecondary,
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
                                   'Cargaste combustible hoy con '
-                                  '${widget.carga.kmAlCargar.toStringAsFixed(0)} km en el tablero.',
+                                  '${widget.carga.kmAlCargar.toStringAsFixed(0)} $unidad en el tablero.',
                                   style: Theme.of(context).textTheme.bodyMedium,
                                 ),
                               ),
@@ -122,7 +143,9 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
                         ),
                         const SizedBox(height: 20),
                         CapturaFotoField(
-                          etiqueta: 'Foto del tablero (km final)',
+                          etiqueta: porHorometro
+                              ? 'Foto del tablero (horómetro final)'
+                              : 'Foto del tablero (km final)',
                           icono: Icons.speed_outlined,
                           rutaFoto: _fotoTableroPath,
                           cargando: _cargandoFoto,
@@ -130,9 +153,11 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
                         ),
                         const SizedBox(height: 16),
                         StepperNumerico(
-                          etiqueta: 'Km final del día',
+                          etiqueta: porHorometro
+                              ? 'Horómetro final del día'
+                              : 'Km final del día',
                           valor: _kmFinal,
-                          sufijo: 'km',
+                          sufijo: unidad,
                           paso: 1,
                           decimales: 0,
                           minimo: widget.carga.kmAlCargar,
@@ -140,7 +165,11 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
                         ),
                         if (_errorGeneral != null) ...[
                           const SizedBox(height: 12),
-                          Text(_errorGeneral!, style: TextStyle(color: colors.error)),
+                          Text(
+                            _errorGeneral!,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colors.error),
+                          ),
                         ],
                         const SizedBox(height: 24),
                         ElevatedButton(
@@ -149,7 +178,9 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
                               ? const SizedBox(
                                   height: 18,
                                   width: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Text('Cerrar mi día'),
                         ),
@@ -164,9 +195,10 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
 }
 
 class _ResultadoCierre extends StatelessWidget {
-  const _ResultadoCierre({required this.resultado});
+  const _ResultadoCierre({required this.resultado, required this.porHorometro});
 
   final RendimientoDia resultado;
+  final bool porHorometro;
 
   @override
   Widget build(BuildContext context) {
@@ -185,8 +217,12 @@ class _ResultadoCierre extends StatelessWidget {
         Text('Día cerrado', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 8),
         Text(
-          '${resultado.kmRecorridos.toStringAsFixed(0)} km recorridos',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
+          porHorometro
+              ? '${resultado.kmRecorridos.toStringAsFixed(0)} horas trabajadas'
+              : '${resultado.kmRecorridos.toStringAsFixed(0)} km recorridos',
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
         ),
         const SizedBox(height: 20),
         Container(
@@ -198,19 +234,29 @@ class _ResultadoCierre extends StatelessWidget {
           ),
           child: Column(
             children: [
-              Text('Rendimiento',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.textMuted)),
+              Text(
+                'Rendimiento',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
+              ),
               const SizedBox(height: 4),
               Text(
                 resultado.rendimiento != null
                     ? '${resultado.rendimiento!.toStringAsFixed(1)} km/L'
                     : 'No calculable',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: color),
+                style: Theme.of(
+                  context,
+                ).textTheme.headlineSmall?.copyWith(color: color),
               ),
               if (resultado.esAnomalo) ...[
                 const SizedBox(height: 4),
-                Text('Fuera de lo habitual — un admin lo revisará.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.warning)),
+                Text(
+                  'Fuera de lo habitual — un admin lo revisará.',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: colors.warning),
+                ),
               ],
             ],
           ),

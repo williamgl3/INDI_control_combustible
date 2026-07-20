@@ -34,11 +34,13 @@ class LocalRecordatorioService implements RecordatorioService {
 
     await _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.requestNotificationsPermission();
     await _plugin
         .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>()
+          IOSFlutterLocalNotificationsPlugin
+        >()
         ?.requestPermissions(alert: true, badge: true, sound: true);
 
     _inicializado = true;
@@ -63,13 +65,15 @@ class LocalRecordatorioService implements RecordatorioService {
         android: AndroidNotificationDetails(
           'cerrar_dia',
           'Cerrar mi día',
-          channelDescription: 'Recordatorio para registrar el km final del día.',
+          channelDescription:
+              'Recordatorio para registrar el km final del día.',
           importance: Importance.defaultImportance,
         ),
         iOS: DarwinNotificationDetails(),
       ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
 

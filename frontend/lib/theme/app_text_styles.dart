@@ -14,7 +14,7 @@ class AppTextStyles {
   /// Label de formulario en mayúsculas (ej. encabezados de campo en
   /// Login / Registro de chofer / EditarChoferDialog).
   static TextStyle formLabel(Color color) {
-    return AppTypography.manrope(
+    return AppTypography.inter(
       fontSize: 13,
       fontWeight: FontWeight.w800,
       color: color,

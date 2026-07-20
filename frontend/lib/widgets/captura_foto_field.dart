@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../theme/app_radii.dart';
+import '../theme/app_spacing.dart';
 import '../theme/app_theme.dart';
 
 /// Botón para tomar una foto con la cámara (tablero, ticket, etc.) que
@@ -31,24 +32,29 @@ class CapturaFotoField extends StatelessWidget {
     final tieneFoto = rutaFoto != null;
 
     return Material(
-      color: tieneFoto ? colors.success.withValues(alpha: 0.06) : colors.surfaceAlt,
+      color: tieneFoto
+          ? colors.success.withValues(alpha: 0.06)
+          : colors.surfaceAlt,
       borderRadius: AppRadii.cardRadius,
       child: InkWell(
         onTap: cargando ? null : onTomarFoto,
         borderRadius: AppRadii.cardRadius,
+        hoverColor: colors.primary.withValues(alpha: 0.08),
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(AppSpacing.tile),
           decoration: BoxDecoration(
             borderRadius: AppRadii.cardRadius,
             border: Border.all(
-              color: tieneFoto ? colors.success.withValues(alpha: 0.4) : colors.border,
+              color: tieneFoto
+                  ? colors.success.withValues(alpha: 0.4)
+                  : colors.border,
             ),
           ),
           child: Row(
             children: [
               if (tieneFoto)
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: AppRadii.inputRadius,
                   child: Image.file(
                     File(rutaFoto!),
                     width: 44,
@@ -72,8 +78,8 @@ class CapturaFotoField extends StatelessWidget {
                 child: Text(
                   tieneFoto ? '$etiqueta · lista' : etiqueta,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: tieneFoto ? colors.success : colors.textPrimary,
-                      ),
+                    color: tieneFoto ? colors.success : colors.textPrimary,
+                  ),
                 ),
               ),
               if (cargando)

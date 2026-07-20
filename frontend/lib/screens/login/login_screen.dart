@@ -4,11 +4,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth_controller.dart';
 import '../../core/validators.dart';
-import '../../data/mock_auth_repository.dart';
+import '../../data/auth_repository.dart';
 import '../../router/route_paths.dart';
-import '../../theme/app_gradients.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/brand_header.dart';
 import 'admin_login_dialog.dart';
 
 /// Login de chofer (flujo principal). El acceso de administrador vive en
@@ -46,7 +46,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
-      await ref.read(authControllerProvider).login(
+      await ref
+          .read(authControllerProvider)
+          .login(
             usuario: _usuarioController.text.trim(),
             password: _passwordController.text,
           );
@@ -72,27 +74,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
-                    decoration: BoxDecoration(gradient: AppGradients.primary(colors)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  // Header estilo "large title" de iOS: mismo fondo que la
+                  // pantalla, sin banda de color — el logo + título llevan
+                  // toda la presencia visual.
+                  BrandHeader(
+                    child: Row(
                       children: [
-                        Text(
-                          'INDI Combustible',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineLarge
-                              ?.copyWith(color: colors.primaryOn),
+                        ClipRRect(
+                          borderRadius: AppRadii.inputRadius,
+                          child: Image.asset(
+                            'assets/images/logo_indi.jpeg',
+                            width: 52,
+                            height: 52,
+                            fit: BoxFit.cover,
+                          ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Control de combustible en obra',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyLarge
-                              ?.copyWith(color: colors.primaryOn.withValues(alpha: 0.9)),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'INDI Combustible',
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(color: colors.textPrimary),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Control de combustible en obra',
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(color: colors.textSecondary),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -106,31 +120,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('USUARIO', style: Theme.of(context).textTheme.labelMedium),
-                          const SizedBox(height: 8),
                           TextFormField(
                             controller: _usuarioController,
-                            decoration: const InputDecoration(labelText: 'Usuario'),
+                            decoration: const InputDecoration(
+                              labelText: 'Usuario',
+                              prefixIcon: Icon(Icons.person_outline),
+                            ),
                             validator: Validators.usuario,
                             textInputAction: TextInputAction.next,
                           ),
-                          const SizedBox(height: 20),
-                          Row(
-                            children: [
-                              Text('CONTRASEÑA',
-                                  style: Theme.of(context).textTheme.labelMedium),
-                              const Spacer(),
-                              TextButton(
-                                onPressed: () =>
-                                    setState(() => _passwordVisible = !_passwordVisible),
-                                child: Text(_passwordVisible ? 'Ocultar' : 'Ver'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 16),
                           TextFormField(
                             controller: _passwordController,
-                            decoration: const InputDecoration(labelText: 'Contraseña'),
+                            decoration: InputDecoration(
+                              labelText: 'Contraseña',
+                              prefixIcon: const Icon(Icons.lock_outline),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _passwordVisible
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                ),
+                                tooltip: _passwordVisible ? 'Ocultar' : 'Ver',
+                                onPressed: () => setState(
+                                  () => _passwordVisible = !_passwordVisible,
+                                ),
+                              ),
+                            ),
                             obscureText: !_passwordVisible,
                             validator: Validators.password,
                             onFieldSubmitted: (_) => _enviar(),
@@ -138,13 +154,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton(
-                              onPressed: () => context.go(RoutePaths.recuperarPassword),
+                              onPressed: () =>
+                                  context.go(RoutePaths.recuperarPassword),
                               child: const Text('¿Olvidaste tu contraseña?'),
                             ),
                           ),
                           if (_errorGeneral != null) ...[
                             const SizedBox(height: 8),
-                            Text(_errorGeneral!, style: TextStyle(color: colors.error)),
+                            Text(
+                              _errorGeneral!,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: colors.error),
+                            ),
                           ],
                           const SizedBox(height: 12),
                           ElevatedButton(
@@ -153,7 +174,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 ? const SizedBox(
                                     height: 18,
                                     width: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   )
                                 : const Text('Ingresar'),
                           ),
@@ -162,12 +185,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             children: [
                               Expanded(child: Divider(color: colors.border)),
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                child: Text('o',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(color: colors.textMuted)),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                child: Text(
+                                  'o',
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(color: colors.textMuted),
+                                ),
                               ),
                               Expanded(child: Divider(color: colors.border)),
                             ],
@@ -201,37 +226,37 @@ class _AccesoAdministradorButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final acento = colors.accentAdmin;
 
     return Material(
-      color: acento.withValues(alpha: 0.06),
+      color: Colors.transparent,
       borderRadius: AppRadii.cardRadius,
       child: InkWell(
         onTap: onTap,
         borderRadius: AppRadii.cardRadius,
+        hoverColor: colors.surfaceAlt,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
             borderRadius: AppRadii.cardRadius,
-            border: Border.all(color: acento.withValues(alpha: 0.25)),
+            color: colors.surface,
+            boxShadow: context.shadows.card,
           ),
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: acento,
-                child: Icon(Icons.shield_outlined, color: colors.primaryOn),
+                backgroundColor: colors.sidebarBackground,
+                child: Icon(Icons.shield_outlined, color: colors.sidebarText),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   'Acceso de administrador',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(color: colors.textPrimary),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleMedium?.copyWith(color: colors.textPrimary),
                 ),
               ),
-              Icon(Icons.chevron_right, color: acento),
+              Icon(Icons.chevron_right, color: colors.textMuted),
             ],
           ),
         ),
@@ -254,18 +279,13 @@ class _RegistroChoferButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: AppRadii.cardRadius,
+        hoverColor: colors.primaryHover.withValues(alpha: 0.15),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            gradient: AppGradients.primary(colors),
+            color: colors.primary,
             borderRadius: AppRadii.cardRadius,
-            boxShadow: [
-              BoxShadow(
-                color: colors.primary.withValues(alpha: 0.3),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
+            boxShadow: context.shadows.card,
           ),
           child: Row(
             children: [
@@ -280,18 +300,16 @@ class _RegistroChoferButton extends StatelessWidget {
                   children: [
                     Text(
                       '¿Eres chofer y no tienes cuenta?',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(color: colors.primaryOn),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: colors.primaryOn,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Regístrate en un minuto',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: colors.primaryOn.withValues(alpha: 0.85)),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colors.primaryOn.withValues(alpha: 0.85),
+                      ),
                     ),
                   ],
                 ),

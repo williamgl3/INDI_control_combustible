@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
 import '../../../models/vehiculo.dart';
-import '../../../theme/app_radii.dart';
+import '../../../theme/app_section_colors.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/estado_vacio.dart';
+import '../../../widgets/grouped_section.dart';
+import '../../../widgets/responsive_scroll_view.dart';
 import '../../../widgets/stat_tile.dart';
+import '../../../widgets/stat_tile_row.dart';
 import '../editar_vehiculo_dialog.dart';
 
 /// Pestaña "Vehículos": catálogo compartido de la obra, administrado por
@@ -27,7 +30,10 @@ class _VehiculosTabState extends ConsumerState<VehiculosTab> {
   }
 
   Future<void> _editar(Vehiculo vehiculo) async {
-    final guardado = await EditarVehiculoDialog.show(context, vehiculo: vehiculo);
+    final guardado = await EditarVehiculoDialog.show(
+      context,
+      vehiculo: vehiculo,
+    );
     if (guardado == true && mounted) setState(() {});
   }
 
@@ -39,8 +45,7 @@ class _VehiculosTabState extends ConsumerState<VehiculosTab> {
 
     final sinTope = vehiculos.where((v) => v.esNuevaSinFormalizar).length;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+    return ResponsiveScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -51,14 +56,16 @@ class _VehiculosTabState extends ConsumerState<VehiculosTab> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Vehículos', style: Theme.of(context).textTheme.headlineSmall),
+                    Text(
+                      'Vehículos',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       'Catálogo de vehículos y maquinaria de la obra, con su tope semanal.',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: colors.textSecondary),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -71,22 +78,19 @@ class _VehiculosTabState extends ConsumerState<VehiculosTab> {
             ],
           ),
           const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: StatTile(
-                  icono: Icons.local_shipping_outlined,
-                  valor: '${vehiculos.length}',
-                  etiqueta: 'Vehículos',
-                ),
+          StatTileRow(
+            tiles: [
+              StatTile(
+                icono: Icons.local_shipping_outlined,
+                valor: '${vehiculos.length}',
+                etiqueta: 'Vehículos',
+                color: AppSectionColors.vehiculos,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: StatTile(
-                  icono: Icons.warning_amber_outlined,
-                  valor: '$sinTope',
-                  etiqueta: 'Sin tope asignado',
-                ),
+              StatTile(
+                icono: Icons.warning_amber_outlined,
+                valor: '$sinTope',
+                etiqueta: 'Sin tope asignado',
+                color: colors.warning,
               ),
             ],
           ),
@@ -97,68 +101,24 @@ class _VehiculosTabState extends ConsumerState<VehiculosTab> {
               mensaje: 'Aún no hay vehículos registrados.',
             )
           else
-            ...vehiculos.map((v) => _VehiculoTile(vehiculo: v, onEditar: () => _editar(v))),
-        ],
-      ),
-    );
-  }
-}
-
-class _VehiculoTile extends StatelessWidget {
-  const _VehiculoTile({required this.vehiculo, required this.onEditar});
-
-  final Vehiculo vehiculo;
-  final VoidCallback onEditar;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final sinTope = vehiculo.esNuevaSinFormalizar;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: AppRadii.cardRadius,
-        border: Border.all(color: colors.border),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: colors.info.withValues(alpha: 0.12),
-            child: Icon(Icons.local_shipping_outlined, color: colors.info),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            GroupedSection(
+              header: 'Catálogo',
               children: [
-                Text(
-                  '${vehiculo.tipoUnidad} · ${vehiculo.identificador}',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  vehiculo.tipoCombustible,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: colors.textMuted),
-                ),
-                Text(
-                  sinTope
-                      ? 'Sin tope semanal asignado'
-                      : 'Tope: ${vehiculo.topeSemanal.toStringAsFixed(0)} L/semana',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: sinTope ? colors.warning : colors.textSecondary),
-                ),
+                for (final v in vehiculos)
+                  GroupedRow(
+                    titulo: '${v.tipoUnidad} · ${v.identificador}',
+                    subtitulo: v.esNuevaSinFormalizar
+                        ? '${v.tipoCombustible} · Sin tope asignado'
+                        : '${v.tipoCombustible} · Tope: ${v.topeSemanal.toStringAsFixed(0)} L/semana',
+                    icono: Icons.local_shipping_outlined,
+                    iconoColor: AppSectionColors.vehiculos,
+                    trailing: OutlinedButton(
+                      onPressed: () => _editar(v),
+                      child: const Text('Editar'),
+                    ),
+                  ),
               ],
             ),
-          ),
-          OutlinedButton(onPressed: onEditar, child: const Text('Editar')),
         ],
       ),
     );

@@ -28,10 +28,11 @@ class EstadoSolicitudBadge extends StatelessWidget {
       ),
       child: Text(
         texto.toUpperCase(),
-        style: Theme.of(context)
-            .textTheme
-            .labelSmall
-            ?.copyWith(color: color, fontWeight: FontWeight.w800, letterSpacing: 0.4),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
+        ),
       ),
     );
   }

@@ -94,7 +94,8 @@ String _dosDigitos(int numero) => numero.toString().padLeft(2, '0');
 /// Ej. "concentrado_20260715_143205.csv" — nombre de archivo con marca de
 /// tiempo para no pisar exportaciones anteriores.
 String nombreArchivoConcentrado(DateTime momento) {
-  final fecha = '${momento.year}${_dosDigitos(momento.month)}${_dosDigitos(momento.day)}';
+  final fecha =
+      '${momento.year}${_dosDigitos(momento.month)}${_dosDigitos(momento.day)}';
   final hora =
       '${_dosDigitos(momento.hour)}${_dosDigitos(momento.minute)}${_dosDigitos(momento.second)}';
   return 'concentrado_${fecha}_$hora.csv';

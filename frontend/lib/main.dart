@@ -20,6 +20,11 @@ class MyApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
+      // El diseño se construyó y verificó contra el tema claro (los
+      // mockups de referencia son claros) — sin esto, un dispositivo con
+      // modo oscuro del sistema activado usa `darkTheme`, que no se ha
+      // afinado con la misma atención al detalle todavía.
+      themeMode: ThemeMode.light,
       routerConfig: router,
     );
   }

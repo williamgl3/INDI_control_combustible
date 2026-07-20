@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
 import '../../../core/semana_util.dart';
+import '../../../theme/app_motion.dart';
 import '../../../theme/app_radii.dart';
 import '../../../theme/app_theme.dart';
-import '../../../widgets/chip_filtro.dart';
 import '../../../widgets/estado_vacio.dart';
 import '../../../widgets/fecha_formato.dart';
+import '../../../widgets/ios_segmented_control.dart';
+import '../../../widgets/responsive_scroll_view.dart';
 import 'concentrado_csv.dart';
 
 enum _Periodo { dia, semana, mes, anio }
@@ -28,7 +30,9 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
   bool _dentroDelPeriodo(DateTime fecha, DateTime hoy) {
     switch (_periodo) {
       case _Periodo.dia:
-        return fecha.year == hoy.year && fecha.month == hoy.month && fecha.day == hoy.day;
+        return fecha.year == hoy.year &&
+            fecha.month == hoy.month &&
+            fecha.day == hoy.day;
       case _Periodo.semana:
         return estaEnSemanaDe(fecha, hoy);
       case _Periodo.mes:
@@ -50,13 +54,17 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
         totalLitros: totalLitros,
         totalImporte: totalImporte,
       );
-      await ref.read(exportadorServiceProvider).exportarCsv(
+      await ref
+          .read(exportadorServiceProvider)
+          .exportarCsv(
             nombreArchivo: nombreArchivoConcentrado(DateTime.now()),
             contenidoCsv: contenidoCsv,
           );
     } catch (_) {
       mensajero.showSnackBar(
-        const SnackBar(content: Text('No pudimos preparar el archivo. Intenta de nuevo.')),
+        const SnackBar(
+          content: Text('No pudimos preparar el archivo. Intenta de nuevo.'),
+        ),
       );
     }
   }
@@ -71,8 +79,9 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
     final vehiculosRepo = ref.watch(vehiculosRepositoryProvider);
 
     final hoy = DateTime.now();
-    final cargas =
-        repo.todasLasCargas.where((c) => _dentroDelPeriodo(c.creadaEn, hoy)).toList();
+    final cargas = repo.todasLasCargas
+        .where((c) => _dentroDelPeriodo(c.creadaEn, hoy))
+        .toList();
 
     final filas = cargas.map((carga) {
       final cierre = repo.cierreDe(carga);
@@ -81,11 +90,11 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
       final precioPorLitro = vehiculo == null
           ? 0.0
           : repo.precios
-              .firstWhere(
-                (p) => p.tipoCombustible == vehiculo.tipoCombustible,
-                orElse: () => repo.precios.first,
-              )
-              .precioPorLitro;
+                .firstWhere(
+                  (p) => p.tipoCombustible == vehiculo.tipoCombustible,
+                  orElse: () => repo.precios.first,
+                )
+                .precioPorLitro;
       return FilaConcentrado(
         carga: carga,
         cierre: cierre,
@@ -99,9 +108,9 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
     final totalLitros = filas.fold(0.0, (s, f) => s + f.carga.litrosCargados);
     final totalImporte = filas.fold(0.0, (s, f) => s + f.importe);
 
-    return SingleChildScrollView(
+    return ResponsiveScrollView(
+      maxWidth: 1100,
       primary: false,
-      padding: const EdgeInsets.all(20),
       physics: const ClampingScrollPhysics(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -113,13 +122,17 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Concentrado de cargas', style: Theme.of(context).textTheme.headlineSmall),
+                    Text(
+                      'Concentrado de cargas',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
                     const SizedBox(height: 4),
-                    Text('Historial de cargas de combustible, con alertas de auditoría.',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(color: colors.textSecondary)),
+                    Text(
+                      'Historial de cargas de combustible, con alertas de auditoría.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colors.textSecondary,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -131,47 +144,50 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
             ],
           ),
           const SizedBox(height: 20),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ChipFiltro(
-                etiqueta: 'Día',
-                seleccionado: _periodo == _Periodo.dia,
-                onTap: () => setState(() => _periodo = _Periodo.dia),
-              ),
-              ChipFiltro(
-                etiqueta: 'Semana',
-                seleccionado: _periodo == _Periodo.semana,
-                onTap: () => setState(() => _periodo = _Periodo.semana),
-              ),
-              ChipFiltro(
-                etiqueta: 'Mes',
-                seleccionado: _periodo == _Periodo.mes,
-                onTap: () => setState(() => _periodo = _Periodo.mes),
-              ),
-              ChipFiltro(
-                etiqueta: 'Año',
-                seleccionado: _periodo == _Periodo.anio,
-                onTap: () => setState(() => _periodo = _Periodo.anio),
-              ),
-            ],
+          IosSegmentedControl<_Periodo>(
+            valor: _periodo,
+            opciones: const {
+              _Periodo.dia: 'Día',
+              _Periodo.semana: 'Semana',
+              _Periodo.mes: 'Mes',
+              _Periodo.anio: 'Año',
+            },
+            onChanged: (p) => setState(() => _periodo = p),
           ),
           const SizedBox(height: 16),
-          if (filas.isEmpty)
-            const EstadoVacio(
-              icono: Icons.table_chart_outlined,
-              mensaje: 'No hay cargas registradas en este periodo.',
-            )
-          else
-            _TablaConcentrado(filas: filas, totalLitros: totalLitros, totalImporte: totalImporte),
+          AnimatedSwitcher(
+            duration: AppMotion.base,
+            switchInCurve: AppMotion.curve,
+            switchOutCurve: AppMotion.curve,
+            transitionBuilder: (child, animation) =>
+                FadeTransition(opacity: animation, child: child),
+            child: KeyedSubtree(
+              key: ValueKey(_periodo),
+              child: filas.isEmpty
+                  ? const EstadoVacio(
+                      icono: Icons.table_chart_outlined,
+                      mensaje: 'No hay cargas registradas en este periodo.',
+                    )
+                  : _TablaConcentrado(
+                      filas: filas,
+                      totalLitros: totalLitros,
+                      totalImporte: totalImporte,
+                    ),
+            ),
+          ),
           const SizedBox(height: 12),
           Wrap(
             spacing: 16,
             runSpacing: 8,
             children: [
-              _Leyenda(color: colors.error, texto: 'Rendimiento anómalo (alerta)'),
-              _Leyenda(color: colors.warning, texto: 'Ticket pendiente de subir'),
+              _Leyenda(
+                color: colors.error,
+                texto: 'Rendimiento anómalo (alerta)',
+              ),
+              _Leyenda(
+                color: colors.warning,
+                texto: 'Ticket pendiente de subir',
+              ),
             ],
           ),
         ],
@@ -209,7 +225,9 @@ class _TablaConcentrado extends StatelessWidget {
         primary: false,
         physics: const ClampingScrollPhysics(),
         child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: _anchos.reduce((a, b) => a + b)),
+          constraints: BoxConstraints(
+            minWidth: _anchos.reduce((a, b) => a + b),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -229,10 +247,11 @@ class _TablaConcentrado extends StatelessWidget {
                   'IMPORTE',
                   'TICKET',
                 ],
-                estilo: (context) => Theme.of(context)
-                    .textTheme
-                    .labelSmall
-                    ?.copyWith(color: colors.textMuted, fontWeight: FontWeight.w700),
+                estilo: (context) =>
+                    Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colors.textMuted,
+                      fontWeight: FontWeight.w700,
+                    ),
               ),
               for (final fila in filas)
                 _FilaTabla(
@@ -240,8 +259,8 @@ class _TablaConcentrado extends StatelessWidget {
                   fondo: fila.rendimientoAnomalo
                       ? colors.error.withValues(alpha: 0.07)
                       : fila.ticketPendiente
-                          ? colors.warning.withValues(alpha: 0.08)
-                          : null,
+                      ? colors.warning.withValues(alpha: 0.08)
+                      : null,
                   celdas: [
                     formatearFechaCorta(fila.carga.creadaEn).split(',').first,
                     fila.chofer?.nombreCompleto ?? fila.carga.choferId,
@@ -281,10 +300,11 @@ class _TablaConcentrado extends StatelessWidget {
                   '\$${totalImporte.toStringAsFixed(2)}',
                   '',
                 ],
-                estilo: (context) => Theme.of(context)
-                    .textTheme
-                    .labelMedium
-                    ?.copyWith(color: colors.primary, fontWeight: FontWeight.w700),
+                estilo: (context) =>
+                    Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
               ),
             ],
           ),
@@ -312,11 +332,12 @@ class _FilaTabla extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final estiloBase = estilo?.call(context) ??
+    final estiloBase =
+        estilo?.call(context) ??
         Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colors.textPrimary,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            );
+          color: colors.textPrimary,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        );
 
     return Container(
       color: fondo,
@@ -328,7 +349,9 @@ class _FilaTabla extends StatelessWidget {
             width: anchos[i],
             child: Text(
               celdas[i],
-              style: colorCelda == null ? estiloBase : estiloBase?.copyWith(color: colorCelda),
+              style: colorCelda == null
+                  ? estiloBase
+                  : estiloBase?.copyWith(color: colorCelda),
             ),
           );
         }),
@@ -351,14 +374,18 @@ class _Leyenda extends StatelessWidget {
         Container(
           width: 10,
           height: 10,
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.5), shape: BoxShape.circle),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.5),
+            shape: BoxShape.circle,
+          ),
         ),
         const SizedBox(width: 6),
-        Text(texto,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: context.colors.textMuted)),
+        Text(
+          texto,
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: context.colors.textMuted),
+        ),
       ],
     );
   }

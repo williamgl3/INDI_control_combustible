@@ -25,8 +25,8 @@ class ChipFiltro extends StatelessWidget {
       onSelected: (_) => onTap(),
       selectedColor: colors.primary.withValues(alpha: 0.15),
       labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: seleccionado ? colors.primary : colors.textSecondary,
-          ),
+        color: seleccionado ? colors.primary : colors.textSecondary,
+      ),
       side: BorderSide(color: seleccionado ? colors.primary : colors.border),
       backgroundColor: colors.surface,
       showCheckmark: false,

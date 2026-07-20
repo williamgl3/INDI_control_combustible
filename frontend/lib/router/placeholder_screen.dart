@@ -34,10 +34,7 @@ class RutaInvalidaScreen extends StatelessWidget {
           children: [
             const Text('Esta pantalla no recibió la información esperada.'),
             const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: onVolver,
-              child: const Text('Volver'),
-            ),
+            ElevatedButton(onPressed: onVolver, child: const Text('Volver')),
           ],
         ),
       ),

@@ -16,6 +16,7 @@ import '../screens/chofer/solicitar_carga_screen.dart';
 import '../screens/login/login_screen.dart';
 import '../screens/recuperar_password/recuperar_password_screen.dart';
 import '../screens/registro_chofer/registro_chofer_screen.dart';
+import '../theme/app_motion.dart';
 import 'placeholder_screen.dart';
 import 'route_paths.dart';
 
@@ -26,14 +27,16 @@ CustomTransitionPage<void> _conTransicion(GoRouterState state, Widget child) {
   return CustomTransitionPage<void>(
     key: state.pageKey,
     child: child,
-    transitionDuration: const Duration(milliseconds: 260),
+    transitionDuration: AppMotion.base,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curva = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+      final curva = CurvedAnimation(parent: animation, curve: AppMotion.curve);
       return FadeTransition(
         opacity: curva,
         child: SlideTransition(
-          position: Tween<Offset>(begin: const Offset(0, 0.03), end: Offset.zero)
-              .animate(curva),
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.03),
+            end: Offset.zero,
+          ).animate(curva),
           child: child,
         ),
       );
@@ -92,7 +95,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: RoutePaths.login,
-        pageBuilder: (context, state) => _conTransicion(state, const LoginScreen()),
+        pageBuilder: (context, state) =>
+            _conTransicion(state, const LoginScreen()),
       ),
       GoRoute(
         path: RoutePaths.registroChofer,
@@ -124,7 +128,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               RutaInvalidaScreen(onVolver: () => context.go(RoutePaths.chofer)),
             );
           }
-          return _conTransicion(state, RespuestaSolicitudScreen(solicitud: solicitud));
+          return _conTransicion(
+            state,
+            RespuestaSolicitudScreen(solicitud: solicitud),
+          );
         },
       ),
       GoRoute(
@@ -137,7 +144,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               RutaInvalidaScreen(onVolver: () => context.go(RoutePaths.chofer)),
             );
           }
-          return _conTransicion(state, ComprobarCargaScreen(folioAutorizacion: folio));
+          return _conTransicion(
+            state,
+            ComprobarCargaScreen(folioAutorizacion: folio),
+          );
         },
       ),
       GoRoute(
@@ -165,7 +175,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           if (chofer is! Perfil) {
             return _conTransicion(
               state,
-              RutaInvalidaScreen(onVolver: () => context.go(RoutePaths.administrativo)),
+              RutaInvalidaScreen(
+                onVolver: () => context.go(RoutePaths.administrativo),
+              ),
             );
           }
           return _conTransicion(state, ChoferDetalleScreen(chofer: chofer));

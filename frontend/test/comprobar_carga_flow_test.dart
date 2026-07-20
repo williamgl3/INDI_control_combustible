@@ -72,7 +72,7 @@ void main() {
             matching: find.widgetWithText(TextFormField, 'Usuario del administrador')),
         'admin1');
     await tester.enterText(
-        find.descendant(of: loginDialog, matching: find.widgetWithText(TextFormField, '••••••••')),
+        find.descendant(of: loginDialog, matching: find.widgetWithText(TextFormField, 'Contraseña')),
         'admin1234');
     await tester.tap(find.descendant(of: loginDialog, matching: find.text('Ingresar')));
     await tester.pumpAndSettle();

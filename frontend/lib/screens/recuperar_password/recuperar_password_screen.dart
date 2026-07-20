@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth_controller.dart';
 import '../../core/validators.dart';
-import '../../data/mock_auth_repository.dart';
+import '../../data/auth_repository.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_theme.dart';
 
@@ -21,7 +21,8 @@ class RecuperarPasswordScreen extends ConsumerStatefulWidget {
       _RecuperarPasswordScreenState();
 }
 
-class _RecuperarPasswordScreenState extends ConsumerState<RecuperarPasswordScreen> {
+class _RecuperarPasswordScreenState
+    extends ConsumerState<RecuperarPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usuarioOCorreoController = TextEditingController();
 
@@ -46,7 +47,9 @@ class _RecuperarPasswordScreenState extends ConsumerState<RecuperarPasswordScree
     try {
       await ref
           .read(authControllerProvider)
-          .recuperarPassword(usuarioOCorreo: _usuarioOCorreoController.text.trim());
+          .recuperarPassword(
+            usuarioOCorreo: _usuarioOCorreoController.text.trim(),
+          );
       setState(() => _enviado = true);
     } on AuthException catch (e) {
       setState(() => _errorGeneral = e.mensaje);
@@ -68,7 +71,9 @@ class _RecuperarPasswordScreenState extends ConsumerState<RecuperarPasswordScree
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: _enviado ? _buildConfirmacion(context) : _buildFormulario(context),
+              child: _enviado
+                  ? _buildConfirmacion(context)
+                  : _buildFormulario(context),
             ),
           ),
         ),
@@ -93,13 +98,21 @@ class _RecuperarPasswordScreenState extends ConsumerState<RecuperarPasswordScree
           const SizedBox(height: 24),
           TextFormField(
             controller: _usuarioOCorreoController,
-            decoration: const InputDecoration(labelText: 'Usuario o correo'),
+            decoration: const InputDecoration(
+              labelText: 'Usuario o correo',
+              prefixIcon: Icon(Icons.person_outline),
+            ),
             validator: (v) => Validators.requerido(v, etiqueta: 'Este campo'),
             onFieldSubmitted: (_) => _enviar(),
           ),
           if (_errorGeneral != null) ...[
             const SizedBox(height: 12),
-            Text(_errorGeneral!, style: TextStyle(color: colors.error)),
+            Text(
+              _errorGeneral!,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: colors.error),
+            ),
           ],
           const SizedBox(height: 24),
           ElevatedButton(

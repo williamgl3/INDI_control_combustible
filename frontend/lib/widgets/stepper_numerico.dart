@@ -27,7 +27,9 @@ class StepperNumerico extends StatelessWidget {
   final double minimo;
 
   Future<void> _editarManualmente(BuildContext context) async {
-    final controller = TextEditingController(text: valor.toStringAsFixed(decimales));
+    final controller = TextEditingController(
+      text: valor.toStringAsFixed(decimales),
+    );
     final nuevoValor = await showDialog<double>(
       context: context,
       builder: (context) => AlertDialog(
@@ -72,13 +74,17 @@ class StepperNumerico extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(etiqueta.toUpperCase(), style: Theme.of(context).textTheme.labelMedium),
+          Text(
+            etiqueta.toUpperCase(),
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
           const SizedBox(height: 8),
           Row(
             children: [
               _BotonPaso(
                 icono: Icons.remove,
-                onTap: () => onChanged((valor - paso).clamp(minimo, double.infinity)),
+                onTap: () =>
+                    onChanged((valor - paso).clamp(minimo, double.infinity)),
               ),
               Expanded(
                 child: GestureDetector(
@@ -92,17 +98,21 @@ class StepperNumerico extends StatelessWidget {
                         style: Theme.of(context).textTheme.headlineMedium,
                       ),
                       Text(
-                        sufijo.isEmpty ? 'toca para escribir' : '$sufijo · toca para escribir',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: colors.textMuted),
+                        sufijo.isEmpty
+                            ? 'toca para escribir'
+                            : '$sufijo · toca para escribir',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colors.textMuted,
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
-              _BotonPaso(icono: Icons.add, onTap: () => onChanged(valor + paso)),
+              _BotonPaso(
+                icono: Icons.add,
+                onTap: () => onChanged(valor + paso),
+              ),
             ],
           ),
         ],
@@ -126,6 +136,7 @@ class _BotonPaso extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),
+        hoverColor: colors.primary.withValues(alpha: 0.12),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Icon(icono, color: colors.primary),

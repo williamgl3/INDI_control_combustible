@@ -22,7 +22,11 @@ class SelectorVehiculo extends ConsumerWidget {
   final Vehiculo? vehiculoSeleccionado;
   final ValueChanged<Vehiculo> onSeleccionar;
 
-  Future<void> _manejarSeleccion(BuildContext context, WidgetRef ref, String? valor) async {
+  Future<void> _manejarSeleccion(
+    BuildContext context,
+    WidgetRef ref,
+    String? valor,
+  ) async {
     if (valor == null) return;
     if (valor == _valorVehiculoNuevo) {
       final nuevo = await ReportarVehiculoNuevoDialog.show(context);
@@ -37,7 +41,9 @@ class SelectorVehiculo extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
-    ref.watch(operacionesTickProvider); // el catálogo puede crecer (vehículo nuevo)
+    ref.watch(
+      operacionesTickProvider,
+    ); // el catálogo puede crecer (vehículo nuevo)
     final vehiculos = ref.watch(vehiculosRepositoryProvider).todos;
 
     return DropdownButtonFormField<String>(
@@ -57,8 +63,10 @@ class SelectorVehiculo extends ConsumerWidget {
         ),
         DropdownMenuItem(
           value: _valorVehiculoNuevo,
-          child: Text('🆕 Vehículo nuevo, no está en la lista',
-              style: TextStyle(color: colors.primary)),
+          child: Text(
+            '🆕 Vehículo nuevo, no está en la lista',
+            style: TextStyle(color: colors.primary),
+          ),
         ),
       ],
       validator: (v) => v == null ? 'Elige el vehículo que vas a usar.' : null,

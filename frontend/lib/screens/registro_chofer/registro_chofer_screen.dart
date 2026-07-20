@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth_controller.dart';
 import '../../core/validators.dart';
-import '../../data/mock_auth_repository.dart';
+import '../../data/auth_repository.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_theme.dart';
 
@@ -16,7 +16,8 @@ class RegistroChoferScreen extends ConsumerStatefulWidget {
   const RegistroChoferScreen({super.key});
 
   @override
-  ConsumerState<RegistroChoferScreen> createState() => _RegistroChoferScreenState();
+  ConsumerState<RegistroChoferScreen> createState() =>
+      _RegistroChoferScreenState();
 }
 
 class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
@@ -52,7 +53,9 @@ class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
     });
 
     try {
-      await ref.read(authControllerProvider).registrarChofer(
+      await ref
+          .read(authControllerProvider)
+          .registrarChofer(
             nombreCompleto: _nombreController.text.trim(),
             edad: int.parse(_edadController.text.trim()),
             correo: _correoController.text.trim(),
@@ -89,7 +92,10 @@ class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('Datos personales', style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      'Datos personales',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       'El vehículo que uses lo eliges cada vez que solicites '
@@ -99,47 +105,72 @@ class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _nombreController,
-                      decoration: const InputDecoration(labelText: 'Nombre completo'),
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre completo',
+                        prefixIcon: Icon(Icons.badge_outlined),
+                      ),
                       validator: Validators.nombre,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _edadController,
-                      decoration: const InputDecoration(labelText: 'Edad'),
+                      decoration: const InputDecoration(
+                        labelText: 'Edad',
+                        prefixIcon: Icon(Icons.cake_outlined),
+                      ),
                       keyboardType: TextInputType.number,
                       validator: Validators.edad,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _correoController,
-                      decoration: const InputDecoration(labelText: 'Correo'),
+                      decoration: const InputDecoration(
+                        labelText: 'Correo',
+                        prefixIcon: Icon(Icons.mail_outline),
+                      ),
                       keyboardType: TextInputType.emailAddress,
                       validator: Validators.correo,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _usuarioController,
-                      decoration: const InputDecoration(labelText: 'Usuario'),
+                      decoration: const InputDecoration(
+                        labelText: 'Usuario',
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
                       validator: Validators.usuario,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _passwordController,
-                      decoration: const InputDecoration(labelText: 'Contraseña'),
+                      decoration: const InputDecoration(
+                        labelText: 'Contraseña',
+                        prefixIcon: Icon(Icons.lock_outline),
+                      ),
                       obscureText: true,
                       validator: Validators.password,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _confirmarPasswordController,
-                      decoration: const InputDecoration(labelText: 'Confirmar contraseña'),
+                      decoration: const InputDecoration(
+                        labelText: 'Confirmar contraseña',
+                        prefixIcon: Icon(Icons.lock_outline),
+                      ),
                       obscureText: true,
-                      validator: (v) =>
-                          Validators.confirmarPassword(v, _passwordController.text),
+                      validator: (v) => Validators.confirmarPassword(
+                        v,
+                        _passwordController.text,
+                      ),
                     ),
                     if (_errorGeneral != null) ...[
                       const SizedBox(height: 16),
-                      Text(_errorGeneral!, style: TextStyle(color: colors.error)),
+                      Text(
+                        _errorGeneral!,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: colors.error),
+                      ),
                     ],
                     const SizedBox(height: 24),
                     ElevatedButton(

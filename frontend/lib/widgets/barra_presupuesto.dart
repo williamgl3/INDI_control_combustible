@@ -23,9 +23,12 @@ class BarraPresupuesto extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final ejercido = total - restante;
-    final proporcion = total > 0 ? (ejercido / total).clamp(0, 1).toDouble() : 0.0;
-    final color =
-        proporcion >= 0.9 ? colors.error : (proporcion >= 0.7 ? colors.warning : colors.success);
+    final proporcion = total > 0
+        ? (ejercido / total).clamp(0, 1).toDouble()
+        : 0.0;
+    final color = proporcion >= 0.9
+        ? colors.error
+        : (proporcion >= 0.7 ? colors.warning : colors.success);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -43,24 +46,31 @@ class BarraPresupuesto extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Presupuesto semanal',
-                        style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      'Presupuesto semanal',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     if (etiquetaSemana != null)
-                      Text('Semana del $etiquetaSemana',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: colors.textMuted)),
+                      Text(
+                        'Semana del $etiquetaSemana',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colors.textMuted,
+                        ),
+                      ),
                   ],
                 ),
               ),
-              Text('\$${restante.toStringAsFixed(0)} restantes',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color)),
+              Text(
+                '\$${restante.toStringAsFixed(0)} restantes',
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(color: color),
+              ),
             ],
           ),
           const SizedBox(height: 10),
           ClipRRect(
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: AppRadii.badgeRadius,
             child: LinearProgressIndicator(
               value: proporcion,
               minHeight: 8,
@@ -71,7 +81,9 @@ class BarraPresupuesto extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             '${(proporcion * 100).toStringAsFixed(0)}% ejercido de \$${total.toStringAsFixed(0)}',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.textMuted),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
           ),
         ],
       ),

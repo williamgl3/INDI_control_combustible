@@ -34,7 +34,7 @@ Future<void> _loginComoAdmin(WidgetTester tester) async {
           of: dialog, matching: find.widgetWithText(TextFormField, 'Usuario del administrador')),
       'admin1');
   await tester.enterText(
-      find.descendant(of: dialog, matching: find.widgetWithText(TextFormField, '••••••••')),
+      find.descendant(of: dialog, matching: find.widgetWithText(TextFormField, 'Contraseña')),
       'admin1234');
   await tester.tap(find.descendant(of: dialog, matching: find.text('Ingresar')));
   await tester.pumpAndSettle();
@@ -95,10 +95,10 @@ void main() {
     final campoTope = find.descendant(
         of: dialog, matching: find.widgetWithText(TextFormField, 'Tope semanal (déjalo vacío si aún no se asigna)'));
     await tester.enterText(campoTope, '700');
-    await tester.tap(find.descendant(of: dialog, matching: find.text('Guardar')));
+    await tester.tap(find.descendant(of: dialog, matching: find.text('Guardar vehículo')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Tope: 700 L/semana'), findsOneWidget);
+    expect(find.textContaining('Tope: 700 L/semana'), findsOneWidget);
   });
 
   testWidgets('admin actualiza el precio de un combustible', (tester) async {
@@ -121,7 +121,7 @@ void main() {
     final campoPrecio = find.descendant(
         of: dialog, matching: find.widgetWithText(TextFormField, 'Precio por litro'));
     await tester.enterText(campoPrecio, '26.90');
-    await tester.tap(find.descendant(of: dialog, matching: find.text('Guardar')));
+    await tester.tap(find.descendant(of: dialog, matching: find.text('Guardar precio')));
     await tester.pumpAndSettle();
 
     expect(find.text('\$26.90 / L'), findsOneWidget);
@@ -227,6 +227,7 @@ void main() {
       identificador: 'ABC-123',
       tipoCombustible: 'Diésel',
       topeSemanal: 500,
+      intervaloServicio: 5000,
     );
     final carga = Carga(
       id: 'carga-1',

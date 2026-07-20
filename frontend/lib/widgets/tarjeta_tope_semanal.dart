@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_motion.dart';
 import '../theme/app_radii.dart';
 import '../theme/app_theme.dart';
 
@@ -22,8 +23,9 @@ class TarjetaTopeSemanal extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final colorBarra =
-        progreso >= 0.9 ? colors.error : (progreso >= 0.7 ? colors.warning : colors.success);
+    final colorBarra = progreso >= 0.9
+        ? colors.error
+        : (progreso >= 0.7 ? colors.warning : colors.success);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -38,24 +40,28 @@ class TarjetaTopeSemanal extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text('Tope semanal', style: Theme.of(context).textTheme.titleMedium),
+                child: Text(
+                  'Tope semanal',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ),
               Text(
-                tope > 0 ? '${disponible.toStringAsFixed(1)} L disponibles' : 'Sin asignar',
-                style: Theme.of(context)
-                    .textTheme
-                    .labelLarge
-                    ?.copyWith(color: tope > 0 ? colorBarra : colors.textMuted),
+                tope > 0
+                    ? '${disponible.toStringAsFixed(1)} L disponibles'
+                    : 'Sin asignar',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: tope > 0 ? colorBarra : colors.textMuted,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 12),
           ClipRRect(
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: AppRadii.badgeRadius,
             child: TweenAnimationBuilder<double>(
               tween: Tween(begin: 0, end: progreso),
-              duration: const Duration(milliseconds: 600),
-              curve: Curves.easeOutCubic,
+              duration: AppMotion.slow,
+              curve: AppMotion.curve,
               builder: (context, value, _) => LinearProgressIndicator(
                 value: tope > 0 ? value : 0,
                 minHeight: 10,
@@ -69,7 +75,9 @@ class TarjetaTopeSemanal extends StatelessWidget {
             tope > 0
                 ? '${usado.toStringAsFixed(1)} L usados de $tope L'
                 : 'Pide a un administrativo que asigne el tope de tu vehículo.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
           ),
         ],
       ),

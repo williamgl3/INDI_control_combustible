@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_spacing.dart';
 import '../theme/app_theme.dart';
 
 /// Mensaje centrado para listas/tablas sin datos, reutilizado en varias
@@ -14,17 +15,21 @@ class EstadoVacio extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 24),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxl),
       alignment: Alignment.center,
       child: Column(
         children: [
           if (icono != null) ...[
             Icon(icono, size: 36, color: colors.textMuted),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
           ],
-          Text(mensaje,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colors.textMuted)),
+          Text(
+            mensaje,
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: colors.textMuted),
+          ),
         ],
       ),
     );

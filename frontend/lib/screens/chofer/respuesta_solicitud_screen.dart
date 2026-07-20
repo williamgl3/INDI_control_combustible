@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../models/solicitud_autorizacion.dart';
 import '../../router/route_paths.dart';
+import '../../theme/app_motion.dart';
 import '../../theme/app_radii.dart';
+import '../../theme/app_text_styles.dart';
 import '../../theme/app_theme.dart';
 
 /// Muestra el resultado de una [SolicitudAutorizacion] recién creada.
@@ -19,9 +21,21 @@ class RespuestaSolicitudScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final (color, icono, titulo) = switch (solicitud.estado) {
-      EstadoSolicitud.aprobada => (colors.success, Icons.check_circle, 'Solicitud aprobada'),
-      EstadoSolicitud.rechazada => (colors.error, Icons.cancel, 'Solicitud rechazada'),
-      EstadoSolicitud.pendiente => (colors.warning, Icons.hourglass_top, 'En revisión'),
+      EstadoSolicitud.aprobada => (
+        colors.success,
+        Icons.check_circle,
+        'Solicitud aprobada',
+      ),
+      EstadoSolicitud.rechazada => (
+        colors.error,
+        Icons.cancel,
+        'Solicitud rechazada',
+      ),
+      EstadoSolicitud.pendiente => (
+        colors.warning,
+        Icons.hourglass_top,
+        'En revisión',
+      ),
     };
 
     return Scaffold(
@@ -36,8 +50,8 @@ class RespuestaSolicitudScreen extends StatelessWidget {
                 children: [
                   TweenAnimationBuilder<double>(
                     tween: Tween(begin: 0, end: 1),
-                    duration: const Duration(milliseconds: 400),
-                    curve: Curves.elasticOut,
+                    duration: AppMotion.slow,
+                    curve: AppMotion.celebratory,
                     builder: (context, value, child) =>
                         Transform.scale(scale: value, child: child),
                     child: CircleAvatar(
@@ -55,10 +69,9 @@ class RespuestaSolicitudScreen extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     '${solicitud.litrosSolicitados.toStringAsFixed(1)} L solicitados',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: colors.textSecondary),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colors.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 20),
                   if (solicitud.estado == EstadoSolicitud.aprobada)
@@ -72,22 +85,27 @@ class RespuestaSolicitudScreen extends StatelessWidget {
                       child: Column(
                         children: [
                           if (solicitud.litrosAutorizados != null &&
-                              solicitud.litrosAutorizados != solicitud.litrosSolicitados) ...[
+                              solicitud.litrosAutorizados !=
+                                  solicitud.litrosSolicitados) ...[
                             Text(
                               'Te autorizaron ${solicitud.litrosAutorizados!.toStringAsFixed(1)} L',
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                             const SizedBox(height: 8),
                           ],
-                          Text('Folio de autorización',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(color: colors.textMuted)),
+                          Text(
+                            'Folio de autorización',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: colors.textMuted),
+                          ),
                           const SizedBox(height: 4),
                           Text(
                             solicitud.folioAutorizacion!,
-                            style: Theme.of(context).textTheme.headlineSmall,
+                            style: AppTextStyles.monoData(colors.textPrimary)
+                                .copyWith(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w700,
+                                ),
                           ),
                         ],
                       ),
@@ -97,10 +115,10 @@ class RespuestaSolicitudScreen extends StatelessWidget {
                       solicitud.comentario!,
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: solicitud.estado == EstadoSolicitud.rechazada
-                                ? colors.error
-                                : colors.textSecondary,
-                          ),
+                        color: solicitud.estado == EstadoSolicitud.rechazada
+                            ? colors.error
+                            : colors.textSecondary,
+                      ),
                     ),
                   const SizedBox(height: 28),
                   if (solicitud.estado == EstadoSolicitud.aprobada) ...[
