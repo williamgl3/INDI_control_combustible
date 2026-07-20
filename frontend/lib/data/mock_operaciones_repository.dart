@@ -27,15 +27,16 @@ class MockOperacionesRepository implements OperacionesRepository {
 
   /// Mínimo de solicitudes aprobadas previas que debe tener un chofer
   /// antes de que su historial se considere "confiable" para auto-aprobar.
-  /// TODO-SPEC: valor PLACEHOLDER.
+  /// Confirmado por el usuario — no es un placeholder pendiente.
   static const _historialMinimo = 4;
 
   /// Margen sobre el máximo histórico que todavía se considera "dentro
-  /// de su patrón habitual" (15%). TODO-SPEC: valor PLACEHOLDER.
+  /// de su patrón habitual" (15%). Confirmado por el usuario.
   static const _margenPatron = 1.15;
 
-  /// Presupuesto semanal total de la obra, en pesos.
-  /// TODO-SPEC: valor PLACEHOLDER.
+  /// Presupuesto semanal total de la obra, en pesos. Valor de prueba para
+  /// este repositorio mock — el backend real lo trae desde
+  /// `/solicitudes/resumen-presupuesto`, configurable por el admin.
   @override
   double presupuestoSemanalTotal = 50000;
 

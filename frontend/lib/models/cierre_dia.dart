@@ -64,8 +64,7 @@ class RendimientoDia {
   /// 0 o negativo (dato inconsistente, no se puede calcular).
   final double? rendimiento;
 
-  /// TODO-SPEC: umbrales de anomalía PLACEHOLDER — ajustar con datos
-  /// reales de las unidades de la obra.
+  /// Umbrales confirmados por el usuario (no son placeholder pendiente).
   bool get esAnomalo =>
       rendimiento != null && (rendimiento! < 2 || rendimiento! > 15);
 }

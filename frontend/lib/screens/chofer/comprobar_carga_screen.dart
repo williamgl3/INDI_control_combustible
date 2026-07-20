@@ -138,7 +138,7 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
             litrosDetectadosOcr: _resultadoOcr?.litros,
           );
       ref.read(operacionesTickProvider.notifier).state++;
-      // TODO-SPEC: 8 horas es un placeholder para "fin de jornada".
+      // 8 horas para "fin de jornada" confirmado por el usuario.
       await ref
           .read(recordatorioServiceProvider)
           .programarRecordatorioCerrarDia(
