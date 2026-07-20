@@ -4,29 +4,81 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth_controller.dart';
 import '../../core/session_provider.dart';
 import '../../theme/app_breakpoints.dart';
+import '../../theme/app_motion.dart';
+import '../../theme/app_radii.dart';
+import '../../theme/app_section_colors.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/gradient_header.dart';
+import '../../widgets/brand_header.dart';
+import '../../widgets/icon_badge.dart';
 import 'tabs/autorizaciones_tab.dart';
 import 'tabs/choferes_tab.dart';
 import 'tabs/concentrado_tab.dart';
+import 'tabs/dashboard_tab.dart';
 import 'tabs/finanzas_tab.dart';
+import 'tabs/mantenimiento_tab.dart';
 import 'tabs/vehiculos_tab.dart';
 
-enum _SeccionAdmin { autorizaciones, concentrado, finanzas, vehiculos, choferes }
+enum _SeccionAdmin {
+  dashboard,
+  autorizaciones,
+  concentrado,
+  finanzas,
+  vehiculos,
+  mantenimiento,
+  choferes,
+}
 
 class _Destino {
-  const _Destino(this.seccion, this.icono, this.etiqueta);
+  const _Destino(this.seccion, this.icono, this.etiqueta, this.color);
   final _SeccionAdmin seccion;
   final IconData icono;
   final String etiqueta;
+  final Color color;
 }
 
 const _destinos = [
-  _Destino(_SeccionAdmin.autorizaciones, Icons.assignment_outlined, 'Autorizaciones'),
-  _Destino(_SeccionAdmin.concentrado, Icons.table_chart_outlined, 'Concentrado'),
-  _Destino(_SeccionAdmin.finanzas, Icons.payments_outlined, 'Finanzas'),
-  _Destino(_SeccionAdmin.vehiculos, Icons.local_shipping_outlined, 'Vehículos'),
-  _Destino(_SeccionAdmin.choferes, Icons.groups_outlined, 'Choferes'),
+  _Destino(
+    _SeccionAdmin.dashboard,
+    Icons.insights_outlined,
+    'Dashboard',
+    AppSectionColors.dashboard,
+  ),
+  _Destino(
+    _SeccionAdmin.autorizaciones,
+    Icons.assignment_outlined,
+    'Autorizaciones',
+    AppSectionColors.autorizaciones,
+  ),
+  _Destino(
+    _SeccionAdmin.concentrado,
+    Icons.table_chart_outlined,
+    'Concentrado',
+    AppSectionColors.concentrado,
+  ),
+  _Destino(
+    _SeccionAdmin.finanzas,
+    Icons.payments_outlined,
+    'Finanzas',
+    AppSectionColors.finanzas,
+  ),
+  _Destino(
+    _SeccionAdmin.vehiculos,
+    Icons.local_shipping_outlined,
+    'Vehículos',
+    AppSectionColors.vehiculos,
+  ),
+  _Destino(
+    _SeccionAdmin.mantenimiento,
+    Icons.build_outlined,
+    'Mantenimiento',
+    AppSectionColors.mantenimiento,
+  ),
+  _Destino(
+    _SeccionAdmin.choferes,
+    Icons.groups_outlined,
+    'Choferes',
+    AppSectionColors.choferes,
+  ),
 ];
 
 /// Shell del panel administrativo: sidebar en escritorio/tablet
@@ -40,11 +92,14 @@ class AdministrativoHomeScreen extends ConsumerStatefulWidget {
       _AdministrativoHomeScreenState();
 }
 
-class _AdministrativoHomeScreenState extends ConsumerState<AdministrativoHomeScreen> {
+class _AdministrativoHomeScreenState
+    extends ConsumerState<AdministrativoHomeScreen> {
   _SeccionAdmin _seccion = _SeccionAdmin.autorizaciones;
 
   Widget _cuerpoDe(_SeccionAdmin seccion) {
     switch (seccion) {
+      case _SeccionAdmin.dashboard:
+        return const DashboardTab();
       case _SeccionAdmin.autorizaciones:
         return const AutorizacionesTab();
       case _SeccionAdmin.concentrado:
@@ -53,6 +108,8 @@ class _AdministrativoHomeScreenState extends ConsumerState<AdministrativoHomeScr
         return const FinanzasTab();
       case _SeccionAdmin.vehiculos:
         return const VehiculosTab();
+      case _SeccionAdmin.mantenimiento:
+        return const MantenimientoTab();
       case _SeccionAdmin.choferes:
         return const ChoferesTab();
     }
@@ -63,12 +120,14 @@ class _AdministrativoHomeScreenState extends ConsumerState<AdministrativoHomeScr
     final colors = context.colors;
     final ancho = MediaQuery.sizeOf(context).width;
     final esAncho = AppBreakpoints.isTabletOrDesktop(ancho);
-    final indiceSeleccionado = _destinos.indexWhere((d) => d.seccion == _seccion);
+    final indiceSeleccionado = _destinos.indexWhere(
+      (d) => d.seccion == _seccion,
+    );
 
     final contenido = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        GradientHeader(
+        BrandHeader(
           padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -79,18 +138,16 @@ class _AdministrativoHomeScreenState extends ConsumerState<AdministrativoHomeScr
                   children: [
                     Text(
                       'Panel administrativo',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
-                          ?.copyWith(color: colors.primaryOn),
+                      style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                        color: colors.textPrimary,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       'INDI Combustible · Control de combustible en obra',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodyMedium
-                          ?.copyWith(color: colors.primaryOn.withValues(alpha: 0.9)),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colors.textSecondary,
+                      ),
                     ),
                   ],
                 ),
@@ -98,12 +155,32 @@ class _AdministrativoHomeScreenState extends ConsumerState<AdministrativoHomeScr
               IconButton(
                 tooltip: 'Cerrar sesión',
                 onPressed: () => ref.read(authControllerProvider).logout(),
-                icon: Icon(Icons.logout, color: colors.primaryOn),
+                icon: Icon(Icons.logout, color: colors.textSecondary),
               ),
             ],
           ),
         ),
-        Expanded(child: _cuerpoDe(_seccion)),
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: AppMotion.base,
+            switchInCurve: AppMotion.curve,
+            switchOutCurve: AppMotion.curve,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.02),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            ),
+            child: KeyedSubtree(
+              key: ValueKey(_seccion),
+              child: _cuerpoDe(_seccion),
+            ),
+          ),
+        ),
       ],
     );
 
@@ -115,7 +192,8 @@ class _AdministrativoHomeScreenState extends ConsumerState<AdministrativoHomeScr
             children: [
               _SidebarAdmin(
                 indiceSeleccionado: indiceSeleccionado,
-                onSeleccionar: (i) => setState(() => _seccion = _destinos[i].seccion),
+                onSeleccionar: (i) =>
+                    setState(() => _seccion = _destinos[i].seccion),
               ),
               Expanded(child: contenido),
             ],
@@ -128,20 +206,31 @@ class _AdministrativoHomeScreenState extends ConsumerState<AdministrativoHomeScr
       body: SafeArea(child: contenido),
       bottomNavigationBar: NavigationBar(
         selectedIndex: indiceSeleccionado,
-        onDestinationSelected: (i) => setState(() => _seccion = _destinos[i].seccion),
+        // Con 7 secciones, mostrar las 7 etiquetas a la vez no cabe en un
+        // teléfono angosto (se cortan/superponen) — solo la sección activa
+        // muestra su etiqueta, el resto queda solo con el ícono.
+        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+        onDestinationSelected: (i) =>
+            setState(() => _seccion = _destinos[i].seccion),
         destinations: _destinos
-            .map((d) => NavigationDestination(icon: Icon(d.icono), label: d.etiqueta))
+            .map(
+              (d) =>
+                  NavigationDestination(icon: Icon(d.icono), label: d.etiqueta),
+            )
             .toList(),
       ),
     );
   }
 }
 
-/// Sidebar oscuro del panel administrativo (escritorio/tablet) — marca +
-/// navegación + el admin en sesión, en vez del `NavigationRail` claro por
-/// defecto de Material.
+/// Sidebar claro del panel administrativo (escritorio/tablet), estilo el
+/// panel maestro de Ajustes en iPad — marca + navegación + el admin en
+/// sesión, en vez del `NavigationRail` por defecto de Material.
 class _SidebarAdmin extends ConsumerWidget {
-  const _SidebarAdmin({required this.indiceSeleccionado, required this.onSeleccionar});
+  const _SidebarAdmin({
+    required this.indiceSeleccionado,
+    required this.onSeleccionar,
+  });
 
   final int indiceSeleccionado;
   final ValueChanged<int> onSeleccionar;
@@ -161,23 +250,22 @@ class _SidebarAdmin extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
             child: Row(
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [colors.info, colors.primary]),
-                    borderRadius: BorderRadius.circular(10),
+                ClipRRect(
+                  borderRadius: AppRadii.inputRadius,
+                  child: Image.asset(
+                    'assets/images/logo_indi.jpeg',
+                    width: 36,
+                    height: 36,
+                    fit: BoxFit.cover,
                   ),
-                  child: Icon(Icons.local_gas_station, color: colors.primaryOn, size: 20),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'INDI Combustible',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(color: colors.sidebarText),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: colors.sidebarText,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -200,18 +288,22 @@ class _SidebarAdmin extends ConsumerWidget {
                     radius: 16,
                     backgroundColor: colors.sidebarSurfaceAlt,
                     child: Text(
-                      admin.nombreCompleto.isNotEmpty ? admin.nombreCompleto[0] : '?',
-                      style: TextStyle(color: colors.sidebarText, fontWeight: FontWeight.bold),
+                      admin.nombreCompleto.isNotEmpty
+                          ? admin.nombreCompleto[0]
+                          : '?',
+                      style: TextStyle(
+                        color: colors.sidebarText,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       admin.nombreCompleto,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: colors.sidebarTextMuted),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colors.sidebarTextMuted,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -225,7 +317,11 @@ class _SidebarAdmin extends ConsumerWidget {
 }
 
 class _ItemSidebar extends StatelessWidget {
-  const _ItemSidebar({required this.destino, required this.seleccionado, required this.onTap});
+  const _ItemSidebar({
+    required this.destino,
+    required this.seleccionado,
+    required this.onTap,
+  });
 
   final _Destino destino;
   final bool seleccionado;
@@ -238,19 +334,23 @@ class _ItemSidebar extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       child: Material(
-        color: seleccionado ? colors.primary : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
+        color: seleccionado
+            ? destino.color.withValues(alpha: 0.12)
+            : Colors.transparent,
+        borderRadius: AppRadii.navButtonRadius,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
+          borderRadius: AppRadii.navButtonRadius,
+          hoverColor: colors.sidebarSurfaceAlt.withValues(alpha: 0.6),
+          child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
               children: [
-                Icon(
-                  destino.icono,
-                  size: 20,
-                  color: seleccionado ? colors.primaryOn : colors.sidebarTextMuted,
+                IconBadge(
+                  icono: destino.icono,
+                  color: destino.color,
+                  size: 30,
+                  iconSize: 16,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -258,9 +358,13 @@ class _ItemSidebar extends StatelessWidget {
                     destino.etiqueta,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: seleccionado ? colors.primaryOn : colors.sidebarText,
-                          fontWeight: seleccionado ? FontWeight.w700 : FontWeight.w500,
-                        ),
+                      color: seleccionado
+                          ? destino.color
+                          : colors.sidebarTextMuted,
+                      fontWeight: seleccionado
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
