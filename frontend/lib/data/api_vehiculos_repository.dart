@@ -100,12 +100,12 @@ class ApiVehiculosRepository implements VehiculosRepository {
     final data = await _client.patch(
       '/vehiculos/$id',
       body: {
-        if (tipoUnidad != null) 'tipoUnidad': tipoUnidad,
-        if (identificador != null) 'identificador': identificador,
-        if (tipoCombustible != null) 'tipoCombustible': tipoCombustible,
-        if (topeSemanal != null) 'topeSemanal': topeSemanal,
+        'tipoUnidad': ?tipoUnidad,
+        'identificador': ?identificador,
+        'tipoCombustible': ?tipoCombustible,
+        'topeSemanal': ?topeSemanal,
         'modelo': modelo,
-        if (intervaloServicio != null) 'intervaloServicio': intervaloServicio,
+        'intervaloServicio': ?intervaloServicio,
       },
     );
     final vehiculo = Vehiculo.fromJson(data as Map<String, dynamic>);

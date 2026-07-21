@@ -10,6 +10,8 @@ import '../../theme/app_section_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/brand_header.dart';
 import '../../widgets/icon_badge.dart';
+import '../../widgets/selector_tema_dialog.dart';
+import 'tabs/auditoria_tab.dart';
 import 'tabs/autorizaciones_tab.dart';
 import 'tabs/choferes_tab.dart';
 import 'tabs/concentrado_tab.dart';
@@ -26,6 +28,7 @@ enum _SeccionAdmin {
   vehiculos,
   mantenimiento,
   choferes,
+  auditoria,
 }
 
 class _Destino {
@@ -79,6 +82,12 @@ const _destinos = [
     'Choferes',
     AppSectionColors.choferes,
   ),
+  _Destino(
+    _SeccionAdmin.auditoria,
+    Icons.history_outlined,
+    'Auditoría',
+    AppSectionColors.auditoria,
+  ),
 ];
 
 /// Shell del panel administrativo: sidebar en escritorio/tablet
@@ -112,12 +121,13 @@ class _AdministrativoHomeScreenState
         return const MantenimientoTab();
       case _SeccionAdmin.choferes:
         return const ChoferesTab();
+      case _SeccionAdmin.auditoria:
+        return const AuditoriaTab();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
     final ancho = MediaQuery.sizeOf(context).width;
     final esAncho = AppBreakpoints.isTabletOrDesktop(ancho);
     final indiceSeleccionado = _destinos.indexWhere(
@@ -139,23 +149,31 @@ class _AdministrativoHomeScreenState
                     Text(
                       'Panel administrativo',
                       style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                        color: colors.textPrimary,
+                        color: BrandHeader.onColor,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       'INDI Combustible · Control de combustible en obra',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: colors.textSecondary,
+                        color: BrandHeader.onColorMuted,
                       ),
                     ),
                   ],
                 ),
               ),
               IconButton(
+                tooltip: 'Tema',
+                onPressed: () => SelectorTemaDialog.show(context),
+                icon: const Icon(
+                  Icons.brightness_6_outlined,
+                  color: BrandHeader.onColor,
+                ),
+              ),
+              IconButton(
                 tooltip: 'Cerrar sesión',
                 onPressed: () => ref.read(authControllerProvider).logout(),
-                icon: Icon(Icons.logout, color: colors.textSecondary),
+                icon: const Icon(Icons.logout, color: BrandHeader.onColor),
               ),
             ],
           ),
@@ -272,13 +290,23 @@ class _SidebarAdmin extends ConsumerWidget {
               ],
             ),
           ),
-          for (var i = 0; i < _destinos.length; i++)
-            _ItemSidebar(
-              destino: _destinos[i],
-              seleccionado: i == indiceSeleccionado,
-              onTap: () => onSeleccionar(i),
+          // `Expanded` + `ListView` en vez de una lista fija: con 8
+          // secciones, una ventana baja (o el viewport chico de los
+          // tests de widgets) ya no alcanza a mostrarlas todas sin
+          // hacer scroll — antes, con menos secciones, cabían siempre.
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                for (var i = 0; i < _destinos.length; i++)
+                  _ItemSidebar(
+                    destino: _destinos[i],
+                    seleccionado: i == indiceSeleccionado,
+                    onTap: () => onSeleccionar(i),
+                  ),
+              ],
             ),
-          const Spacer(),
+          ),
           if (admin != null)
             Padding(
               padding: const EdgeInsets.all(20),

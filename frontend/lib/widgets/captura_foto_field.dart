@@ -31,16 +31,21 @@ class CapturaFotoField extends StatelessWidget {
     final colors = context.colors;
     final tieneFoto = rutaFoto != null;
 
-    return Material(
-      color: tieneFoto
-          ? colors.success.withValues(alpha: 0.06)
-          : colors.surfaceAlt,
-      borderRadius: AppRadii.cardRadius,
-      child: InkWell(
-        onTap: cargando ? null : onTomarFoto,
+    return Semantics(
+      button: true,
+      label: tieneFoto
+          ? 'Volver a tomar foto: $etiqueta'
+          : 'Tomar foto: $etiqueta',
+      child: Material(
+        color: tieneFoto
+            ? colors.success.withValues(alpha: 0.06)
+            : colors.surfaceAlt,
         borderRadius: AppRadii.cardRadius,
-        hoverColor: colors.primary.withValues(alpha: 0.08),
-        child: Container(
+        child: InkWell(
+          onTap: cargando ? null : onTomarFoto,
+          borderRadius: AppRadii.cardRadius,
+          hoverColor: colors.primary.withValues(alpha: 0.08),
+          child: Container(
           padding: const EdgeInsets.all(AppSpacing.tile),
           decoration: BoxDecoration(
             borderRadius: AppRadii.cardRadius,
@@ -94,6 +99,7 @@ class CapturaFotoField extends StatelessWidget {
                   color: colors.textSecondary,
                 ),
             ],
+          ),
           ),
         ),
       ),

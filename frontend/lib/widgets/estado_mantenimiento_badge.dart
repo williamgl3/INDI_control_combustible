@@ -21,18 +21,21 @@ class EstadoMantenimientoBadge extends StatelessWidget {
       EstadoMantenimiento.sinDatos => (colors.textMuted, 'Sin datos'),
     };
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: AppRadii.badgeRadius,
-      ),
-      child: Text(
-        texto.toUpperCase(),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.4,
+    return Semantics(
+      label: 'Estado de mantenimiento: $texto',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.14),
+          borderRadius: AppRadii.badgeRadius,
+        ),
+        child: Text(
+          texto.toUpperCase(),
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: color,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.4,
+          ),
         ),
       ),
     );

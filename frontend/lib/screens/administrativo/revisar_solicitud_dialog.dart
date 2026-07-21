@@ -109,143 +109,148 @@ class _RevisarSolicitudDialogState
 
     return AppDialogShell(
       maxWidth: 440,
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.nombreChofer,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              vehiculo == null
-                  ? 'Vehículo no encontrado'
-                  : '${vehiculo.tipoUnidad} · ${vehiculo.identificador} · '
-                        '${vehiculo.tipoCombustible}',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
-            ),
-            if (widget.solicitud.esUrgente) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: colors.error.withValues(alpha: 0.1),
-                  borderRadius: AppRadii.badgeRadius,
-                ),
-                child: Text(
-                  'URGENTE',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: colors.error,
-                    fontWeight: FontWeight.w700,
-                  ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            widget.nombreChofer,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            vehiculo == null
+                ? 'Vehículo no encontrado'
+                : '${vehiculo.tipoUnidad} · ${vehiculo.identificador} · '
+                      '${vehiculo.tipoCombustible}',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Para: ${widget.solicitud.fechaProgramada.day.toString().padLeft(2, '0')}/'
+            '${widget.solicitud.fechaProgramada.month.toString().padLeft(2, '0')}/'
+            '${widget.solicitud.fechaProgramada.year}',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            widget.solicitud.actividad,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          if (widget.solicitud.esUrgente) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: colors.error.withValues(alpha: 0.1),
+                borderRadius: AppRadii.badgeRadius,
+              ),
+              child: Text(
+                'URGENTE',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: colors.error,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-            ],
-            if (widget.solicitud.motivoChofer != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                '"${widget.solicitud.motivoChofer}"',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontStyle: FontStyle.italic,
-                  color: colors.textSecondary,
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _DatoReferencia(
-                    etiqueta: 'Solicitado',
-                    valor:
-                        '${widget.solicitud.litrosSolicitados.toStringAsFixed(1)} L',
-                  ),
-                ),
-                Expanded(
-                  child: _DatoReferencia(
-                    etiqueta: 'Tope vehículo',
-                    valor: (vehiculo != null && vehiculo.topeSemanal > 0)
-                        ? '${vehiculo.topeSemanal.toStringAsFixed(0)} L'
-                        : 'Sin asignar',
-                  ),
-                ),
-                Expanded(
-                  child: _DatoReferencia(
-                    etiqueta: 'Presup. semana',
-                    valor: '\$${repo.presupuestoRestante.toStringAsFixed(0)}',
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            StepperNumerico(
-              etiqueta: 'Litros a autorizar',
-              valor: _litrosAutorizados,
-              sufijo: 'L',
-              decimales: 1,
-              onChanged: (v) => setState(() => _litrosAutorizados = v),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _motivoController,
-              decoration: InputDecoration(
-                labelText: _autorizaMenos
-                    ? 'Motivo (obligatorio: autorizas menos de lo pedido)'
-                    : 'Motivo (obligatorio solo si rechazas)',
-              ),
-              maxLines: 2,
-            ),
-            if (_errorGeneral != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _errorGeneral!,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: colors.error),
-              ),
-            ],
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _cargando
-                        ? null
-                        : () => _resolver(aprobar: false),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: colors.error,
-                    ),
-                    child: const Text('Rechazar'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _cargando
-                        ? null
-                        : () => _resolver(aprobar: true),
-                    child: _cargando
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(
-                            'Autorizar ${_litrosAutorizados.toStringAsFixed(0)} L',
-                          ),
-                  ),
-                ),
-              ],
             ),
           ],
-        ),
+          if (widget.solicitud.motivoChofer != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              '"${widget.solicitud.motivoChofer}"',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontStyle: FontStyle.italic,
+                color: colors.textSecondary,
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _DatoReferencia(
+                  etiqueta: 'Solicitado',
+                  valor:
+                      '${widget.solicitud.litrosSolicitados.toStringAsFixed(1)} L',
+                ),
+              ),
+              Expanded(
+                child: _DatoReferencia(
+                  etiqueta: 'Tope vehículo',
+                  valor: (vehiculo != null && vehiculo.topeSemanal > 0)
+                      ? '${vehiculo.topeSemanal.toStringAsFixed(0)} L'
+                      : 'Sin asignar',
+                ),
+              ),
+              Expanded(
+                child: _DatoReferencia(
+                  etiqueta: 'Presup. semana',
+                  valor: '\$${repo.presupuestoRestante.toStringAsFixed(0)}',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          StepperNumerico(
+            etiqueta: 'Litros a autorizar',
+            valor: _litrosAutorizados,
+            sufijo: 'L',
+            decimales: 1,
+            onChanged: (v) => setState(() => _litrosAutorizados = v),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _motivoController,
+            decoration: InputDecoration(
+              labelText: _autorizaMenos
+                  ? 'Motivo (obligatorio: autorizas menos de lo pedido)'
+                  : 'Motivo (obligatorio solo si rechazas)',
+            ),
+            maxLines: 2,
+          ),
+          if (_errorGeneral != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _errorGeneral!,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: colors.error),
+            ),
+          ],
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _cargando ? null : () => _resolver(aprobar: false),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: colors.error,
+                  ),
+                  child: const Text('Rechazar'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _cargando ? null : () => _resolver(aprobar: true),
+                  child: _cargando
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          'Autorizar ${_litrosAutorizados.toStringAsFixed(0)} L',
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -29,6 +29,11 @@ class AppDialogShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    // Tope de alto relativo a la pantalla — sin esto, un diálogo con
+    // varios campos (ej. EditarVehiculoDialog) se desborda en pantallas
+    // cortas (teléfono en horizontal, o ventanas de escritorio bajas) en
+    // vez de hacer scroll.
+    final alturaMaxima = MediaQuery.sizeOf(context).height * 0.9;
 
     return Dialog(
       // `Dialog` sigue siendo el widget raíz (algunos tests lo ubican por
@@ -39,7 +44,10 @@ class AppDialogShell extends StatelessWidget {
       elevation: 0,
       shape: const RoundedRectangleBorder(borderRadius: AppRadii.cardRadius),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth),
+        constraints: BoxConstraints(
+          maxWidth: maxWidth,
+          maxHeight: alturaMaxima,
+        ),
         child: Container(
           decoration: BoxDecoration(
             color: colors.surface,
@@ -52,9 +60,11 @@ class AppDialogShell extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               ?header,
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.xxl),
-                child: child,
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppSpacing.xxl),
+                  child: child,
+                ),
               ),
             ],
           ),

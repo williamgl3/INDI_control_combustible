@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/auth_controller.dart';
+import '../../core/cola_solicitudes_offline.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
 import '../../models/solicitud_autorizacion.dart';
@@ -16,6 +17,8 @@ import '../../widgets/estado_solicitud_badge.dart';
 import '../../widgets/estado_vacio.dart';
 import '../../widgets/fecha_formato.dart';
 import '../../widgets/grouped_section.dart';
+import '../../widgets/notificaciones_bell.dart';
+import '../../widgets/selector_tema_dialog.dart';
 import '../../widgets/tarjeta_tope_semanal.dart';
 
 class ChoferHomeScreen extends ConsumerStatefulWidget {
@@ -89,13 +92,20 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ClipRRect(
-                          borderRadius: AppRadii.inputRadius,
-                          child: Image.asset(
-                            'assets/images/logo_indi.jpeg',
-                            width: 44,
-                            height: 44,
-                            fit: BoxFit.cover,
+                        Container(
+                          padding: const EdgeInsets.all(5),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: AppRadii.inputRadius,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(5),
+                            child: Image.asset(
+                              'assets/images/logo_indi.jpeg',
+                              width: 34,
+                              height: 34,
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -106,22 +116,45 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
                               Text(
                                 'Hola, ${perfil.nombreCompleto.split(' ').first}',
                                 style: Theme.of(context).textTheme.displayLarge
-                                    ?.copyWith(color: colors.textPrimary),
+                                    ?.copyWith(color: BrandHeader.onColor),
                               ),
                               const SizedBox(height: 6),
                               Text(
                                 'Control de combustible en obra',
                                 style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(color: colors.textSecondary),
+                                    ?.copyWith(
+                                      color: BrandHeader.onColorMuted,
+                                    ),
                               ),
                             ],
+                          ),
+                        ),
+                        const NotificacionesBell(color: BrandHeader.onColor),
+                        IconButton(
+                          tooltip: 'Mi perfil',
+                          onPressed: () =>
+                              context.push(RoutePaths.choferPerfil),
+                          icon: const Icon(
+                            Icons.person_outline,
+                            color: BrandHeader.onColor,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Tema',
+                          onPressed: () => SelectorTemaDialog.show(context),
+                          icon: const Icon(
+                            Icons.brightness_6_outlined,
+                            color: BrandHeader.onColor,
                           ),
                         ),
                         IconButton(
                           tooltip: 'Cerrar sesión',
                           onPressed: () =>
                               ref.read(authControllerProvider).logout(),
-                          icon: Icon(Icons.logout, color: colors.textSecondary),
+                          icon: const Icon(
+                            Icons.logout,
+                            color: BrandHeader.onColor,
+                          ),
                         ),
                       ],
                     ),
@@ -185,6 +218,29 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
                           ),
                           icon: const Icon(Icons.local_gas_station_outlined),
                           label: const Text('Solicitar carga de combustible'),
+                        ),
+                        const SizedBox(height: 16),
+                        _AccesosRapidos(
+                          onMiConsumo: () =>
+                              context.push(RoutePaths.choferDashboard),
+                          onMisSolicitudes: () =>
+                              context.push(RoutePaths.choferSolicitudes),
+                        ),
+                        Consumer(
+                          builder: (context, ref, _) {
+                            // Cuenta las cuatro colas offline (solicitar
+                            // carga, comprobar carga, cerrar día, reportar
+                            // incidencia) — no solo la primera.
+                            final total = ref
+                                    .watch(totalPendientesOfflineProvider)
+                                    .valueOrNull ??
+                                0;
+                            if (total == 0) return const SizedBox.shrink();
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: _BannerPendientesOffline(cantidad: total),
+                            );
+                          },
                         ),
                         const SizedBox(height: 28),
                         Text(
@@ -378,6 +434,120 @@ class _SolicitudTile extends StatelessWidget {
             ),
           ),
           EstadoSolicitudBadge(estado: solicitud.estado),
+        ],
+      ),
+    );
+  }
+}
+
+/// Fila de atajos a las secciones nuevas del chofer — antes de esto solo
+/// existían "Solicitar carga" y "Comprobar carga"/"Cerrar día" (estas
+/// últimas solo aparecen como tarjeta cuando aplican).
+class _AccesosRapidos extends StatelessWidget {
+  const _AccesosRapidos({
+    required this.onMiConsumo,
+    required this.onMisSolicitudes,
+  });
+
+  final VoidCallback onMiConsumo;
+  final VoidCallback onMisSolicitudes;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _BotonAcceso(
+            icono: Icons.insights_outlined,
+            etiqueta: 'Mi consumo',
+            onTap: onMiConsumo,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _BotonAcceso(
+            icono: Icons.assignment_outlined,
+            etiqueta: 'Mis solicitudes',
+            onTap: onMisSolicitudes,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BotonAcceso extends StatelessWidget {
+  const _BotonAcceso({
+    required this.icono,
+    required this.etiqueta,
+    required this.onTap,
+  });
+
+  final IconData icono;
+  final String etiqueta;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Material(
+      color: colors.surface,
+      borderRadius: AppRadii.cardRadius,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppRadii.cardRadius,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: AppRadii.cardRadius,
+            border: Border.all(color: colors.border),
+          ),
+          child: Column(
+            children: [
+              Icon(icono, color: colors.primary, size: 22),
+              const SizedBox(height: 6),
+              Text(
+                etiqueta,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: colors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BannerPendientesOffline extends StatelessWidget {
+  const _BannerPendientesOffline({required this.cantidad});
+
+  final int cantidad;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: colors.warning.withValues(alpha: 0.1),
+        borderRadius: AppRadii.cardRadius,
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.cloud_off_outlined, size: 18, color: colors.warning),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              cantidad == 1
+                  ? 'Tienes 1 solicitud guardada sin conexión — se enviará sola.'
+                  : 'Tienes $cantidad solicitudes guardadas sin conexión — se enviarán solas.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
+            ),
+          ),
         ],
       ),
     );

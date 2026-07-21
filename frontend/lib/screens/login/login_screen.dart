@@ -8,7 +8,7 @@ import '../../data/auth_repository.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/brand_header.dart';
+import '../../widgets/auth_screen_shell.dart';
 import 'admin_login_dialog.dart';
 
 /// Login de chofer (flujo principal). El acceso de administrador vive en
@@ -64,155 +64,104 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final colors = context.colors;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Header estilo "large title" de iOS: mismo fondo que la
-                  // pantalla, sin banda de color — el logo + título llevan
-                  // toda la presencia visual.
-                  BrandHeader(
-                    child: Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: AppRadii.inputRadius,
-                          child: Image.asset(
-                            'assets/images/logo_indi.jpeg',
-                            width: 52,
-                            height: 52,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'INDI Combustible',
-                                style: Theme.of(context).textTheme.headlineSmall
-                                    ?.copyWith(color: colors.textPrimary),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Control de combustible en obra',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(color: colors.textSecondary),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+    return AuthScreenShell(
+      titulo: 'Bienvenido',
+      subtitulo: 'Ingresa tus datos para continuar',
+      child: Form(
+        key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _usuarioController,
+              decoration: const InputDecoration(
+                labelText: 'Usuario',
+                prefixIcon: Icon(Icons.person_outline),
+              ),
+              validator: Validators.usuario,
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _passwordController,
+              decoration: InputDecoration(
+                labelText: 'Contraseña',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: Semantics(
+                  label: _passwordVisible
+                      ? 'Ocultar contraseña'
+                      : 'Mostrar contraseña',
+                  button: true,
+                  child: IconButton(
+                    icon: Icon(
+                      _passwordVisible
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
                     ),
+                    tooltip: _passwordVisible ? 'Ocultar' : 'Ver',
+                    onPressed: () =>
+                        setState(() => _passwordVisible = !_passwordVisible),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Form(
-                      key: _formKey,
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          TextFormField(
-                            controller: _usuarioController,
-                            decoration: const InputDecoration(
-                              labelText: 'Usuario',
-                              prefixIcon: Icon(Icons.person_outline),
-                            ),
-                            validator: Validators.usuario,
-                            textInputAction: TextInputAction.next,
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _passwordController,
-                            decoration: InputDecoration(
-                              labelText: 'Contraseña',
-                              prefixIcon: const Icon(Icons.lock_outline),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _passwordVisible
-                                      ? Icons.visibility_off_outlined
-                                      : Icons.visibility_outlined,
-                                ),
-                                tooltip: _passwordVisible ? 'Ocultar' : 'Ver',
-                                onPressed: () => setState(
-                                  () => _passwordVisible = !_passwordVisible,
-                                ),
-                              ),
-                            ),
-                            obscureText: !_passwordVisible,
-                            validator: Validators.password,
-                            onFieldSubmitted: (_) => _enviar(),
-                          ),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: () =>
-                                  context.go(RoutePaths.recuperarPassword),
-                              child: const Text('¿Olvidaste tu contraseña?'),
-                            ),
-                          ),
-                          if (_errorGeneral != null) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              _errorGeneral!,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: colors.error),
-                            ),
-                          ],
-                          const SizedBox(height: 12),
-                          ElevatedButton(
-                            onPressed: _cargando ? null : _enviar,
-                            child: _cargando
-                                ? const SizedBox(
-                                    height: 18,
-                                    width: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Text('Ingresar'),
-                          ),
-                          const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              Expanded(child: Divider(color: colors.border)),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                ),
-                                child: Text(
-                                  'o',
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(color: colors.textMuted),
-                                ),
-                              ),
-                              Expanded(child: Divider(color: colors.border)),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                          _AccesoAdministradorButton(
-                            onTap: () => AdminLoginDialog.show(context),
-                          ),
-                          const SizedBox(height: 16),
-                          _RegistroChoferButton(
-                            onTap: () => context.go(RoutePaths.registroChofer),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                ),
+              ),
+              obscureText: !_passwordVisible,
+              validator: Validators.password,
+              onFieldSubmitted: (_) => _enviar(),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => context.go(RoutePaths.recuperarPassword),
+                child: const Text('¿Olvidaste tu contraseña?'),
               ),
             ),
-          ),
+            if (_errorGeneral != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _errorGeneral!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.error),
+              ),
+            ],
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: _cargando ? null : _enviar,
+              child: _cargando
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Ingresar'),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(child: Divider(color: colors.border)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    'o',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: colors.textMuted),
+                  ),
+                ),
+                Expanded(child: Divider(color: colors.border)),
+              ],
+            ),
+            const SizedBox(height: 24),
+            _AccesoAdministradorButton(
+              onTap: () => AdminLoginDialog.show(context),
+            ),
+            const SizedBox(height: 16),
+            _RegistroChoferButton(
+              onTap: () => context.go(RoutePaths.registroChofer),
+            ),
+          ],
         ),
       ),
     );
@@ -239,7 +188,7 @@ class _AccesoAdministradorButton extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: AppRadii.cardRadius,
             color: colors.surface,
-            boxShadow: context.shadows.card,
+            border: Border.all(color: colors.border),
           ),
           child: Row(
             children: [

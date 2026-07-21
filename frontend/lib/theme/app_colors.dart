@@ -31,6 +31,9 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.sidebarSurfaceAlt,
     required this.sidebarText,
     required this.sidebarTextMuted,
+    required this.brandHeaderStart,
+    required this.brandHeaderEnd,
+    required this.brandHeaderDot,
   });
 
   final Color background;
@@ -59,6 +62,14 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color sidebarSurfaceAlt;
   final Color sidebarText;
   final Color sidebarTextMuted;
+  // Azul "de sello" de la marca — tomado del banner corporativo real
+  // (fondo degradado + textura de puntos tipo halftone), distinto del
+  // azul vívido de [primary] (que viene del isotipo/logo y se reserva
+  // para botones/acentos interactivos). Fijo en ambos temas: es chrome
+  // de marca, no una superficie que deba adaptarse a claro/oscuro.
+  final Color brandHeaderStart;
+  final Color brandHeaderEnd;
+  final Color brandHeaderDot;
 
   static const light = AppColors(
     // systemGroupedBackground de iOS.
@@ -96,6 +107,9 @@ class AppColors extends ThemeExtension<AppColors> {
     sidebarSurfaceAlt: Color(0xFFDCE9FF),
     sidebarText: Color(0xFF000000),
     sidebarTextMuted: Color(0xFF6C6C70),
+    brandHeaderStart: Color(0xFF0F3E7A),
+    brandHeaderEnd: Color(0xFF1D63B4),
+    brandHeaderDot: Color(0xFF5FA0E8),
   );
 
   /// TODO-SPEC: paleta oscuro placeholder (systemBackground/label de iOS en
@@ -121,6 +135,9 @@ class AppColors extends ThemeExtension<AppColors> {
     sidebarSurfaceAlt: Color(0xFF0A3A75),
     sidebarText: Color(0xFFFFFFFF),
     sidebarTextMuted: Color(0xFFAEAEB2),
+    brandHeaderStart: Color(0xFF0F3E7A),
+    brandHeaderEnd: Color(0xFF1D63B4),
+    brandHeaderDot: Color(0xFF5FA0E8),
   );
 
   @override
@@ -144,6 +161,9 @@ class AppColors extends ThemeExtension<AppColors> {
     Color? sidebarSurfaceAlt,
     Color? sidebarText,
     Color? sidebarTextMuted,
+    Color? brandHeaderStart,
+    Color? brandHeaderEnd,
+    Color? brandHeaderDot,
   }) {
     return AppColors(
       background: background ?? this.background,
@@ -165,6 +185,9 @@ class AppColors extends ThemeExtension<AppColors> {
       sidebarSurfaceAlt: sidebarSurfaceAlt ?? this.sidebarSurfaceAlt,
       sidebarText: sidebarText ?? this.sidebarText,
       sidebarTextMuted: sidebarTextMuted ?? this.sidebarTextMuted,
+      brandHeaderStart: brandHeaderStart ?? this.brandHeaderStart,
+      brandHeaderEnd: brandHeaderEnd ?? this.brandHeaderEnd,
+      brandHeaderDot: brandHeaderDot ?? this.brandHeaderDot,
     );
   }
 
@@ -207,6 +230,13 @@ class AppColors extends ThemeExtension<AppColors> {
         other.sidebarTextMuted,
         t,
       )!,
+      brandHeaderStart: Color.lerp(
+        brandHeaderStart,
+        other.brandHeaderStart,
+        t,
+      )!,
+      brandHeaderEnd: Color.lerp(brandHeaderEnd, other.brandHeaderEnd, t)!,
+      brandHeaderDot: Color.lerp(brandHeaderDot, other.brandHeaderDot, t)!,
     );
   }
 }

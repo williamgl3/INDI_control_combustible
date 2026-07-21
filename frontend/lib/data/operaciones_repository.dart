@@ -48,6 +48,8 @@ abstract class OperacionesRepository {
     required double litrosSolicitados,
     bool esUrgente = false,
     String? motivoChofer,
+    required String actividad,
+    required DateTime fechaProgramada,
   });
 
   SolicitudAutorizacion? solicitudPorFolio(String folio);

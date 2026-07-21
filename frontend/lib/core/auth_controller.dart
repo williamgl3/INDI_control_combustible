@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/auth_repository.dart';
 import '../models/perfil.dart';
+import 'app_logger.dart';
+import 'cola_solicitudes_offline.dart';
 import 'providers.dart';
 import 'session_provider.dart';
 
@@ -24,8 +26,10 @@ class AuthController {
   }
 
   Future<void> registrarChofer({
-    required String nombreCompleto,
-    required int edad,
+    required String nombre,
+    required String apellidoPaterno,
+    String? apellidoMaterno,
+    required DateTime fechaNacimiento,
     required String correo,
     required String usuario,
     required String password,
@@ -33,8 +37,10 @@ class AuthController {
     final resultado = await _ref
         .read(authRepositoryProvider)
         .registrarChofer(
-          nombreCompleto: nombreCompleto,
-          edad: edad,
+          nombre: nombre,
+          apellidoPaterno: apellidoPaterno,
+          apellidoMaterno: apellidoMaterno,
+          fechaNacimiento: fechaNacimiento,
           correo: correo,
           usuario: usuario,
           password: password,
@@ -48,8 +54,28 @@ class AuthController {
         .recuperarPassword(usuarioOCorreo: usuarioOCorreo);
   }
 
+  Future<void> cambiarPassword({
+    required String passwordActual,
+    required String passwordNueva,
+  }) {
+    return _ref
+        .read(authRepositoryProvider)
+        .cambiarPassword(
+          passwordActual: passwordActual,
+          passwordNueva: passwordNueva,
+        );
+  }
+
   Future<void> logout() async {
+    // Best-effort: si falla la llamada al backend (sin conexión, refresh
+    // token ya expirado, etc.) de todos modos se limpia la sesión local.
+    try {
+      await _ref.read(authRepositoryProvider).logout();
+    } catch (e) {
+      AppLogger.error('AuthController.logout', e);
+    }
     await _ref.read(tokenStorageProvider).borrarToken();
+    await _ref.read(tokenStorageProvider).borrarRefreshToken();
     await _ref.read(sessionStorageProvider).borrarPerfil();
     _ref.read(sessionProvider.notifier).cerrarSesion();
   }
@@ -71,6 +97,9 @@ class AuthController {
   Future<void> _completarSesion(ResultadoAuth resultado) async {
     final perfil = resultado.perfil;
     await _ref.read(tokenStorageProvider).guardarToken(resultado.token);
+    await _ref
+        .read(tokenStorageProvider)
+        .guardarRefreshToken(resultado.refreshToken);
     await _ref.read(sessionStorageProvider).guardarPerfil(perfil);
     _ref.read(sessionProvider.notifier).iniciarSesion(perfil);
     await _precargarDatos(perfil);
@@ -89,12 +118,31 @@ class AuthController {
         _ref
             .read(operacionesRepositoryProvider)
             .cargarDatosIniciales(perfil: perfil),
-        if (perfil.esAdministrativo)
+        if (perfil.esAdministrativo) ...[
           _ref.read(authRepositoryProvider).cargarChoferes(),
+          _ref.read(incidenciasRepositoryProvider).cargarTodasLasIncidencias(),
+        ] else
+          _ref.read(incidenciasRepositoryProvider).cargarMisIncidencias(),
       ]);
-    } catch (_) {
-      // TODO-BACKEND: mostrar un aviso de "no se pudo sincronizar" en vez
-      // de fallar en silencio, cuando se defina el manejo de conectividad.
+    } catch (e) {
+      // Antes fallaba en silencio. Ahora, para el chofer (el centro de
+      // notificaciones de `notificaciones_provider.dart` solo existe para
+      // ese rol), queda un aviso visible — el manejo de conectividad ya
+      // está definido (`connectivity_provider.dart` +
+      // `cola_solicitudes_offline.dart`).
+      if (perfil.esChofer) {
+        await _ref
+            .read(avisosSincronizacionOfflineProvider)
+            .agregar(
+              AvisoSincronizacionFallida(
+                id: 'aviso-precarga-${DateTime.now().microsecondsSinceEpoch}',
+                descripcion: 'Sincronización inicial',
+                motivo: 'No pudimos traer tus datos más recientes.',
+                ocurridoEn: DateTime.now(),
+              ),
+            );
+      }
+      AppLogger.error('AuthController._precargarDatos', e);
     }
     _ref.read(operacionesTickProvider.notifier).state++;
   }

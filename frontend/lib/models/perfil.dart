@@ -18,37 +18,82 @@ class Perfil {
   const Perfil({
     required this.id,
     required this.usuario,
-    required this.nombreCompleto,
+    required this.nombre,
+    this.apellidoPaterno,
+    this.apellidoMaterno,
     required this.correo,
-    required this.edad,
+    this.fechaNacimiento,
     required this.rol,
+    this.activo = true,
   });
 
   final String id;
   final String usuario;
-  final String nombreCompleto;
+  final String nombre;
+
+  /// `null` para cuentas administrativas dadas de alta desde el panel
+  /// (`AuthRepository.crearAdministrativo`), que solo piden
+  /// nombre/usuario/correo/password — un chofer siempre lo trae.
+  final String? apellidoPaterno;
+  final String? apellidoMaterno;
   final String correo;
-  final int edad;
+
+  /// `null` para cuentas administrativas dadas de alta desde el panel,
+  /// por el mismo motivo que [apellidoPaterno].
+  final DateTime? fechaNacimiento;
   final RolUsuario rol;
+
+  /// `false` si el usuario fue desactivado por un administrativo (ver
+  /// `AuthRepository.cambiarEstado`). Un usuario inactivo no puede
+  /// iniciar sesión — lo valida el backend, aquí solo se refleja en la UI
+  /// (badge en el directorio de choferes/administrativos).
+  final bool activo;
 
   bool get esChofer => rol == RolUsuario.chofer;
   bool get esAdministrativo => rol == RolUsuario.administrativo;
 
+  String get nombreCompleto => [
+    nombre,
+    if (apellidoPaterno != null && apellidoPaterno!.isNotEmpty) apellidoPaterno,
+    if (apellidoMaterno != null && apellidoMaterno!.isNotEmpty) apellidoMaterno,
+  ].join(' ');
+
+  /// Edad calculada desde [fechaNacimiento] — no se guarda por separado.
+  /// `null` si el perfil no trae fecha de nacimiento (cuentas
+  /// administrativas dadas de alta desde el panel).
+  int? get edad {
+    final nacimiento = fechaNacimiento;
+    if (nacimiento == null) return null;
+    final hoy = DateTime.now();
+    var edad = hoy.year - nacimiento.year;
+    final aunNoCumple =
+        hoy.month < nacimiento.month ||
+        (hoy.month == nacimiento.month && hoy.day < nacimiento.day);
+    if (aunNoCumple) edad--;
+    return edad;
+  }
+
   Perfil copyWith({
     String? id,
     String? usuario,
-    String? nombreCompleto,
+    String? nombre,
+    String? apellidoPaterno,
+    String? apellidoMaterno,
     String? correo,
-    int? edad,
+    DateTime? fechaNacimiento,
     RolUsuario? rol,
+    bool? activo,
   }) {
     return Perfil(
       id: id ?? this.id,
       usuario: usuario ?? this.usuario,
-      nombreCompleto: nombreCompleto ?? this.nombreCompleto,
+      nombre: nombre ?? this.nombre,
+      apellidoPaterno: apellidoPaterno ?? this.apellidoPaterno,
+      apellidoMaterno: apellidoMaterno ?? this.apellidoMaterno,
       correo: correo ?? this.correo,
-      edad: edad ?? this.edad,
+      fechaNacimiento: fechaNacimiento ?? this.fechaNacimiento,
       rol: rol ?? this.rol,
+      activo: activo ?? this.activo,
     );
   }
 
@@ -56,10 +101,15 @@ class Perfil {
     return Perfil(
       id: json['id'] as String,
       usuario: json['usuario'] as String,
-      nombreCompleto: json['nombreCompleto'] as String,
+      nombre: json['nombre'] as String,
+      apellidoPaterno: json['apellidoPaterno'] as String?,
+      apellidoMaterno: json['apellidoMaterno'] as String?,
       correo: json['correo'] as String,
-      edad: json['edad'] as int,
+      fechaNacimiento: json['fechaNacimiento'] != null
+          ? DateTime.parse(json['fechaNacimiento'] as String)
+          : null,
       rol: RolUsuario.values.byName(json['rol'] as String),
+      activo: json['activo'] as bool? ?? true,
     );
   }
 
@@ -67,10 +117,17 @@ class Perfil {
     return {
       'id': id,
       'usuario': usuario,
-      'nombreCompleto': nombreCompleto,
+      'nombre': nombre,
+      'apellidoPaterno': apellidoPaterno,
+      'apellidoMaterno': apellidoMaterno,
       'correo': correo,
-      'edad': edad,
+      'fechaNacimiento': fechaNacimiento == null
+          ? null
+          : '${fechaNacimiento!.year.toString().padLeft(4, '0')}-'
+                '${fechaNacimiento!.month.toString().padLeft(2, '0')}-'
+                '${fechaNacimiento!.day.toString().padLeft(2, '0')}',
       'rol': rol.name,
+      'activo': activo,
     };
   }
 
@@ -79,13 +136,25 @@ class Perfil {
     return other is Perfil &&
         other.id == id &&
         other.usuario == usuario &&
-        other.nombreCompleto == nombreCompleto &&
+        other.nombre == nombre &&
+        other.apellidoPaterno == apellidoPaterno &&
+        other.apellidoMaterno == apellidoMaterno &&
         other.correo == correo &&
-        other.edad == edad &&
-        other.rol == rol;
+        other.fechaNacimiento == fechaNacimiento &&
+        other.rol == rol &&
+        other.activo == activo;
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, usuario, nombreCompleto, correo, edad, rol);
+  int get hashCode => Object.hash(
+    id,
+    usuario,
+    nombre,
+    apellidoPaterno,
+    apellidoMaterno,
+    correo,
+    fechaNacimiento,
+    rol,
+    activo,
+  );
 }

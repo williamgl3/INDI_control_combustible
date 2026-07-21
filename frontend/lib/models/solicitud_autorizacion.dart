@@ -26,6 +26,8 @@ class SolicitudAutorizacion {
     required this.costoEstimado,
     this.esUrgente = false,
     this.motivoChofer,
+    required this.actividad,
+    required this.fechaProgramada,
     this.litrosAutorizados,
     this.aprobadaPor,
     this.folioAutorizacion,
@@ -55,6 +57,15 @@ class SolicitudAutorizacion {
   /// Motivo opcional que da el CHOFER al pedir (ej. "voy hasta el frente
   /// de obra"). Obligatorio en la UI cuando [esUrgente] es `true`.
   final String? motivoChofer;
+
+  /// Descripción del trabajo/actividad para el que se necesita el
+  /// combustible (ej. "Tramo 340+000 al 349+420, Realizar Trazos y
+  /// Niveles..."). Siempre obligatorio.
+  final String actividad;
+
+  /// Fecha y hora en que el chofer necesita el combustible — informativo,
+  /// no reemplaza a [esUrgente] (que sigue rigiendo la auto-aprobación).
+  final DateTime fechaProgramada;
 
   /// Litros que finalmente se autorizaron — puede ser menor a
   /// [litrosSolicitados] si un administrativo decidió recortar la
@@ -86,6 +97,8 @@ class SolicitudAutorizacion {
     double? costoEstimado,
     bool? esUrgente,
     String? motivoChofer,
+    String? actividad,
+    DateTime? fechaProgramada,
     double? litrosAutorizados,
     String? aprobadaPor,
     String? folioAutorizacion,
@@ -102,6 +115,8 @@ class SolicitudAutorizacion {
       costoEstimado: costoEstimado ?? this.costoEstimado,
       esUrgente: esUrgente ?? this.esUrgente,
       motivoChofer: motivoChofer ?? this.motivoChofer,
+      actividad: actividad ?? this.actividad,
+      fechaProgramada: fechaProgramada ?? this.fechaProgramada,
       litrosAutorizados: litrosAutorizados ?? this.litrosAutorizados,
       aprobadaPor: aprobadaPor ?? this.aprobadaPor,
       folioAutorizacion: folioAutorizacion ?? this.folioAutorizacion,
@@ -122,6 +137,8 @@ class SolicitudAutorizacion {
       costoEstimado: (json['costoEstimado'] as num).toDouble(),
       esUrgente: json['esUrgente'] as bool? ?? false,
       motivoChofer: json['motivoChofer'] as String?,
+      actividad: json['actividad'] as String,
+      fechaProgramada: DateTime.parse(json['fechaProgramada'] as String),
       litrosAutorizados: (json['litrosAutorizados'] as num?)?.toDouble(),
       aprobadaPor: json['aprobadaPor'] as String?,
       folioAutorizacion: json['folioAutorizacion'] as String?,
@@ -141,6 +158,8 @@ class SolicitudAutorizacion {
       'costoEstimado': costoEstimado,
       'esUrgente': esUrgente,
       'motivoChofer': motivoChofer,
+      'actividad': actividad,
+      'fechaProgramada': fechaProgramada.toIso8601String(),
       'litrosAutorizados': litrosAutorizados,
       'aprobadaPor': aprobadaPor,
       'folioAutorizacion': folioAutorizacion,

@@ -205,6 +205,8 @@ class MockOperacionesRepository implements OperacionesRepository {
     required double litrosSolicitados,
     bool esUrgente = false,
     String? motivoChofer,
+    required String actividad,
+    required DateTime fechaProgramada,
   }) async {
     await Future.delayed(const Duration(milliseconds: 400));
 
@@ -245,6 +247,8 @@ class MockOperacionesRepository implements OperacionesRepository {
       creadaEn: DateTime.now(),
       esUrgente: esUrgente,
       motivoChofer: motivoChofer,
+      actividad: actividad,
+      fechaProgramada: fechaProgramada,
       litrosAutorizados: seAutoAprueba ? litrosSolicitados : null,
       aprobadaPor: seAutoAprueba ? 'Automático (historial)' : null,
       folioAutorizacion: seAutoAprueba ? 'FA-${_folioSeq++}' : null,

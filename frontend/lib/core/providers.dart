@@ -1,10 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/api_auditoria_repository.dart';
 import '../data/api_auth_repository.dart';
 import '../data/api_client.dart';
+import '../data/api_incidencias_repository.dart';
 import '../data/api_operaciones_repository.dart';
 import '../data/api_vehiculos_repository.dart';
+import '../data/auditoria_repository.dart';
 import '../data/auth_repository.dart';
+import '../data/incidencias_repository.dart';
 import '../data/operaciones_repository.dart';
 import '../data/vehiculos_repository.dart';
 import 'auth_controller.dart';
@@ -20,7 +24,14 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  return ApiAuthRepository(ref.watch(apiClientProvider));
+  return ApiAuthRepository(
+    ref.watch(apiClientProvider),
+    ref.watch(tokenStorageProvider),
+  );
+});
+
+final auditoriaRepositoryProvider = Provider<AuditoriaRepository>((ref) {
+  return ApiAuditoriaRepository(ref.watch(apiClientProvider));
 });
 
 final operacionesRepositoryProvider = Provider<OperacionesRepository>((ref) {
@@ -40,6 +51,10 @@ final operacionesTickProvider = StateProvider<int>((ref) => 0);
 
 final vehiculosRepositoryProvider = Provider<VehiculosRepository>((ref) {
   return ApiVehiculosRepository(ref.watch(apiClientProvider));
+});
+
+final incidenciasRepositoryProvider = Provider<IncidenciasRepository>((ref) {
+  return ApiIncidenciasRepository(ref.watch(apiClientProvider));
 });
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) => TokenStorage());

@@ -182,6 +182,8 @@ class ApiOperacionesRepository implements OperacionesRepository {
     required double litrosSolicitados,
     bool esUrgente = false,
     String? motivoChofer,
+    required String actividad,
+    required DateTime fechaProgramada,
   }) async {
     final data = await _client.post(
       '/solicitudes',
@@ -190,6 +192,8 @@ class ApiOperacionesRepository implements OperacionesRepository {
         'litrosSolicitados': litrosSolicitados,
         'esUrgente': esUrgente,
         'motivoChofer': motivoChofer,
+        'actividad': actividad,
+        'fechaProgramada': fechaProgramada.toIso8601String(),
       },
     );
     final solicitud = SolicitudAutorizacion.fromJson(

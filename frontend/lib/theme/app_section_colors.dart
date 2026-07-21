@@ -18,4 +18,5 @@ class AppSectionColors {
   static const vehiculos = Color(0xFFFF9500); // iOS orange
   static const mantenimiento = Color(0xFFFF3B30); // iOS red
   static const choferes = Color(0xFFFF2D55); // iOS pink
+  static const auditoria = Color(0xFF8E8E93); // iOS gray
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
+import '../../../models/incidencia_vehiculo.dart';
 import '../../../models/vehiculo.dart';
 import '../../../theme/app_motion.dart';
 import '../../../theme/app_radii.dart';
@@ -55,6 +56,43 @@ class _MantenimientoTabState extends ConsumerState<MantenimientoTab> {
     if (guardado == true && mounted) setState(() {});
   }
 
+  Future<void> _resolverIncidencia(IncidenciaVehiculo incidencia) async {
+    final comentarioController = TextEditingController();
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Marcar como resuelta'),
+        content: TextField(
+          controller: comentarioController,
+          decoration: const InputDecoration(
+            labelText: 'Comentario (opcional)',
+          ),
+          maxLines: 2,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Resolver'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true) return;
+    await ref
+        .read(incidenciasRepositoryProvider)
+        .resolver(
+          id: incidencia.id,
+          comentario: comentarioController.text.trim().isEmpty
+              ? null
+              : comentarioController.text.trim(),
+        );
+    if (mounted) setState(() {});
+  }
+
   Future<void> _exportar(List<DiagnosticoMantenimiento> diagnosticos) async {
     final mensajero = ScaffoldMessenger.of(context);
     try {
@@ -79,7 +117,13 @@ class _MantenimientoTabState extends ConsumerState<MantenimientoTab> {
     final colors = context.colors;
     final vehiculosRepo = ref.watch(vehiculosRepositoryProvider);
     final operacionesRepo = ref.watch(operacionesRepositoryProvider);
+    final incidenciasRepo = ref.watch(incidenciasRepositoryProvider);
     ref.watch(operacionesTickProvider);
+
+    final incidenciasAbiertas = incidenciasRepo.todasLasIncidencias
+        .where((i) => i.estado == EstadoIncidencia.abierta)
+        .toList();
+    final vehiculosPorId = {for (final v in vehiculosRepo.todos) v.id: v};
 
     final ahora = DateTime.now();
     final diagnosticos = vehiculosRepo.todos
@@ -156,6 +200,20 @@ class _MantenimientoTabState extends ConsumerState<MantenimientoTab> {
               ),
             ],
           ),
+          if (incidenciasAbiertas.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            GroupedSection(
+              header: 'Incidencias reportadas (${incidenciasAbiertas.length})',
+              children: [
+                for (final i in incidenciasAbiertas)
+                  _IncidenciaTile(
+                    incidencia: i,
+                    vehiculo: vehiculosPorId[i.vehiculoId],
+                    onResolver: () => _resolverIncidencia(i),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: 20),
           IosSegmentedControl<_FiltroVista>(
             valor: _filtroVista,
@@ -332,6 +390,69 @@ class _TarjetaMantenimiento extends StatelessWidget {
           OutlinedButton(
             onPressed: onRegistrarServicio,
             child: const Text('Registrar servicio'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IncidenciaTile extends StatelessWidget {
+  const _IncidenciaTile({
+    required this.incidencia,
+    required this.vehiculo,
+    required this.onResolver,
+  });
+
+  final IncidenciaVehiculo incidencia;
+  final Vehiculo? vehiculo;
+  final VoidCallback onResolver;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IconBadge(
+            icono: Icons.report_gmailerrorred_outlined,
+            color: colors.error,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  vehiculo == null
+                      ? 'Vehículo no encontrado'
+                      : '${vehiculo!.tipoUnidad} · ${vehiculo!.identificador}',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  incidencia.descripcion,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  formatearFechaCorta(incidencia.creadaEn),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: onResolver,
+            child: const Text('Resolver'),
           ),
         ],
       ),

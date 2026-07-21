@@ -73,6 +73,15 @@ class RespuestaSolicitudScreen extends StatelessWidget {
                       color: colors.textSecondary,
                     ),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Para: ${solicitud.fechaProgramada.day.toString().padLeft(2, '0')}/'
+                    '${solicitud.fechaProgramada.month.toString().padLeft(2, '0')}/'
+                    '${solicitud.fechaProgramada.year}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
                   const SizedBox(height: 20),
                   if (solicitud.estado == EstadoSolicitud.aprobada)
                     Container(

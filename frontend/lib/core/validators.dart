@@ -28,12 +28,15 @@ class Validators {
     return null;
   }
 
-  static String? edad(String? value) {
-    final v = value?.trim() ?? '';
-    if (v.isEmpty) return 'La edad es obligatoria.';
-    final n = int.tryParse(v);
-    if (n == null) return 'La edad debe ser un número.';
-    if (n < edadMin || n > edadMax) {
+  static String? fechaNacimiento(DateTime? value) {
+    if (value == null) return 'La fecha de nacimiento es obligatoria.';
+    final hoy = DateTime.now();
+    var edad = hoy.year - value.year;
+    final aunNoCumple =
+        hoy.month < value.month ||
+        (hoy.month == value.month && hoy.day < value.day);
+    if (aunNoCumple) edad--;
+    if (edad < edadMin || edad > edadMax) {
       return 'La edad debe estar entre $edadMin y $edadMax años.';
     }
     return null;

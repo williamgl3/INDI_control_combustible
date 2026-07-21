@@ -7,6 +7,7 @@ import '../../core/validators.dart';
 import '../../data/auth_repository.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/auth_screen_shell.dart';
 
 /// Flujo de "¿Olvidaste tu contraseña?": captura → confirmación.
 ///
@@ -60,24 +61,14 @@ class _RecuperarPasswordScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Recuperar contraseña'),
-        leading: BackButton(onPressed: () => context.go(RoutePaths.login)),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: _enviado
-                  ? _buildConfirmacion(context)
-                  : _buildFormulario(context),
-            ),
-          ),
-        ),
-      ),
+    return AuthScreenShell(
+      onBack: () => context.go(RoutePaths.login),
+      titulo: _enviado ? null : 'Recuperar contraseña',
+      subtitulo: _enviado
+          ? null
+          : 'Ingresa tu usuario o correo y te enviaremos instrucciones '
+                'para restablecer tu contraseña.',
+      child: _enviado ? _buildConfirmacion(context) : _buildFormulario(context),
     );
   }
 
@@ -90,12 +81,6 @@ class _RecuperarPasswordScreenState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'Ingresa tu usuario o correo y te enviaremos instrucciones '
-            'para restablecer tu contraseña.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 24),
           TextFormField(
             controller: _usuarioOCorreoController,
             decoration: const InputDecoration(

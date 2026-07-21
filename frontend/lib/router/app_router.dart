@@ -8,9 +8,13 @@ import '../models/perfil.dart';
 import '../models/solicitud_autorizacion.dart';
 import '../screens/administrativo/administrativo_home_screen.dart';
 import '../screens/administrativo/chofer_detalle_screen.dart';
+import '../screens/bienvenida/bienvenida_screen.dart';
 import '../screens/chofer/cerrar_dia_screen.dart';
+import '../screens/chofer/chofer_dashboard_screen.dart';
 import '../screens/chofer/chofer_home_screen.dart';
 import '../screens/chofer/comprobar_carga_screen.dart';
+import '../screens/chofer/mi_perfil_screen.dart';
+import '../screens/chofer/mis_solicitudes_screen.dart';
 import '../screens/chofer/respuesta_solicitud_screen.dart';
 import '../screens/chofer/solicitar_carga_screen.dart';
 import '../screens/login/login_screen.dart';
@@ -62,7 +66,7 @@ String? _redirigirSegunSesion(Perfil? perfil, GoRouterState state) {
 
   if (perfil == null) {
     // Sin sesión: solo se permite ver rutas públicas.
-    return esPublica ? null : RoutePaths.login;
+    return esPublica ? null : RoutePaths.bienvenida;
   }
 
   // Con sesión: no debe poder volver a login/registro/recuperar.
@@ -86,13 +90,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = _SessionRefreshNotifier(ref);
 
   return GoRouter(
-    initialLocation: RoutePaths.login,
+    initialLocation: RoutePaths.bienvenida,
     refreshListenable: refreshNotifier,
     redirect: (context, state) {
       final perfil = ref.read(sessionProvider);
       return _redirigirSegunSesion(perfil, state);
     },
     routes: [
+      GoRoute(
+        path: RoutePaths.bienvenida,
+        pageBuilder: (context, state) =>
+            _conTransicion(state, const BienvenidaScreen()),
+      ),
       GoRoute(
         path: RoutePaths.login,
         pageBuilder: (context, state) =>
@@ -162,6 +171,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
           return _conTransicion(state, CerrarDiaScreen(carga: carga));
         },
+      ),
+      GoRoute(
+        path: RoutePaths.choferSolicitudes,
+        pageBuilder: (context, state) =>
+            _conTransicion(state, const MisSolicitudesScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.choferPerfil,
+        pageBuilder: (context, state) =>
+            _conTransicion(state, const MiPerfilScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.choferDashboard,
+        pageBuilder: (context, state) =>
+            _conTransicion(state, const ChoferDashboardScreen()),
       ),
       GoRoute(
         path: RoutePaths.administrativo,

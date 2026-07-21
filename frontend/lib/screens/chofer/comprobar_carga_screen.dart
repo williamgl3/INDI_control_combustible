@@ -3,12 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/catalogos_vehiculo.dart';
+import '../../core/cola_solicitudes_offline.dart';
+import '../../core/connectivity_provider.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
 import '../../core/ticket_ocr_service.dart';
 import '../../data/api_client.dart';
 import '../../models/vehiculo.dart';
 import '../../router/route_paths.dart';
+import '../../theme/app_breakpoints.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/captura_foto_field.dart';
@@ -122,6 +125,13 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
       _errorGeneral = null;
     });
 
+    // Sin conexión detectada de entrada: se encola directo, igual que en
+    // SolicitarCargaScreen — evita esperar el timeout de red.
+    if (ref.read(conectividadProvider).valueOrNull == false) {
+      await _encolarSinConexion();
+      return;
+    }
+
     try {
       final perfil = ref.read(sessionProvider)!;
       final carga = await ref
@@ -147,6 +157,12 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
           );
       if (mounted) context.go(RoutePaths.chofer);
     } on ApiException catch (e) {
+      if (e.status == null) {
+        // Sin `status` HTTP = nunca llegó a un servidor — posible falso
+        // positivo del chequeo de conectividad de arriba.
+        await _encolarSinConexion();
+        return;
+      }
       setState(() => _errorGeneral = e.mensaje);
     } catch (e) {
       setState(
@@ -156,6 +172,53 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
     } finally {
       if (mounted) setState(() => _enviando = false);
     }
+  }
+
+  /// Encola la comprobación para reintentarla al reconectar (ver
+  /// `cola_solicitudes_offline.dart`). No se programa el recordatorio
+  /// local de "cerrar mi día" aquí — depende del `id`/`creadaEn` reales
+  /// que solo asigna el backend al sincronizar.
+  Future<void> _encolarSinConexion() async {
+    final perfil = ref.read(sessionProvider)!;
+    final ahora = DateTime.now();
+    await ref
+        .read(colaComprobarCargaOfflineProvider)
+        .agregar(
+          ComprobarCargaPendienteOffline(
+            idLocal: 'offline-${ahora.microsecondsSinceEpoch}',
+            choferId: perfil.id,
+            vehiculoId: _vehiculo!.id,
+            folioAutorizacion: widget.folioAutorizacion,
+            litrosCargados: _litrosCargados,
+            kmAlCargar: _kmAlCargar,
+            gasolinera: _gasolineraController.text.trim(),
+            fotoTicketPath: _fotoTicketPath!,
+            fotoTableroPath: _fotoTableroPath!,
+            litrosDetectadosOcr: _resultadoOcr?.litros,
+            creadaEn: ahora,
+          ),
+        );
+    ref.read(operacionesTickProvider.notifier).state++;
+    if (!mounted) return;
+    setState(() => _enviando = false);
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.cloud_off_outlined),
+        title: const Text('Sin conexión'),
+        content: const Text(
+          'Guardamos tu comprobación en este dispositivo. Se enviará sola '
+          'en cuanto vuelvas a tener señal — no hace falta que la repitas.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+    if (mounted) context.go(RoutePaths.chofer);
   }
 
   @override
@@ -174,7 +237,9 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
+              constraints: const BoxConstraints(
+                maxWidth: AppBreakpoints.contentMaxWidth,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 mainAxisSize: MainAxisSize.min,
