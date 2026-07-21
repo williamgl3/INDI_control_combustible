@@ -1,17 +1,72 @@
-# indi_combustible
+# INDI Combustible — Frontend
 
-A new Flutter project.
+App Flutter (Android, iOS, Web, Windows, macOS, Linux) del sistema de control y
+autorización de combustible para vehículos en obra de Grupo INDI.
 
-## Getting Started
+## Requisitos
 
-This project is a starting point for a Flutter application.
+- Flutter SDK (canal `stable`) — ver `environment.sdk` en `pubspec.yaml` para la
+  versión mínima de Dart.
+- El backend corriendo (ver `../backend/README.md`) — sin esto, login/registro
+  y todas las pantallas que dependen de datos reales no van a funcionar.
 
-A few resources to get you started if this is your first Flutter project:
+## Levantar el proyecto
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```bash
+flutter pub get
+flutter run            # elige el dispositivo/emulador conectado
+flutter run -d windows  # o -d chrome, -d web-server, etc.
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Apuntar al backend
+
+`lib/config/api_config.dart` define `ApiConfig.baseUrl`:
+
+```dart
+class ApiConfig {
+  static const String baseUrl = 'https://indi-backend.up.railway.app';
+  // static const String baseUrl = 'http://localhost:3000'; // desarrollo local
+}
+```
+
+Para desarrollo local con el backend corriendo en la misma máquina, comenta la
+URL de producción y descomenta la de `localhost:3000` (o el puerto que uses).
+Es un valor compilado, no una variable de entorno — hay que recompilar tras
+cambiarlo.
+
+## Pruebas y análisis estático
+
+```bash
+flutter analyze
+flutter test
+```
+
+Ambos se corren automáticamente en CI (`.github/workflows/frontend-ci.yml`) en
+cada push/PR que toque `frontend/`.
+
+## Estructura
+
+- `lib/core/` — providers de Riverpod, servicios (auth, foto, OCR, recordatorios,
+  logging), validadores.
+- `lib/data/` — repositorios: interfaz (`*_repository.dart`), implementación
+  real contra el backend (`api_*_repository.dart`) e implementación mock en
+  memoria para tests (`mock_*_repository.dart`).
+- `lib/models/` — modelos de dominio (`Perfil`, `Vehiculo`, `SolicitudAutorizacion`,
+  `Carga`, `CierreDia`, `PrecioCombustible`).
+- `lib/screens/` — pantallas, separadas por rol (`chofer/`, `administrativo/`,
+  `login/`, etc.).
+- `lib/theme/` — design tokens (colores, tipografía, espaciado, radios,
+  sombras, motion) — nunca hardcodear estos valores fuera de aquí.
+- `lib/widgets/` — componentes compartidos entre pantallas.
+- `lib/router/` — rutas (`go_router`) y el guard centralizado por rol.
+- `test/` — tests de flujo completo (widget tests) + tests unitarios de lógica
+  pura (cálculos de rendimiento, semana laboral, CSV del concentrado).
+
+## Limitaciones conocidas (decisiones, no bugs)
+
+- El tema oscuro existe pero no se ha pulido — `main.dart` fija
+  `themeMode: ThemeMode.light` a propósito.
+- El offline-first para el rol de chofer (encolar acciones sin conexión y
+  sincronizar después) todavía no está implementado — hoy solo hay detección
+  de conectividad (banner "Sin conexión a internet") y mensajes de error claros
+  cuando una acción falla por falta de red.
