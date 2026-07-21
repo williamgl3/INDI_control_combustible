@@ -10,11 +10,14 @@ import 'package:indi_combustible/core/recordatorio_service.dart';
 import 'package:indi_combustible/core/session_storage.dart';
 import 'package:indi_combustible/core/ticket_ocr_service.dart';
 import 'package:indi_combustible/core/token_storage.dart';
+import 'package:indi_combustible/data/mock_auditoria_repository.dart';
 import 'package:indi_combustible/data/mock_auth_repository.dart';
+import 'package:indi_combustible/data/mock_incidencias_repository.dart';
 import 'package:indi_combustible/data/mock_operaciones_repository.dart';
 import 'package:indi_combustible/data/mock_vehiculos_repository.dart';
 import 'package:indi_combustible/models/perfil.dart';
 import 'package:indi_combustible/router/app_router.dart';
+import 'package:indi_combustible/router/route_paths.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
 
 /// Fakes en memoria para las dependencias que usan canales de plataforma
@@ -23,6 +26,7 @@ import 'package:indi_combustible/theme/app_theme.dart';
 
 class FakeTokenStorage extends TokenStorage {
   String? _token;
+  String? _refreshToken;
 
   @override
   Future<void> guardarToken(String token) async => _token = token;
@@ -32,6 +36,16 @@ class FakeTokenStorage extends TokenStorage {
 
   @override
   Future<void> borrarToken() async => _token = null;
+
+  @override
+  Future<void> guardarRefreshToken(String refreshToken) async =>
+      _refreshToken = refreshToken;
+
+  @override
+  Future<String?> leerRefreshToken() async => _refreshToken;
+
+  @override
+  Future<void> borrarRefreshToken() async => _refreshToken = null;
 }
 
 class FakeSessionStorage extends SessionStorage {
@@ -95,7 +109,10 @@ class FakeExportadorService implements ExportadorService {
   String? ultimoContenidoCsv;
 
   @override
-  Future<void> exportarCsv({required String nombreArchivo, required String contenidoCsv}) async {
+  Future<void> exportarCsv({
+    required String nombreArchivo,
+    required String contenidoCsv,
+  }) async {
     ultimoNombreArchivo = nombreArchivo;
     ultimoContenidoCsv = contenidoCsv;
   }
@@ -105,19 +122,31 @@ class FakeExportadorService implements ExportadorService {
 /// verdad — en los tests de widgets se sustituyen por los Mocks en
 /// memoria, para no depender de un backend real ni colgar esperando una
 /// respuesta de red.
-ProviderContainer makeTestContainer({List<Override> overridesExtra = const []}) {
-  return ProviderContainer(overrides: [
-    tokenStorageProvider.overrideWithValue(FakeTokenStorage()),
-    sessionStorageProvider.overrideWithValue(FakeSessionStorage()),
-    fotoPickerProvider.overrideWithValue(FakeFotoPicker()),
-    ticketOcrServiceProvider.overrideWithValue(const FakeTicketOcrService()),
-    recordatorioServiceProvider.overrideWithValue(FakeRecordatorioService()),
-    exportadorServiceProvider.overrideWithValue(FakeExportadorService()),
-    authRepositoryProvider.overrideWithValue(MockAuthRepository()),
-    operacionesRepositoryProvider.overrideWithValue(MockOperacionesRepository()),
-    vehiculosRepositoryProvider.overrideWithValue(MockVehiculosRepository()),
-    ...overridesExtra,
-  ]);
+ProviderContainer makeTestContainer({
+  List<Override> overridesExtra = const [],
+}) {
+  return ProviderContainer(
+    overrides: [
+      tokenStorageProvider.overrideWithValue(FakeTokenStorage()),
+      sessionStorageProvider.overrideWithValue(FakeSessionStorage()),
+      fotoPickerProvider.overrideWithValue(FakeFotoPicker()),
+      ticketOcrServiceProvider.overrideWithValue(const FakeTicketOcrService()),
+      recordatorioServiceProvider.overrideWithValue(FakeRecordatorioService()),
+      exportadorServiceProvider.overrideWithValue(FakeExportadorService()),
+      authRepositoryProvider.overrideWithValue(MockAuthRepository()),
+      operacionesRepositoryProvider.overrideWithValue(
+        MockOperacionesRepository(),
+      ),
+      vehiculosRepositoryProvider.overrideWithValue(MockVehiculosRepository()),
+      incidenciasRepositoryProvider.overrideWithValue(
+        MockIncidenciasRepository(),
+      ),
+      auditoriaRepositoryProvider.overrideWithValue(
+        MockAuditoriaRepository(),
+      ),
+      ...overridesExtra,
+    ],
+  );
 }
 
 Future<GoRouter> pumpTestApp(
@@ -136,6 +165,10 @@ Future<GoRouter> pumpTestApp(
       ),
     ),
   );
+  await tester.pumpAndSettle();
+  // La ruta inicial ahora es la pantalla de bienvenida; la mayoría de las
+  // pruebas ejercitan el flujo de login directo, así que se navega ahí.
+  router.go(RoutePaths.login);
   await tester.pumpAndSettle();
   return router;
 }

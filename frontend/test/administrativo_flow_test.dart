@@ -66,6 +66,8 @@ void main() {
             choferId: chofer1.id,
             vehiculo: vehiculo1,
             litrosSolicitados: 100,
+            actividad: 'Actividad de prueba',
+            fechaProgramada: DateTime.now().add(const Duration(days: 1)),
           );
     });
 
@@ -143,8 +145,20 @@ void main() {
     // runAsync: enviarSolicitud usa Future.delayed real; sin esto, el
     // reloj falso de testWidgets nunca avanza y el await se cuelga.
     await tester.runAsync(() async {
-      await repo.enviarSolicitud(choferId: chofer1.id, vehiculo: vehiculo1, litrosSolicitados: 100);
-      await repo.enviarSolicitud(choferId: chofer1.id, vehiculo: vehiculo1, litrosSolicitados: 50);
+      await repo.enviarSolicitud(
+        choferId: chofer1.id,
+        vehiculo: vehiculo1,
+        litrosSolicitados: 100,
+        actividad: 'Actividad de prueba',
+        fechaProgramada: DateTime.now().add(const Duration(days: 1)),
+      );
+      await repo.enviarSolicitud(
+        choferId: chofer1.id,
+        vehiculo: vehiculo1,
+        litrosSolicitados: 50,
+        actividad: 'Actividad de prueba',
+        fechaProgramada: DateTime.now().add(const Duration(days: 1)),
+      );
     });
 
     await pumpTestApp(tester, container: container, scrollBehavior: _SinEstiramientoDeScroll());
@@ -212,12 +226,13 @@ void main() {
   // como función pura contra FilaConcentrado, sin montar el árbol de
   // widgets.
   test('construirCsvConcentrado arma encabezado, filas y totales', () {
-    final chofer = const Perfil(
+    final chofer = Perfil(
       id: 'chofer-1',
       usuario: 'chofer1',
-      nombreCompleto: 'Juan Pérez',
+      nombre: 'Juan',
+      apellidoPaterno: 'Pérez',
       correo: 'chofer1@example.com',
-      edad: 30,
+      fechaNacimiento: DateTime(1996, 3, 10),
       rol: RolUsuario.chofer,
     );
     const vehiculo = Vehiculo(
