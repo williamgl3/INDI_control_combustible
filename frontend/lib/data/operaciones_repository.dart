@@ -42,6 +42,22 @@ abstract class OperacionesRepository {
     required double nuevoPrecio,
   });
 
+  /// Cambia el presupuesto semanal total (en pesos) — antes no existía
+  /// forma de editar esto, solo se leía. Queda en auditoría del lado del
+  /// backend (ver `preciosService.actualizarPresupuestoSemanalTotal`).
+  Future<void> actualizarPresupuestoSemanalTotal(double nuevoValor);
+
+  /// Corrige litros/km de una carga YA registrada (ej. edición inline en
+  /// el Concentrado, cuando el chofer capturó mal el dato). Distinto de
+  /// [registrarCarga]: es una corrección administrativa posterior, y
+  /// queda en auditoría del lado del backend en vez de sobrescribirse sin
+  /// rastro.
+  Future<Carga> editarCarga({
+    required String cargaId,
+    double? litrosCargados,
+    double? kmAlCargar,
+  });
+
   Future<SolicitudAutorizacion> enviarSolicitud({
     required String choferId,
     required Vehiculo vehiculo,
@@ -50,9 +66,18 @@ abstract class OperacionesRepository {
     String? motivoChofer,
     required String actividad,
     required DateTime fechaProgramada,
+    // Foto del tablero (km/horómetro actual) al momento de pedir — mismo
+    // respaldo visual que ya se manda por WhatsApp en el proceso real,
+    // antes de que el chofer vaya a cargar combustible.
+    String? fotoTableroPath,
   });
 
   SolicitudAutorizacion? solicitudPorFolio(String folio);
+
+  /// El propio chofer cancela una solicitud suya que sigue pendiente —
+  /// distinto de [resolverSolicitud] (solo administrativo). Lanza
+  /// [ApiException] si ya no está pendiente o no le pertenece.
+  Future<SolicitudAutorizacion> cancelarSolicitud(String solicitudId);
 
   Future<SolicitudAutorizacion> resolverSolicitud({
     required String solicitudId,

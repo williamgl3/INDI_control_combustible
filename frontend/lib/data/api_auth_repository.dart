@@ -41,7 +41,6 @@ class ApiAuthRepository implements AuthRepository {
     required String nombre,
     required String apellidoPaterno,
     String? apellidoMaterno,
-    required DateTime fechaNacimiento,
     required String correo,
     required String usuario,
     required String password,
@@ -53,10 +52,6 @@ class ApiAuthRepository implements AuthRepository {
           'nombre': nombre,
           'apellidoPaterno': apellidoPaterno,
           'apellidoMaterno': apellidoMaterno,
-          'fechaNacimiento':
-              '${fechaNacimiento.year.toString().padLeft(4, '0')}-'
-              '${fechaNacimiento.month.toString().padLeft(2, '0')}-'
-              '${fechaNacimiento.day.toString().padLeft(2, '0')}',
           'correo': correo,
           'usuario': usuario,
           'password': password,
@@ -174,7 +169,7 @@ class ApiAuthRepository implements AuthRepository {
     final refreshToken = await _tokenStorage.leerRefreshToken();
     if (refreshToken == null) return;
     try {
-      await _client.post('/auth/logout', body: {'refreshToken': refreshToken});
+      await _client.post('/logout', body: {'refreshToken': refreshToken});
     } on ApiException {
       // Best-effort: si el backend no puede invalidar el refresh token
       // (ya expiró, backend caído, etc.), de todos modos se limpia la

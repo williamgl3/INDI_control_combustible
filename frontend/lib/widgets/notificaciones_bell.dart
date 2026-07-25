@@ -5,21 +5,38 @@ import '../core/notificaciones_provider.dart';
 import '../theme/app_radii.dart';
 import '../theme/app_theme.dart';
 import 'estado_vacio.dart';
+import 'header_glass_button.dart';
 
 IconData _iconoDe(String nombre) => switch (nombre) {
   'check_circle_outline' => Icons.check_circle_outline,
   'cancel_outlined' => Icons.cancel_outlined,
   'schedule_outlined' => Icons.schedule_outlined,
   'error_outline' => Icons.error_outline,
+  'assignment_outlined' => Icons.assignment_outlined,
+  'report_problem_outlined' => Icons.report_problem_outlined,
   _ => Icons.notifications_outlined,
+};
+
+/// IDs de notificaciones "en vivo" que no se marcan como vistas al cerrar
+/// la hoja — reflejan un estado actual (recordatorio de cerrar día, avisos
+/// de presupuesto), no un evento puntual que ya se "consume" al verlo.
+const _idsNoDescartables = {
+  'recordatorio-cerrar-dia',
+  'presupuesto-70',
+  'presupuesto-90',
 };
 
 /// Campanita con contador de notificaciones sin ver — antes de esto, la
 /// única forma de enterarse de que una solicitud se resolvió era la
 /// notificación push del sistema operativo (que se pierde si se
-/// descarta) o revisar "Actividad reciente" manualmente.
+/// descarta) o revisar "Actividad reciente" manualmente. Reutilizada tanto
+/// para el chofer (`notificacionesChoferProvider`) como para el
+/// administrativo (`notificacionesAdminProvider`) — cada rol pasa su
+/// propio [provider].
 class NotificacionesBell extends ConsumerWidget {
-  const NotificacionesBell({super.key, this.color});
+  const NotificacionesBell({super.key, required this.provider, this.color});
+
+  final FutureProvider<List<NotificacionItem>> provider;
 
   /// Color del ícono — por defecto `colors.textSecondary` (para usarse
   /// sobre superficies claras); pásalo explícito (ej. blanco) cuando se
@@ -29,31 +46,36 @@ class NotificacionesBell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
-    final notificaciones = ref.watch(notificacionesChoferProvider).valueOrNull ?? const [];
+    final notificaciones = ref.watch(provider).valueOrNull ?? const [];
 
-    return Semantics(
-      label: notificaciones.isEmpty
-          ? 'Notificaciones, sin novedades'
-          : 'Notificaciones, ${notificaciones.length} sin ver',
-      button: true,
-      child: IconButton(
-        tooltip: 'Notificaciones',
-        onPressed: () => _mostrar(context, ref),
-        icon: Badge(
-          isLabelVisible: notificaciones.isNotEmpty,
-          label: Text('${notificaciones.length}'),
-          child: Icon(
-            Icons.notifications_outlined,
-            color: color ?? colors.textSecondary,
-          ),
+    final tooltip = notificaciones.isEmpty
+        ? 'Notificaciones, sin novedades'
+        : 'Notificaciones, ${notificaciones.length} sin ver';
+
+    return HeaderGlassButton(
+      tooltip: tooltip,
+      onPressed: () => mostrar(context, ref, provider),
+      icon: Badge(
+        isLabelVisible: notificaciones.isNotEmpty,
+        label: Text('${notificaciones.length}'),
+        child: Icon(
+          Icons.notifications_outlined,
+          color: color ?? colors.textSecondary,
         ),
       ),
     );
   }
 
-  Future<void> _mostrar(BuildContext context, WidgetRef ref) async {
-    final notificaciones =
-        ref.read(notificacionesChoferProvider).valueOrNull ?? const [];
+  /// Abre la misma hoja de notificaciones que el ícono de la campanita —
+  /// expuesto aparte para poder engancharlo a otro disparador (ej. la
+  /// pestaña "Notificaciones" de la barra inferior del chofer) sin
+  /// duplicar la lógica de "marcar como vistas al cerrar".
+  static Future<void> mostrar(
+    BuildContext context,
+    WidgetRef ref,
+    FutureProvider<List<NotificacionItem>> provider,
+  ) async {
+    final notificaciones = ref.read(provider).valueOrNull ?? const [];
 
     await showModalBottomSheet<void>(
       context: context,
@@ -69,11 +91,11 @@ class NotificacionesBell extends ConsumerWidget {
     // "Actividad reciente"/"Mis solicitudes".
     final ids = notificaciones
         .map((n) => n.id)
-        .where((id) => id != 'recordatorio-cerrar-dia')
+        .where((id) => !_idsNoDescartables.contains(id))
         .toList();
     if (ids.isNotEmpty) {
       await ref.read(notificacionesVistasStorageProvider).marcarVistas(ids);
-      ref.invalidate(notificacionesChoferProvider);
+      ref.invalidate(provider);
     }
   }
 }

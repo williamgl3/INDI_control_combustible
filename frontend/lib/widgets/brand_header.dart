@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
-import 'halftone_pattern.dart';
 
-/// Header de marca — degradado azul + textura de puntos ("halftone"),
-/// tomado directo del banner corporativo real de INDI. Reutilizado en
-/// Login y en los "home" de chofer/administrativo para dar coherencia
-/// visual e identidad de marca fuerte entre pantallas.
+/// Header de marca — degradado azul, tomado directo del banner corporativo
+/// real de INDI. Reutilizado en Login y en los "home" de chofer/administrativo
+/// para dar coherencia visual e identidad de marca fuerte entre pantallas.
 ///
 /// El contenido ([child]) se pinta sobre fondo oscuro — usa
 /// [BrandHeader.onColor]/[BrandHeader.onColorMuted] para texto/íconos en
@@ -16,7 +14,7 @@ class BrandHeader extends StatelessWidget {
   const BrandHeader({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.fromLTRB(24, 40, 24, 32),
+    this.padding = const EdgeInsets.fromLTRB(24, 32, 24, 24),
   });
 
   final Widget child;
@@ -31,6 +29,7 @@ class BrandHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final mid = Color.lerp(colors.brandHeaderStart, colors.brandHeaderEnd, 0.5)!;
 
     return Container(
       width: double.infinity,
@@ -38,21 +37,12 @@ class BrandHeader extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [colors.brandHeaderStart, colors.brandHeaderEnd],
+          colors: [colors.brandHeaderStart, mid, colors.brandHeaderEnd],
+          stops: const [0.0, 0.55, 1.0],
         ),
       ),
-      child: ClipRect(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: HalftonePattern(
-                color: colors.brandHeaderDot.withValues(alpha: 0.35),
-              ),
-            ),
-            Padding(padding: padding, child: child),
-          ],
-        ),
-      ),
+      padding: padding,
+      child: child,
     );
   }
 }

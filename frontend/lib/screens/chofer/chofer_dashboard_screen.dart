@@ -10,9 +10,13 @@ import '../../theme/app_motion.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/brand_sub_header.dart';
 import '../../widgets/estado_vacio.dart';
 import '../../widgets/ios_segmented_control.dart';
 import '../../widgets/responsive_scroll_view.dart';
+import '../../widgets/stat_tile.dart';
+import '../../widgets/stat_tile_row.dart';
+import '../../router/route_paths.dart';
 import '../administrativo/tabs/dashboard_calculo.dart';
 
 /// Dashboard personal del chofer: cuánto ha consumido, cómo va su
@@ -20,15 +24,19 @@ import '../administrativo/tabs/dashboard_calculo.dart';
 /// misma lógica que ya usa el sistema para auto-aprobarlo o mandarlo a
 /// revisión manual, pero antes invisible para el propio chofer.
 class ChoferDashboardScreen extends ConsumerStatefulWidget {
-  const ChoferDashboardScreen({super.key});
+  const ChoferDashboardScreen({super.key, this.mostrarComoTab = false});
+
+  /// `true` cuando esta pantalla vive embebida como una pestaña de
+  /// [ChoferHomeShell] (sin `Scaffold`/`AppBar`/botón de volver propios)
+  /// en vez de empujada como ruta independiente.
+  final bool mostrarComoTab;
 
   @override
   ConsumerState<ChoferDashboardScreen> createState() =>
       _ChoferDashboardScreenState();
 }
 
-class _ChoferDashboardScreenState
-    extends ConsumerState<ChoferDashboardScreen> {
+class _ChoferDashboardScreenState extends ConsumerState<ChoferDashboardScreen> {
   PeriodoDashboard _periodo = PeriodoDashboard.semana;
 
   @override
@@ -71,76 +79,141 @@ class _ChoferDashboardScreenState
     }
     final rendimientoPromedio = puntosRendimiento.isEmpty
         ? null
-        : puntosRendimiento.reduce((a, b) => a + b) /
-              puntosRendimiento.length;
+        : puntosRendimiento.reduce((a, b) => a + b) / puntosRendimiento.length;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mi consumo'),
-        leading: BackButton(onPressed: () => context.pop()),
-      ),
-      body: SafeArea(
-        child: ResponsiveScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _HeroConsumo(
-                totalLitros: totalLitros,
-                rendimientoPromedio: rendimientoPromedio,
-                cargas: cargas.length,
-                colors: colors,
-              ),
-              const SizedBox(height: 20),
-              IosSegmentedControl<PeriodoDashboard>(
-                valor: _periodo,
-                opciones: const {
-                  PeriodoDashboard.dia: 'Día',
-                  PeriodoDashboard.semana: 'Semana',
-                  PeriodoDashboard.mes: 'Mes',
-                  PeriodoDashboard.anio: 'Año',
-                },
-                onChanged: (p) => setState(() => _periodo = p),
-              ),
-              const SizedBox(height: 8),
-              Text(
+    final cuerpoDashboard = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _HeroConsumo(
+          totalLitros: totalLitros,
+          rendimientoPromedio: rendimientoPromedio,
+          colors: colors,
+        ),
+        const SizedBox(height: 20),
+        IosSegmentedControl<PeriodoDashboard>(
+          valor: _periodo,
+          opciones: const {
+            PeriodoDashboard.dia: 'Día',
+            PeriodoDashboard.semana: 'Semana',
+            PeriodoDashboard.mes: 'Mes',
+            PeriodoDashboard.anio: 'Año',
+          },
+          onChanged: (p) => setState(() => _periodo = p),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(
+              Icons.calendar_today_outlined,
+              size: 13,
+              color: colors.textMuted,
+            ),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
                 etiquetaPeriodoDashboard(_periodo, ahora),
+                overflow: TextOverflow.ellipsis,
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
               ),
-              const SizedBox(height: 16),
-              AnimatedSwitcher(
-                duration: AppMotion.base,
-                switchInCurve: AppMotion.curve,
-                switchOutCurve: AppMotion.curve,
-                transitionBuilder: (child, animation) =>
-                    FadeTransition(opacity: animation, child: child),
-                child: Column(
-                  key: ValueKey(_periodo),
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (cargas.isEmpty)
-                      EstadoVacio(
-                        icono: Icons.bar_chart_outlined,
-                        mensaje: 'No registraste cargas en este periodo.',
-                      )
-                    else ...[
-                      if (serie.isNotEmpty) ...[
-                        _TarjetaBarras(serie: serie),
-                        const SizedBox(height: 16),
-                      ],
-                      if (puntosRendimiento.length >= 2) ...[
-                        _TarjetaRendimiento(puntos: puntosRendimiento),
-                        const SizedBox(height: 16),
-                      ],
-                      if (desglose.isNotEmpty) _TarjetaDona(desglose: desglose),
-                    ],
-                  ],
-                ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        StatTileRow(
+          tiles: [
+            StatTile(
+              icono: Icons.local_gas_station_outlined,
+              valor: totalLitros.toStringAsFixed(0),
+              etiqueta: 'Litros del periodo',
+              color: colors.primary,
+            ),
+            StatTile(
+              icono: Icons.speed_outlined,
+              valor: rendimientoPromedio == null
+                  ? '—'
+                  : rendimientoPromedio!.toStringAsFixed(1),
+              etiqueta: 'Rendimiento promedio',
+              color: colors.success,
+            ),
+            StatTile(
+              icono: Icons.receipt_long_outlined,
+              valor: cargas.length.toString(),
+              etiqueta: 'Cargas registradas',
+              color: colors.info,
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        AnimatedSwitcher(
+          duration: AppMotion.base,
+          switchInCurve: AppMotion.curve,
+          switchOutCurve: AppMotion.curve,
+          transitionBuilder: (child, animation) =>
+              FadeTransition(opacity: animation, child: child),
+          child: Column(
+            key: ValueKey(_periodo),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (cargas.isEmpty)
+                EstadoVacio(
+                  icono: Icons.bar_chart_outlined,
+                  mensaje: 'Todavía no registras cargas en este periodo.',
+                  textoAccion: 'Solicitar carga',
+                  onAccion: () => context.go(RoutePaths.choferSolicitar),
+                )
+              else ...[
+                if (serie.isNotEmpty) ...[
+                  _TarjetaBarras(serie: serie),
+                  const SizedBox(height: 16),
+                ],
+                if (puntosRendimiento.length >= 2) ...[
+                  _TarjetaRendimiento(puntos: puntosRendimiento),
+                  const SizedBox(height: 16),
+                ],
+                if (desglose.isNotEmpty) _TarjetaDona(desglose: desglose),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+
+    final encabezado = BrandSubHeader(
+      titulo: 'Mi consumo',
+      onBack: widget.mostrarComoTab ? null : () => context.pop(),
+    );
+
+    if (widget.mostrarComoTab) {
+      return SafeArea(
+        child: ResponsiveScrollView(
+          padding: EdgeInsets.zero,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              encabezado,
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: cuerpoDashboard,
               ),
             ],
           ),
         ),
+      );
+    }
+
+    return Scaffold(
+      body: Column(
+        children: [
+          encabezado,
+          Expanded(
+            child: SafeArea(
+              top: false,
+              child: ResponsiveScrollView(child: cuerpoDashboard),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -150,13 +223,11 @@ class _HeroConsumo extends StatelessWidget {
   const _HeroConsumo({
     required this.totalLitros,
     required this.rendimientoPromedio,
-    required this.cargas,
     required this.colors,
   });
 
   final double totalLitros;
   final double? rendimientoPromedio;
-  final int cargas;
   final AppColors colors;
 
   @override
@@ -200,20 +271,12 @@ class _HeroConsumo extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _PildoraHero(
-                      icono: Icons.speed_outlined,
-                      texto: rendimientoPromedio == null
-                          ? 'Sin datos de rendimiento'
-                          : '${rendimientoPromedio!.toStringAsFixed(1)} km/L',
-                    ),
-                    const SizedBox(width: 8),
-                    _PildoraHero(
-                      icono: Icons.receipt_long_outlined,
-                      texto: '$cargas ${cargas == 1 ? 'carga' : 'cargas'}',
-                    ),
-                  ],
+                Text(
+                  'Selecciona un periodo para comparar tu consumo, rendimiento y cargas registradas.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.84),
+                    height: 1.35,
+                  ),
                 ),
               ],
             ),
@@ -222,38 +285,6 @@ class _HeroConsumo extends StatelessWidget {
             Icons.local_gas_station_rounded,
             color: Colors.white.withValues(alpha: 0.25),
             size: 64,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PildoraHero extends StatelessWidget {
-  const _PildoraHero({required this.icono, required this.texto});
-
-  final IconData icono;
-  final String texto;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icono, size: 13, color: Colors.white),
-          const SizedBox(width: 5),
-          Text(
-            texto,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
           ),
         ],
       ),

@@ -6,10 +6,47 @@ import '../../../core/providers.dart';
 import '../../../models/registro_auditoria.dart';
 import '../../../theme/app_section_colors.dart';
 import '../../../theme/app_theme.dart';
+import '../../../widgets/chip_filtro.dart';
 import '../../../widgets/estado_vacio.dart';
 import '../../../widgets/fecha_formato.dart';
 import '../../../widgets/grouped_section.dart';
 import '../../../widgets/responsive_scroll_view.dart';
+import '../../../widgets/skeleton_loader.dart';
+
+/// Traduce la clave de acción del backend (snake_case, ej. `'editar_carga'`)
+/// a un verbo conjugado para el título de la fila. Los datos de ejemplo
+/// (mocks) ya mandan el verbo directo (ej. `'aprobó'`), así que caen en el
+/// `default` y se muestran tal cual, sin cambios.
+String _accionLegible(String accion) {
+  switch (accion) {
+    case 'aprobar_solicitud':
+      return 'aprobó';
+    case 'rechazar_solicitud':
+      return 'rechazó';
+    case 'editar_carga':
+      return 'editó';
+    case 'editar_precio':
+      return 'editó el precio de';
+    case 'editar_presupuesto_semanal':
+      return 'editó';
+    case 'editar_vehiculo':
+      return 'editó';
+    case 'registrar_servicio_mantenimiento':
+      return 'registró servicio de';
+    case 'resolver_incidencia':
+      return 'resolvió';
+    case 'activar_usuario':
+      return 'activó';
+    case 'desactivar_usuario':
+      return 'desactivó';
+    case 'resetear_password_usuario':
+      return 'reseteó la contraseña de';
+    case 'crear_administrativo':
+      return 'creó';
+    default:
+      return accion;
+  }
+}
 
 /// Pestaña "Auditoría": bitácora cronológica (más reciente primero) de la
 /// actividad administrativa — quién hizo qué, sobre qué entidad, y
@@ -26,6 +63,7 @@ class _AuditoriaTabState extends ConsumerState<AuditoriaTab> {
   bool _cargando = true;
   bool _cargandoMas = false;
   String? _error;
+  String? _filtroEntidad;
 
   @override
   void initState() {
@@ -68,11 +106,49 @@ class _AuditoriaTabState extends ConsumerState<AuditoriaTab> {
     }
   }
 
+  // Estos son los valores REALES que manda el backend (`entidad:` en cada
+  // `registrarAuditoria(...)` de src/services/*.ts) — antes decía
+  // 'solicitud'/'incidencia', que nunca coincidía con lo que en realidad
+  // llega ('solicitud_autorizacion'/'incidencia_vehiculo'), así que estos
+  // dos filtros nunca mostraban nada contra el backend real.
+  static const _entidadesFiltrables = [
+    'solicitud_autorizacion',
+    'carga',
+    'precio_combustible',
+    'configuracion',
+    'vehiculo',
+    'incidencia_vehiculo',
+    'usuario',
+  ];
+
+  String _etiquetaEntidad(String entidad) {
+    switch (entidad) {
+      case 'solicitud_autorizacion':
+        return 'Solicitudes';
+      case 'carga':
+        return 'Cargas';
+      case 'precio_combustible':
+        return 'Precios';
+      case 'configuracion':
+        return 'Presupuesto';
+      case 'vehiculo':
+        return 'Vehículos';
+      case 'incidencia_vehiculo':
+        return 'Incidencias';
+      case 'usuario':
+        return 'Usuarios';
+      default:
+        return entidad;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final repo = ref.watch(auditoriaRepositoryProvider);
-    final registros = repo.registros;
+    final registros = _filtroEntidad == null
+        ? repo.registros
+        : repo.registros.where((r) => r.entidad == _filtroEntidad).toList();
 
     return ResponsiveScrollView(
       child: Column(
@@ -88,17 +164,35 @@ class _AuditoriaTabState extends ConsumerState<AuditoriaTab> {
             ).textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
           ),
           const SizedBox(height: 20),
+          if (!_cargando && _error == null)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ChipFiltro(
+                  etiqueta: 'Todas',
+                  seleccionado: _filtroEntidad == null,
+                  onTap: () => setState(() => _filtroEntidad = null),
+                ),
+                for (final entidad in _entidadesFiltrables)
+                  ChipFiltro(
+                    etiqueta: _etiquetaEntidad(entidad),
+                    seleccionado: _filtroEntidad == entidad,
+                    onTap: () => setState(() => _filtroEntidad = entidad),
+                  ),
+              ],
+            ),
+          const SizedBox(height: 16),
           if (_cargando)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Center(child: CircularProgressIndicator()),
-            )
+            const SkeletonGroupedSection()
           else if (_error != null)
             EstadoVacio(icono: Icons.error_outline, mensaje: _error!)
           else if (registros.isEmpty)
-            const EstadoVacio(
+            EstadoVacio(
               icono: Icons.history_outlined,
-              mensaje: 'Aún no hay actividad registrada.',
+              mensaje: _filtroEntidad == null
+                  ? 'Aún no hay actividad registrada.'
+                  : 'No hay actividad de este tipo.',
             )
           else ...[
             GroupedSection(
@@ -108,7 +202,7 @@ class _AuditoriaTabState extends ConsumerState<AuditoriaTab> {
               ],
             ),
             const SizedBox(height: 16),
-            if (!repo.sinMasRegistros)
+            if (!repo.sinMasRegistros && _filtroEntidad == null)
               Align(
                 alignment: Alignment.center,
                 child: OutlinedButton(
@@ -136,11 +230,17 @@ class _RegistroRow extends StatelessWidget {
 
   IconData get _icono {
     switch (registro.entidad) {
-      case 'solicitud':
+      case 'solicitud_autorizacion':
         return Icons.assignment_outlined;
+      case 'carga':
+        return Icons.local_gas_station_outlined;
+      case 'precio_combustible':
+        return Icons.payments_outlined;
+      case 'configuracion':
+        return Icons.account_balance_wallet_outlined;
       case 'vehiculo':
         return Icons.local_shipping_outlined;
-      case 'incidencia':
+      case 'incidencia_vehiculo':
         return Icons.build_outlined;
       case 'usuario':
         return Icons.person_outline;
@@ -152,9 +252,11 @@ class _RegistroRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final accion = _accionLegible(registro.accion);
+    final detalle = registro.detalleLegible;
     return GroupedRow(
-      titulo: '${registro.usuarioNombre} ${registro.accion} $_entidadLegible',
-      subtitulo: registro.detalle,
+      titulo: '${registro.usuarioNombre} $accion $_entidadLegible',
+      subtitulo: detalle.isEmpty ? null : detalle,
       icono: _icono,
       iconoColor: AppSectionColors.auditoria,
       trailing: Text(
@@ -168,11 +270,17 @@ class _RegistroRow extends StatelessWidget {
 
   String get _entidadLegible {
     switch (registro.entidad) {
-      case 'solicitud':
+      case 'solicitud_autorizacion':
         return 'una solicitud';
+      case 'carga':
+        return 'una carga';
+      case 'precio_combustible':
+        return 'un precio';
+      case 'configuracion':
+        return 'el presupuesto';
       case 'vehiculo':
         return 'un vehículo';
-      case 'incidencia':
+      case 'incidencia_vehiculo':
         return 'una incidencia';
       case 'usuario':
         return 'un usuario';

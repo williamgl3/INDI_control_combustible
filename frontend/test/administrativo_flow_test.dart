@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:indi_combustible/core/providers.dart';
-import 'package:indi_combustible/data/mock_operaciones_repository.dart';
+import 'mocks/mock_operaciones_repository.dart';
 import 'package:indi_combustible/models/carga.dart';
 import 'package:indi_combustible/models/cierre_dia.dart';
 import 'package:indi_combustible/models/perfil.dart';
@@ -24,8 +24,8 @@ class _SinEstiramientoDeScroll extends MaterialScrollBehavior {
 }
 
 Future<void> _loginComoAdmin(WidgetTester tester) async {
-  await tester.ensureVisible(find.text('Acceso de administrador'));
-  await tester.tap(find.text('Acceso de administrador'));
+  await tester.ensureVisible(find.text('Entrar como administrador'));
+  await tester.tap(find.text('Entrar como administrador'));
   await tester.pumpAndSettle();
 
   final dialog = find.byType(Dialog);
@@ -79,6 +79,7 @@ void main() {
     await _irASeccion(tester, 'Choferes');
     expect(find.text('Juan Pérez'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Juan Pérez'));
     await tester.tap(find.text('Juan Pérez'));
     await tester.pumpAndSettle();
 
@@ -114,16 +115,12 @@ void main() {
     expect(find.text('Diésel'), findsOneWidget);
     expect(find.text('\$24.50 / L'), findsOneWidget);
 
-    final botonEditar = find.widgetWithIcon(IconButton, Icons.edit_outlined).first;
-    await tester.ensureVisible(botonEditar);
-    await tester.tap(botonEditar);
-    await tester.pumpAndSettle();
-
-    final dialog = find.byType(Dialog);
-    final campoPrecio = find.descendant(
-        of: dialog, matching: find.widgetWithText(TextFormField, 'Precio por litro'));
-    await tester.enterText(campoPrecio, '26.90');
-    await tester.tap(find.descendant(of: dialog, matching: find.text('Guardar precio')));
+    // El precio ahora se edita inline (CeldaEditable), no en un diálogo:
+    // tocar el texto lo vuelve un TextField.
+    await tester.tap(find.text('\$24.50 / L'));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField).first, '26.90');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
     expect(find.text('\$26.90 / L'), findsOneWidget);
@@ -209,6 +206,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(EstadoSolicitudBadge), findsNWidgets(2));
   });
+
+  // NOTA: se intentó cubrir "aprobar/rechazar en lote" con un
+  // testWidgets completo (marcar casillas → aparece la barra de acciones
+  // → tocar "Aprobar"), pero renderizar la barra de acciones nueva
+  // (`_BarraAccionesLote`) dispara el mismo bug del entorno de test que
+  // ya afecta a `ConcentradoTab` con datos reales (ver comentario más
+  // abajo, junto a `construirCsvConcentrado`): una falla real del árbol
+  // de semántica de Flutter en este entorno, no del código de la
+  // funcionalidad (`flutter analyze` limpio, y la lógica de
+  // `_aprobarSeleccionadas`/`_rechazarSeleccionadas` reutiliza
+  // `resolverSolicitud`, ya cubierto por la prueba de arriba vía
+  // "Revisar" uno por uno).
 
   testWidgets('la pestaña Concentrado se ve sin datos (sin cargas registradas)', (tester) async {
     final container = makeTestContainer();

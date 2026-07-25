@@ -1,5 +1,5 @@
-import '../models/incidencia_vehiculo.dart';
-import 'incidencias_repository.dart';
+import 'package:indi_combustible/data/incidencias_repository.dart';
+import 'package:indi_combustible/models/incidencia_vehiculo.dart';
 
 /// Repositorio de incidencias MOCK — datos en memoria, para widget tests.
 class MockIncidenciasRepository implements IncidenciasRepository {
@@ -22,6 +22,7 @@ class MockIncidenciasRepository implements IncidenciasRepository {
   Future<IncidenciaVehiculo> reportar({
     required String vehiculoId,
     required String descripcion,
+    String? fotoPath,
   }) async {
     final incidencia = IncidenciaVehiculo(
       id: 'inc-${_idSeq++}',
@@ -30,6 +31,7 @@ class MockIncidenciasRepository implements IncidenciasRepository {
       descripcion: descripcion,
       estado: EstadoIncidencia.abierta,
       creadaEn: DateTime.now(),
+      fotoPath: fotoPath,
     );
     _todas.insert(0, incidencia);
     return incidencia;

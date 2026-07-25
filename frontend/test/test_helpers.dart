@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,11 +12,11 @@ import 'package:indi_combustible/core/recordatorio_service.dart';
 import 'package:indi_combustible/core/session_storage.dart';
 import 'package:indi_combustible/core/ticket_ocr_service.dart';
 import 'package:indi_combustible/core/token_storage.dart';
-import 'package:indi_combustible/data/mock_auditoria_repository.dart';
-import 'package:indi_combustible/data/mock_auth_repository.dart';
-import 'package:indi_combustible/data/mock_incidencias_repository.dart';
-import 'package:indi_combustible/data/mock_operaciones_repository.dart';
-import 'package:indi_combustible/data/mock_vehiculos_repository.dart';
+import 'mocks/mock_auditoria_repository.dart';
+import 'mocks/mock_auth_repository.dart';
+import 'mocks/mock_incidencias_repository.dart';
+import 'mocks/mock_operaciones_repository.dart';
+import 'mocks/mock_vehiculos_repository.dart';
 import 'package:indi_combustible/models/perfil.dart';
 import 'package:indi_combustible/router/app_router.dart';
 import 'package:indi_combustible/router/route_paths.dart';
@@ -61,12 +63,26 @@ class FakeSessionStorage extends SessionStorage {
   Future<void> borrarPerfil() async => _perfil = null;
 }
 
-/// Simula una foto tomada al instante, sin abrir la cámara real.
+/// Simula una foto tomada al instante, sin abrir la cámara real. Escribe
+/// un archivo real y vacío en un directorio temporal — necesario para que
+/// el chequeo de "¿sigue existiendo el archivo?" al sincronizar pendientes
+/// offline (ver `cola_solicitudes_offline.dart`) se comporte igual que con
+/// una foto real, en vez de descartar la pendiente por una ruta falsa.
 class FakeFotoPicker implements FotoPicker {
   int contador = 0;
 
   @override
-  Future<String?> tomarFoto() async => 'foto-fake-${contador++}.jpg';
+  Future<String?> tomarFoto() async {
+    // Escritura SÍNCRONA a propósito: una real (`await ...writeAsBytes`)
+    // no se resuelve dentro de la zona de fake-async de `flutter_test`
+    // (a diferencia de `Future.delayed`, que sí tiene manejo especial) y
+    // cuelga `pumpAndSettle()` indefinidamente.
+    final archivo = File(
+      '${Directory.systemTemp.path}/foto-fake-${contador++}.jpg',
+    );
+    archivo.writeAsBytesSync([0xff, 0xd8, 0xff, 0xd9]);
+    return archivo.path;
+  }
 }
 
 class FakeTicketOcrService implements TicketOcrService {

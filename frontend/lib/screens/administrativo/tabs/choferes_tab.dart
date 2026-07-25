@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -31,6 +32,14 @@ class ChoferesTab extends ConsumerStatefulWidget {
 
 class _ChoferesTabState extends ConsumerState<ChoferesTab> {
   String? _accionEnCurso;
+  final _busquedaController = TextEditingController();
+  String _busqueda = '';
+
+  @override
+  void dispose() {
+    _busquedaController.dispose();
+    super.dispose();
+  }
 
   Future<void> _verDetalle(Perfil chofer) async {
     await context.push(RoutePaths.administrativoChoferDetalle, extra: chofer);
@@ -65,6 +74,7 @@ class _ChoferesTabState extends ConsumerState<ChoferesTab> {
       await ref
           .read(authRepositoryProvider)
           .cambiarEstado(usuarioId: usuario.id, activo: activar);
+      HapticFeedback.mediumImpact();
     } on AuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -82,6 +92,17 @@ class _ChoferesTabState extends ConsumerState<ChoferesTab> {
     final choferes = ref.watch(authRepositoryProvider).listarChoferes();
     final sesion = ref.watch(sessionProvider);
     ref.watch(operacionesTickProvider);
+
+    final busqueda = _busqueda.trim().toLowerCase();
+    final choferesFiltrados = busqueda.isEmpty
+        ? choferes
+        : choferes
+              .where(
+                (c) =>
+                    c.nombreCompleto.toLowerCase().contains(busqueda) ||
+                    c.usuario.toLowerCase().contains(busqueda),
+              )
+              .toList();
 
     return ResponsiveScrollView(
       child: Column(
@@ -129,21 +150,43 @@ class _ChoferesTabState extends ConsumerState<ChoferesTab> {
             ),
           ),
           const SizedBox(height: 24),
+          if (choferes.isNotEmpty)
+            TextField(
+              controller: _busquedaController,
+              decoration: const InputDecoration(
+                labelText: 'Buscar por nombre o usuario',
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: (v) => setState(() => _busqueda = v),
+            ),
+          if (choferes.isNotEmpty) const SizedBox(height: 16),
           if (choferes.isEmpty)
             const EstadoVacio(
               icono: Icons.groups_outlined,
               mensaje: 'Aún no hay choferes registrados.',
             )
+          else if (choferesFiltrados.isEmpty)
+            const EstadoVacio(
+              icono: Icons.search_off_outlined,
+              mensaje: 'Ningún chofer coincide con esa búsqueda.',
+            )
           else
             GroupedSection(
               header: 'Directorio',
               children: [
-                for (final c in choferes)
+                for (final c in choferesFiltrados)
                   GroupedRow(
                     titulo: c.nombreCompleto,
                     subtitulo: '@${c.usuario}',
-                    icono: Icons.person_outline,
-                    iconoColor: AppSectionColors.choferes,
+                    // El directorio ahora también lista administradores
+                    // (ver `crear_administrador_dialog.dart`) — sin esto,
+                    // se veían idénticos a un chofer en la lista.
+                    icono: c.esAdministrativo
+                        ? Icons.shield_outlined
+                        : Icons.person_outline,
+                    iconoColor: c.esAdministrativo
+                        ? AppSectionColors.auditoria
+                        : AppSectionColors.choferes,
                     onTap: () => _verDetalle(c),
                     trailing: _accionEnCurso == c.id
                         ? const SizedBox(
@@ -154,6 +197,10 @@ class _ChoferesTabState extends ConsumerState<ChoferesTab> {
                         : Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              if (c.esAdministrativo) ...[
+                                const _BadgeRol(texto: 'ADMIN'),
+                                const SizedBox(width: 8),
+                              ],
                               if (!c.activo) ...[
                                 _BadgeInactivo(),
                                 const SizedBox(width: 8),
@@ -177,6 +224,35 @@ class _ChoferesTabState extends ConsumerState<ChoferesTab> {
               ],
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Pill genérico para el rol de una fila del directorio (ej. "ADMIN") —
+/// mismo estilo visual que [_BadgeInactivo], con color propio para no
+/// confundirse con el rojo de "inactivo".
+class _BadgeRol extends StatelessWidget {
+  const _BadgeRol({required this.texto});
+
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = AppSectionColors.auditoria;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: AppRadii.badgeRadius,
+      ),
+      child: Text(
+        texto,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.4,
+        ),
       ),
     );
   }

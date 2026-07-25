@@ -90,6 +90,7 @@ class _CrearAdministradorDialogState
             const SizedBox(height: 20),
             TextFormField(
               controller: _nombreController,
+              autofocus: true,
               decoration: const InputDecoration(
                 labelText: 'Nombre',
                 prefixIcon: Icon(Icons.badge_outlined),

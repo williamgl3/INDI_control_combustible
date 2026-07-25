@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
@@ -9,6 +10,7 @@ import '../../theme/app_radii.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_dialog.dart';
+import '../../widgets/formato_numero.dart';
 import '../../widgets/stepper_numerico.dart';
 
 /// Modal para que un administrativo resuelva manualmente una solicitud
@@ -90,6 +92,7 @@ class _RevisarSolicitudDialogState
             litrosAutorizados: aprobar ? _litrosAutorizados : null,
             motivo: motivoVacio ? null : _motivoController.text.trim(),
           );
+      HapticFeedback.mediumImpact();
       ref.read(operacionesTickProvider.notifier).state++;
       if (mounted) Navigator.of(context).pop(true);
     } on ApiException catch (e) {
@@ -189,7 +192,7 @@ class _RevisarSolicitudDialogState
               Expanded(
                 child: _DatoReferencia(
                   etiqueta: 'Presup. semana',
-                  valor: '\$${repo.presupuestoRestante.toStringAsFixed(0)}',
+                  valor: formatearMoneda(repo.presupuestoRestante),
                 ),
               ),
             ],

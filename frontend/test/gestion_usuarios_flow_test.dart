@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:indi_combustible/core/providers.dart';
 import 'package:indi_combustible/data/auth_repository.dart';
-import 'package:indi_combustible/data/mock_auth_repository.dart';
+import 'mocks/mock_auth_repository.dart';
 import 'package:indi_combustible/models/perfil.dart';
 
 import 'test_helpers.dart';
@@ -19,8 +19,8 @@ Finder _accionesDe(String usuarioId) =>
 /// como el admin de prueba (`admin1`) para poder llegar a las pestañas
 /// del panel administrativo.
 Future<void> _loginComoAdmin(WidgetTester tester) async {
-  await tester.ensureVisible(find.text('Acceso de administrador'));
-  await tester.tap(find.text('Acceso de administrador'));
+  await tester.ensureVisible(find.text('Entrar como administrador'));
+  await tester.tap(find.text('Entrar como administrador'));
   await tester.pumpAndSettle();
 
   final dialog = find.byType(Dialog);

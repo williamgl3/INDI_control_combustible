@@ -22,8 +22,8 @@ abstract class TicketOcrService {
 /// Implementación real con Google ML Kit (reconocimiento de texto en el
 /// propio dispositivo, sin conexión a internet).
 ///
-/// TODO-SPEC: las expresiones regulares están ajustadas a tickets típicos
-/// de gasolineras en México ("LITROS", "IMPORTE"/"TOTAL"); ajustar si el
+/// Las expresiones regulares están ajustadas a tickets típicos de
+/// gasolineras en México ("LITROS", "IMPORTE"/"TOTAL"). Ajustar si el
 /// formato real de los proveedores de la obra difiere.
 class MlKitTicketOcrService implements TicketOcrService {
   const MlKitTicketOcrService();

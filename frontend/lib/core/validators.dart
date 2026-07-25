@@ -8,15 +8,14 @@ class Validators {
   const Validators._();
 
   static const int nombreMinLength = 2;
-  static const int edadMin = 18;
-  static const int edadMax = 75;
   static const int passwordMinLength = 8;
 
   static final RegExp _correoRegex = RegExp(
     r'^[a-zA-Z0-9.!#$%&*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$',
   );
 
-  /// TODO-SPEC: regex de usuario confirmada por el usuario en este chat.
+  /// Regex de usuario: 3-30 caracteres alfanuméricos, puntos o guiones bajos.
+  /// Confirmada en SPEC.md.
   static final RegExp _usuarioRegex = RegExp(r'^[a-zA-Z0-9._]{3,30}$');
 
   static String? nombre(String? value) {
@@ -24,20 +23,6 @@ class Validators {
     if (v.isEmpty) return 'El nombre es obligatorio.';
     if (v.length < nombreMinLength) {
       return 'El nombre debe tener al menos $nombreMinLength caracteres.';
-    }
-    return null;
-  }
-
-  static String? fechaNacimiento(DateTime? value) {
-    if (value == null) return 'La fecha de nacimiento es obligatoria.';
-    final hoy = DateTime.now();
-    var edad = hoy.year - value.year;
-    final aunNoCumple =
-        hoy.month < value.month ||
-        (hoy.month == value.month && hoy.day < value.day);
-    if (aunNoCumple) edad--;
-    if (edad < edadMin || edad > edadMax) {
-      return 'La edad debe estar entre $edadMin y $edadMax años.';
     }
     return null;
   }

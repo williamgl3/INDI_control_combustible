@@ -1,11 +1,12 @@
-import '../models/carga.dart';
-import '../models/cierre_dia.dart';
-import '../models/perfil.dart';
-import '../models/precio_combustible.dart';
-import '../models/solicitud_autorizacion.dart';
-import '../models/vehiculo.dart';
-import '../core/semana_util.dart';
-import 'operaciones_repository.dart';
+import 'package:indi_combustible/core/semana_util.dart';
+import 'package:indi_combustible/data/api_client.dart';
+import 'package:indi_combustible/data/operaciones_repository.dart';
+import 'package:indi_combustible/models/carga.dart';
+import 'package:indi_combustible/models/cierre_dia.dart';
+import 'package:indi_combustible/models/perfil.dart';
+import 'package:indi_combustible/models/precio_combustible.dart';
+import 'package:indi_combustible/models/solicitud_autorizacion.dart';
+import 'package:indi_combustible/models/vehiculo.dart';
 
 /// Repositorio MOCK de operaciones (solicitudes de autorización y cargas
 /// de combustible), en memoria.
@@ -65,8 +66,13 @@ class MockOperacionesRepository implements OperacionesRepository {
       actualizadoEn: DateTime(2026, 7, 1),
     ),
     PrecioCombustible(
-      tipoCombustible: 'Gasolina',
+      tipoCombustible: 'Magna',
       precioPorLitro: 23.80,
+      actualizadoEn: DateTime(2026, 7, 1),
+    ),
+    PrecioCombustible(
+      tipoCombustible: 'Premium',
+      precioPorLitro: 25.90,
       actualizadoEn: DateTime(2026, 7, 1),
     ),
   ];
@@ -100,6 +106,31 @@ class MockOperacionesRepository implements OperacionesRepository {
     );
     _precios[indice] = actualizado;
     return actualizado;
+  }
+
+  @override
+  Future<void> actualizarPresupuestoSemanalTotal(double nuevoValor) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    presupuestoSemanalTotal = nuevoValor;
+  }
+
+  @override
+  Future<Carga> editarCarga({
+    required String cargaId,
+    double? litrosCargados,
+    double? kmAlCargar,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    final indice = _cargas.indexWhere((c) => c.id == cargaId);
+    if (indice == -1) {
+      throw ApiException('Carga no encontrada.', status: 404);
+    }
+    final actualizada = _cargas[indice].copyWith(
+      litrosCargados: litrosCargados,
+      kmAlCargar: kmAlCargar,
+    );
+    _cargas[indice] = actualizada;
+    return actualizada;
   }
 
   @override
@@ -138,10 +169,9 @@ class MockOperacionesRepository implements OperacionesRepository {
   }
 
   /// Dinero ya comprometido de [presupuestoSemanalTotal] EN LA SEMANA
-  /// ACTUAL.
-  /// TODO-SPEC: usa el costo estimado al momento de pedir aunque un
-  /// admin haya autorizado menos después — simplificación de mock, no
-  /// vuelve a prorratear el costo real.
+  /// ACTUAL. Usa el costo estimado al momento de pedir aunque un admin
+  /// haya autorizado menos después — simplificación de mock, no vuelve
+  /// a prorratear el costo real.
   @override
   double get presupuestoEjercido {
     final hoy = DateTime.now();
@@ -207,6 +237,7 @@ class MockOperacionesRepository implements OperacionesRepository {
     String? motivoChofer,
     required String actividad,
     required DateTime fechaProgramada,
+    String? fotoTableroPath,
   }) async {
     await Future.delayed(const Duration(milliseconds: 400));
 
@@ -253,6 +284,7 @@ class MockOperacionesRepository implements OperacionesRepository {
       aprobadaPor: seAutoAprueba ? 'Automático (historial)' : null,
       folioAutorizacion: seAutoAprueba ? 'FA-${_folioSeq++}' : null,
       comentario: comentario,
+      fotoTableroPath: fotoTableroPath,
     );
 
     _solicitudes.add(solicitud);
@@ -268,6 +300,28 @@ class MockOperacionesRepository implements OperacionesRepository {
     } catch (_) {
       return null;
     }
+  }
+
+  @override
+  Future<SolicitudAutorizacion> cancelarSolicitud(String solicitudId) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    final indice = _solicitudes.indexWhere((s) => s.id == solicitudId);
+    if (indice == -1) {
+      throw ApiException('Solicitud no encontrada.', status: 404);
+    }
+    final actual = _solicitudes[indice];
+    if (actual.estado != EstadoSolicitud.pendiente) {
+      throw ApiException(
+        'Solo se puede cancelar una solicitud que sigue pendiente.',
+        status: 400,
+      );
+    }
+    final cancelada = actual.copyWith(
+      estado: EstadoSolicitud.rechazada,
+      comentario: 'Cancelada por el chofer.',
+    );
+    _solicitudes[indice] = cancelada;
+    return cancelada;
   }
 
   /// Resolución MANUAL de una solicitud pendiente por un administrativo:

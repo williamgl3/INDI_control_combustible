@@ -2,19 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
-import '../../../models/precio_combustible.dart';
 import '../../../models/solicitud_autorizacion.dart';
 import '../../../theme/app_section_colors.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/barra_presupuesto.dart';
+import '../../../widgets/celda_editable.dart';
+import '../../../widgets/formato_numero.dart';
 import '../../../widgets/grouped_section.dart';
 import '../../../widgets/responsive_scroll_view.dart';
 import '../../../widgets/stat_tile.dart';
 import '../../../widgets/stat_tile_row.dart';
-import '../editar_precio_dialog.dart';
 
 /// Pestaña "Finanzas": presupuesto semanal y precios de combustible
-/// vigentes (editables).
+/// vigentes — ambos editables directo en la fila (estilo hoja de
+/// cálculo), sin abrir un diálogo aparte por cada cambio.
 class FinanzasTab extends ConsumerStatefulWidget {
   const FinanzasTab({super.key});
 
@@ -23,11 +24,6 @@ class FinanzasTab extends ConsumerStatefulWidget {
 }
 
 class _FinanzasTabState extends ConsumerState<FinanzasTab> {
-  Future<void> _editarPrecio(PrecioCombustible precio) async {
-    final guardado = await EditarPrecioDialog.show(context, precio);
-    if (guardado == true && mounted) setState(() {});
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -55,6 +51,30 @@ class _FinanzasTabState extends ConsumerState<FinanzasTab> {
             ).textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
           ),
           const SizedBox(height: 20),
+          GroupedSection(
+            header: 'Presupuesto',
+            children: [
+              GroupedRow(
+                titulo: 'Presupuesto semanal total',
+                subtitulo: 'Toca el monto para cambiarlo',
+                icono: Icons.account_balance_wallet_outlined,
+                iconoColor: AppSectionColors.finanzas,
+                trailing: CeldaEditable(
+                  valor: repo.presupuestoSemanalTotal,
+                  prefijo: '\$',
+                  decimales: 0,
+                  estilo: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(color: colors.primary),
+                  onGuardar: (nuevo) async {
+                    await repo.actualizarPresupuestoSemanalTotal(nuevo);
+                    ref.read(operacionesTickProvider.notifier).state++;
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           BarraPresupuesto(
             restante: repo.presupuestoRestante,
             total: repo.presupuestoSemanalTotal,
@@ -71,7 +91,7 @@ class _FinanzasTabState extends ConsumerState<FinanzasTab> {
               ),
               StatTile(
                 icono: Icons.payments_outlined,
-                valor: '\$${repo.presupuestoEjercido.toStringAsFixed(0)}',
+                valor: formatearMoneda(repo.presupuestoEjercido),
                 etiqueta: 'Ejercido esta semana',
                 color: AppSectionColors.finanzas,
               ),
@@ -88,27 +108,24 @@ class _FinanzasTabState extends ConsumerState<FinanzasTab> {
               for (final p in repo.precios)
                 GroupedRow(
                   titulo: p.tipoCombustible,
+                  subtitulo: 'Toca el precio para cambiarlo',
                   icono: Icons.local_gas_station_outlined,
                   iconoColor: AppSectionColors.finanzas,
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '\$${p.precioPorLitro.toStringAsFixed(2)} / L',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.titleSmall?.copyWith(color: colors.primary),
-                      ),
-                      IconButton(
-                        tooltip: 'Editar precio',
-                        onPressed: () => _editarPrecio(p),
-                        icon: Icon(
-                          Icons.edit_outlined,
-                          color: colors.textSecondary,
-                          size: 20,
-                        ),
-                      ),
-                    ],
+                  trailing: CeldaEditable(
+                    valor: p.precioPorLitro,
+                    sufijo: ' / L',
+                    prefijo: '\$',
+                    decimales: 2,
+                    estilo: Theme.of(
+                      context,
+                    ).textTheme.titleSmall?.copyWith(color: colors.primary),
+                    onGuardar: (nuevo) async {
+                      await repo.actualizarPrecio(
+                        tipoCombustible: p.tipoCombustible,
+                        nuevoPrecio: nuevo,
+                      );
+                      ref.read(operacionesTickProvider.notifier).state++;
+                    },
                   ),
                 ),
             ],

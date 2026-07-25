@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../config/api_config.dart';
 import '../../../core/providers.dart';
 import '../../../models/incidencia_vehiculo.dart';
 import '../../../models/vehiculo.dart';
@@ -17,6 +18,7 @@ import '../../../widgets/icon_badge.dart';
 import '../../../widgets/ios_segmented_control.dart';
 import '../../../widgets/responsive_scroll_view.dart';
 import '../../../widgets/stat_tile_row.dart';
+import '../../../widgets/ver_foto_dialog.dart';
 import '../registrar_servicio_dialog.dart';
 import 'mantenimiento_calculo.dart';
 
@@ -440,11 +442,44 @@ class _IncidenciaTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  formatearFechaCorta(incidencia.creadaEn),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
+                Row(
+                  children: [
+                    Text(
+                      formatearFechaCorta(incidencia.creadaEn),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colors.textMuted,
+                      ),
+                    ),
+                    if (incidencia.fotoPath != null) ...[
+                      const SizedBox(width: 8),
+                      InkWell(
+                        onTap: () => VerFotoDialog.show(
+                          context,
+                          titulo: 'Foto de la incidencia',
+                          url: '${ApiConfig.baseUrl}${incidencia.fotoPath}',
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.photo_outlined,
+                              size: 14,
+                              color: colors.primary,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              'Ver foto',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color: colors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),

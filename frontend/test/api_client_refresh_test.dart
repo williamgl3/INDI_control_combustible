@@ -43,7 +43,7 @@ void main() {
       var intentosRefresh = 0;
 
       final mockHttp = MockClient((request) async {
-        if (request.url.path == '/auth/refresh') {
+        if (request.url.path == '/refresh') {
           intentosRefresh++;
           return http.Response(
             jsonEncode({'token': 'token-nuevo', 'refreshToken': 'refresh-nuevo'}),
@@ -81,7 +81,7 @@ void main() {
         ..refreshToken = 'refresh-vencido';
 
       final mockHttp = MockClient((request) async {
-        if (request.url.path == '/auth/refresh') {
+        if (request.url.path == '/refresh') {
           return http.Response(
             jsonEncode({'error': 'Refresh token inválido'}),
             401,
@@ -106,7 +106,7 @@ void main() {
     var llamadasRefresh = 0;
 
     final mockHttp = MockClient((request) async {
-      if (request.url.path == '/auth/refresh') {
+      if (request.url.path == '/refresh') {
         llamadasRefresh++;
       }
       return http.Response(jsonEncode({'error': 'Token expirado'}), 401);

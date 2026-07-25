@@ -99,6 +99,7 @@ class _AdminLoginDialogState extends ConsumerState<AdminLoginDialog> {
           children: [
             TextFormField(
               controller: _usuarioController,
+              autofocus: true,
               decoration: const InputDecoration(
                 labelText: 'Usuario del administrador',
                 prefixIcon: Icon(Icons.person_outline),

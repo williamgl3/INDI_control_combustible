@@ -8,6 +8,10 @@ import '../../data/api_client.dart';
 import '../../models/vehiculo.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_dialog.dart';
+import '../../widgets/app_elevated_button.dart';
+import '../../widgets/aviso_error.dart';
+import '../../widgets/captura_foto_field.dart';
+import '../../widgets/sin_conexion_dialog.dart';
 
 /// El chofer reporta una falla o incidencia real de un vehículo (ej. "se
 /// ponchó una llanta", "el motor hace un ruido raro") — distinto del
@@ -39,6 +43,23 @@ class _ReportarIncidenciaDialogState
   bool _cargando = false;
   String? _errorGeneral;
 
+  /// Opcional — no toda incidencia es fotografiable (ej. "ruido raro en
+  /// el motor"), a diferencia de las fotos de carga/cierre que sí son
+  /// obligatorias.
+  String? _fotoPath;
+  bool _cargandoFoto = false;
+
+  Future<void> _tomarFoto() async {
+    setState(() => _cargandoFoto = true);
+    final ruta = await ref.read(fotoPickerProvider).tomarFoto();
+    if (mounted) {
+      setState(() {
+        if (ruta != null) _fotoPath = ruta;
+        _cargandoFoto = false;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _descripcionController.dispose();
@@ -65,7 +86,11 @@ class _ReportarIncidenciaDialogState
     try {
       await ref
           .read(incidenciasRepositoryProvider)
-          .reportar(vehiculoId: widget.vehiculo.id, descripcion: descripcion);
+          .reportar(
+            vehiculoId: widget.vehiculo.id,
+            descripcion: descripcion,
+            fotoPath: _fotoPath,
+          );
       if (mounted) Navigator.of(context).pop(true);
     } on ApiException catch (e) {
       if (e.status == null) {
@@ -81,8 +106,8 @@ class _ReportarIncidenciaDialogState
   }
 
   /// Encola el reporte para reintentarlo al reconectar (ver
-  /// `cola_solicitudes_offline.dart`) — sin foto que adjuntar, este
-  /// flujo es el más simple de los cuatro que cubre la cola offline.
+  /// `cola_solicitudes_offline.dart`) — la foto es opcional aquí (a
+  /// diferencia de las otras 3 colas, donde es obligatoria).
   Future<void> _encolarSinConexion(String descripcion) async {
     final ahora = DateTime.now();
     await ref
@@ -93,27 +118,17 @@ class _ReportarIncidenciaDialogState
             vehiculoId: widget.vehiculo.id,
             descripcion: descripcion,
             creadaEn: ahora,
+            fotoPath: _fotoPath,
           ),
         );
     ref.read(operacionesTickProvider.notifier).state++;
     if (!mounted) return;
     setState(() => _cargando = false);
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: const Icon(Icons.cloud_off_outlined),
-        title: const Text('Sin conexión'),
-        content: const Text(
+    await SinConexionDialog.show(
+      context,
+      mensaje:
           'Guardamos tu reporte en este dispositivo. Se enviará solo en '
           'cuanto vuelvas a tener señal — no hace falta que lo repitas.',
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Entendido'),
-          ),
-        ],
-      ),
     );
     if (mounted) Navigator.of(context).pop(true);
   }
@@ -142,6 +157,14 @@ class _ReportarIncidenciaDialogState
               ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
             ),
             const SizedBox(height: 20),
+            CapturaFotoField(
+              etiqueta: 'Foto de la falla (opcional)',
+              icono: Icons.photo_camera_outlined,
+              rutaFoto: _fotoPath,
+              cargando: _cargandoFoto,
+              onTomarFoto: _tomarFoto,
+            ),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _descripcionController,
               autofocus: true,
@@ -157,12 +180,7 @@ class _ReportarIncidenciaDialogState
             ),
             if (_errorGeneral != null) ...[
               const SizedBox(height: 12),
-              Text(
-                _errorGeneral!,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: colors.error),
-              ),
+              AvisoError(mensaje: _errorGeneral!),
             ],
             const SizedBox(height: 20),
             Row(
@@ -177,15 +195,10 @@ class _ReportarIncidenciaDialogState
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: ElevatedButton(
-                    onPressed: _cargando ? null : _reportar,
-                    child: _cargando
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Reportar'),
+                  child: AppElevatedButton(
+                    onPressed: _reportar,
+                    cargando: _cargando,
+                    child: const Text('Reportar'),
                   ),
                 ),
               ],

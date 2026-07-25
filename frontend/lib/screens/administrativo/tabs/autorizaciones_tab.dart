@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
+import '../../../core/session_provider.dart';
 import '../../../models/solicitud_autorizacion.dart';
 import '../../../theme/app_motion.dart';
 import '../../../theme/app_section_colors.dart';
 import '../../../theme/app_theme.dart';
+import '../../../widgets/app_dialog.dart';
+import '../../../widgets/app_elevated_button.dart';
+import '../../../widgets/aviso_error.dart';
 import '../../../widgets/barra_presupuesto.dart';
 import '../../../widgets/estado_solicitud_badge.dart';
 import '../../../widgets/estado_vacio.dart';
@@ -33,6 +37,12 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
 
   _FiltroEstado _filtroVista = _FiltroEstado.todas;
 
+  /// Ids de solicitudes pendientes marcadas para una acción en lote — se
+  /// vacía cada vez que se cambia de filtro para no arrastrar selección
+  /// entre vistas distintas.
+  final Set<String> _seleccionadas = {};
+  bool _procesandoLote = false;
+
   /// `null` representa el filtro "Todas".
   EstadoSolicitud? get _filtro => switch (_filtroVista) {
     _FiltroEstado.todas => null,
@@ -51,6 +61,98 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
       nombreChofer: nombreChofer,
     );
     if (resuelta == true && mounted) setState(() {});
+  }
+
+  void _alternarSeleccion(String solicitudId, bool marcada) {
+    setState(() {
+      if (marcada) {
+        _seleccionadas.add(solicitudId);
+      } else {
+        _seleccionadas.remove(solicitudId);
+      }
+    });
+  }
+
+  /// Aprueba de un jalón cada solicitud seleccionada, al 100% de lo
+  /// pedido (una aprobación en lote no tiene sentido para "autorizar
+  /// menos", que necesita un motivo específico por solicitud — para eso
+  /// sigue existiendo "Revisar" una por una).
+  Future<void> _aprobarSeleccionadas(List<SolicitudAutorizacion> todas) async {
+    final admin = ref.read(sessionProvider);
+    if (admin == null) return;
+    final repo = ref.read(operacionesRepositoryProvider);
+    final idsAProcesar = {..._seleccionadas};
+
+    setState(() => _procesandoLote = true);
+    var fallidas = 0;
+    for (final id in idsAProcesar) {
+      final solicitud = todas.firstWhere((s) => s.id == id);
+      try {
+        await repo.resolverSolicitud(
+          solicitudId: id,
+          aprobar: true,
+          resueltaPor: admin.nombreCompleto,
+          litrosAutorizados: solicitud.litrosSolicitados,
+        );
+      } catch (_) {
+        fallidas++;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _procesandoLote = false;
+      _seleccionadas.clear();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          fallidas == 0
+              ? '${idsAProcesar.length} solicitudes aprobadas.'
+              : '${idsAProcesar.length - fallidas} aprobadas, $fallidas no se pudieron procesar.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _rechazarSeleccionadas(
+    List<SolicitudAutorizacion> todas,
+  ) async {
+    final motivo = await _DialogoMotivoLote.show(context);
+    if (motivo == null || !mounted) return;
+
+    final admin = ref.read(sessionProvider);
+    if (admin == null) return;
+    final repo = ref.read(operacionesRepositoryProvider);
+    final idsAProcesar = {..._seleccionadas};
+
+    setState(() => _procesandoLote = true);
+    var fallidas = 0;
+    for (final id in idsAProcesar) {
+      try {
+        await repo.resolverSolicitud(
+          solicitudId: id,
+          aprobar: false,
+          resueltaPor: admin.nombreCompleto,
+          motivo: motivo,
+        );
+      } catch (_) {
+        fallidas++;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _procesandoLote = false;
+      _seleccionadas.clear();
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          fallidas == 0
+              ? '${idsAProcesar.length} solicitudes rechazadas.'
+              : '${idsAProcesar.length - fallidas} rechazadas, $fallidas no se pudieron procesar.',
+        ),
+      ),
+    );
   }
 
   @override
@@ -104,6 +206,7 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
                 valor: '$pendientes',
                 etiqueta: 'Por revisar',
                 color: colors.warning,
+                destacado: pendientes > 0,
                 onTap: () =>
                     setState(() => _filtroVista = _FiltroEstado.pendientes),
               ),
@@ -132,8 +235,21 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
               _FiltroEstado.aprobadas: 'Aprobadas',
               _FiltroEstado.rechazadas: 'Rechazadas',
             },
-            onChanged: (f) => setState(() => _filtroVista = f),
+            onChanged: (f) => setState(() {
+              _filtroVista = f;
+              _seleccionadas.clear();
+            }),
           ),
+          if (_seleccionadas.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _BarraAccionesLote(
+              cantidad: _seleccionadas.length,
+              procesando: _procesandoLote,
+              onAprobar: () => _aprobarSeleccionadas(solicitudes),
+              onRechazar: () => _rechazarSeleccionadas(solicitudes),
+              onCancelar: () => setState(() => _seleccionadas.clear()),
+            ),
+          ],
           const SizedBox(height: 12),
           AnimatedSwitcher(
             duration: AppMotion.base,
@@ -153,20 +269,35 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
                         : 'No hay solicitudes con este filtro.',
                   )
                 else ...[
-                  GroupedSection(
-                    children: [
-                      for (final s in mostradas)
-                        _SolicitudTile(
-                          solicitud: s,
-                          nombreChofer:
-                              nombresPorChoferId[s.choferId] ?? s.choferId,
-                          onRevisar: () => _revisar(
-                            s,
-                            nombresPorChoferId[s.choferId] ?? s.choferId,
-                          ),
-                        ),
-                    ],
-                  ),
+                  for (final grupo in agruparPorFecha(
+                    mostradas,
+                    (s) => s.creadaEn,
+                  ))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: GroupedSection(
+                        header: grupo.etiqueta,
+                        children: [
+                          for (final s in grupo.items)
+                            _SolicitudTile(
+                              solicitud: s,
+                              nombreChofer:
+                                  nombresPorChoferId[s.choferId] ??
+                                  s.choferId,
+                              onRevisar: () => _revisar(
+                                s,
+                                nombresPorChoferId[s.choferId] ?? s.choferId,
+                              ),
+                              seleccionada: _seleccionadas.contains(s.id),
+                              onCambiarSeleccion:
+                                  s.estado == EstadoSolicitud.pendiente
+                                  ? (marcada) =>
+                                        _alternarSeleccion(s.id, marcada)
+                                  : null,
+                            ),
+                        ],
+                      ),
+                    ),
                   if (filtradas.length > mostradas.length)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
@@ -187,16 +318,178 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
   }
 }
 
+/// Diálogo de un solo campo para el motivo de rechazo COMPARTIDO por
+/// todas las solicitudes de un rechazo en lote — igual que
+/// `RevisarSolicitudDialog` exige motivo al rechazar una por una, aquí se
+/// pide una sola vez y se aplica igual a cada solicitud seleccionada.
+class _DialogoMotivoLote extends StatefulWidget {
+  const _DialogoMotivoLote();
+
+  static Future<String?> show(BuildContext context) {
+    return mostrarDialogoApp<String>(
+      context,
+      builder: (_) => const _DialogoMotivoLote(),
+    );
+  }
+
+  @override
+  State<_DialogoMotivoLote> createState() => _DialogoMotivoLoteState();
+}
+
+class _DialogoMotivoLoteState extends State<_DialogoMotivoLote> {
+  final _controller = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _confirmar() {
+    final motivo = _controller.text.trim();
+    if (motivo.isEmpty) {
+      setState(() => _error = 'Explica por qué se rechazan.');
+      return;
+    }
+    Navigator.of(context).pop(motivo);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDialogShell(
+      maxWidth: 400,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Rechazar solicitudes seleccionadas',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Este motivo se aplicará a todas las solicitudes elegidas.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: context.colors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(labelText: 'Motivo del rechazo'),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            AvisoError(mensaje: _error!),
+          ],
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancelar'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _confirmar,
+                  child: const Text('Rechazar todas'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Barra de acciones que aparece mientras haya solicitudes pendientes
+/// seleccionadas — antes había que abrir un diálogo por solicitud aunque
+/// hubiera 20 pendientes idénticas por revisar.
+class _BarraAccionesLote extends StatelessWidget {
+  const _BarraAccionesLote({
+    required this.cantidad,
+    required this.procesando,
+    required this.onAprobar,
+    required this.onRechazar,
+    required this.onCancelar,
+  });
+
+  final int cantidad;
+  final bool procesando;
+  final VoidCallback onAprobar;
+  final VoidCallback onRechazar;
+  final VoidCallback onCancelar;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: colors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              cantidad == 1 ? '1 seleccionada' : '$cantidad seleccionadas',
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(color: colors.primary),
+            ),
+          ),
+          if (procesando)
+            const SizedBox(
+              height: 18,
+              width: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else ...[
+            TextButton(onPressed: onCancelar, child: const Text('Cancelar')),
+            const SizedBox(width: 4),
+            OutlinedButton(
+              onPressed: onRechazar,
+              style: OutlinedButton.styleFrom(foregroundColor: colors.error),
+              child: const Text('Rechazar'),
+            ),
+            const SizedBox(width: 8),
+            AppElevatedButton(
+              onPressed: onAprobar,
+              cargando: false,
+              child: const Text('Aprobar'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _SolicitudTile extends StatelessWidget {
   const _SolicitudTile({
     required this.solicitud,
     required this.nombreChofer,
     required this.onRevisar,
+    this.seleccionada = false,
+    this.onCambiarSeleccion,
   });
 
   final SolicitudAutorizacion solicitud;
   final String nombreChofer;
   final VoidCallback? onRevisar;
+
+  /// `null` = esta solicitud no se puede seleccionar (no está pendiente).
+  final bool seleccionada;
+  final ValueChanged<bool>? onCambiarSeleccion;
 
   @override
   Widget build(BuildContext context) {
@@ -210,6 +503,25 @@ class _SolicitudTile extends StatelessWidget {
         children: [
           Row(
             children: [
+              if (onCambiarSeleccion != null) ...[
+                Checkbox(
+                  value: seleccionada,
+                  onChanged: (v) => onCambiarSeleccion!(v ?? false),
+                ),
+                const SizedBox(width: 4),
+              ],
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: colors.primary.withValues(alpha: 0.12),
+                child: Text(
+                  nombreChofer.isNotEmpty ? nombreChofer[0].toUpperCase() : '?',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: colors.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -231,7 +543,7 @@ class _SolicitudTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      formatearFechaCorta(solicitud.creadaEn),
+                      formatearHora(solicitud.creadaEn),
                       style: Theme.of(
                         context,
                       ).textTheme.bodySmall?.copyWith(color: colors.textMuted),

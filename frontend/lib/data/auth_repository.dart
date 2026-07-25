@@ -26,7 +26,6 @@ abstract class AuthRepository {
     required String nombre,
     required String apellidoPaterno,
     String? apellidoMaterno,
-    required DateTime fechaNacimiento,
     required String correo,
     required String usuario,
     required String password,

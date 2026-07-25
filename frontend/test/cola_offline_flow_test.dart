@@ -120,10 +120,29 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      await tester.tap(find.text('Solicitar carga de combustible'));
+      await tester.tap(find.widgetWithText(FloatingActionButton, 'Solicitar carga'));
       await tester.pumpAndSettle();
       await _elegirVehiculo(tester, 'Vehículo · ABC-123');
-      await _fijarStepper(tester, 'Litros solicitados', '40');
+      await tester.ensureVisible(find.text('Tomar foto del tablero'));
+      await tester.tap(find.text('Tomar foto del tablero'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('L · toca para escribir'));
+      await tester.tap(find.text('L · toca para escribir'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.byType(TextField),
+        ),
+        '40',
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.text('Listo'),
+        ),
+      );
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Actividad'),
         'Actividad de prueba',

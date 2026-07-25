@@ -7,6 +7,8 @@ import '../../data/api_client.dart';
 import '../../models/vehiculo.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_dialog.dart';
+import '../../widgets/app_elevated_button.dart';
+import '../../widgets/aviso_error.dart';
 
 /// El chofer reporta sobre la marcha una unidad que no está en el
 /// catálogo (ej. una unidad recién llegada a la obra). Queda sin tope
@@ -129,12 +131,7 @@ class _ReportarVehiculoNuevoDialogState
             ),
             if (_errorGeneral != null) ...[
               const SizedBox(height: 12),
-              Text(
-                _errorGeneral!,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: colors.error),
-              ),
+              AvisoError(mensaje: _errorGeneral!),
             ],
             const SizedBox(height: 20),
             Row(
@@ -149,15 +146,10 @@ class _ReportarVehiculoNuevoDialogState
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: ElevatedButton(
-                    onPressed: _cargando ? null : _reportar,
-                    child: _cargando
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Reportar y usar'),
+                  child: AppElevatedButton(
+                    onPressed: _reportar,
+                    cargando: _cargando,
+                    child: const Text('Reportar y usar'),
                   ),
                 ),
               ],

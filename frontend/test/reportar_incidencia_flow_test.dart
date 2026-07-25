@@ -48,17 +48,20 @@ void main() {
       await tester.tap(find.text('Ingresar'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Solicitar carga de combustible'));
+      await tester.ensureVisible(
+        find.widgetWithText(FloatingActionButton, 'Solicitar carga'),
+      );
+      await tester.tap(
+        find.widgetWithText(FloatingActionButton, 'Solicitar carga'),
+      );
       await tester.pumpAndSettle();
       await _elegirVehiculo(tester, 'Vehículo · ABC-123');
       await tester.pumpAndSettle();
 
       // Sin historial todavía, el vehículo cae en "sin datos" — se ofrece
       // el atajo corto de reportar (no el aviso de mantenimiento vencido).
-      await tester.ensureVisible(
-        find.text('¿Problema con esta unidad? Repórtalo'),
-      );
-      await tester.tap(find.text('¿Problema con esta unidad? Repórtalo'));
+      await tester.ensureVisible(find.text('¿Problema con esta unidad?'));
+      await tester.tap(find.text('¿Problema con esta unidad?'));
       await tester.pumpAndSettle();
 
       expect(find.text('Reportar falla o incidencia'), findsOneWidget);
@@ -79,18 +82,29 @@ void main() {
       expect(find.text('Incidencia reportada.'), findsOneWidget);
 
       // Vuelve a /chofer y entra como admin en una sesión nueva.
-      await tester.tap(find.byType(BackButton));
+      // "Cerrar sesión" del chofer está en la pestaña Perfil del bottom nav.
+      await tester.tap(find.byIcon(Icons.arrow_back));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byTooltip('Cerrar sesión'));
-      await tester.tap(find.byTooltip('Cerrar sesión'));
+      await tester.tap(find.text('Perfil'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Cerrar sesión'));
+      await tester.tap(find.text('Cerrar sesión'));
+      await tester.pumpAndSettle();
+      // Confirmación antes de cerrar sesión (ver ConfirmarCerrarSesionDialog).
+      await tester.tap(
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.text('Cerrar sesión'),
+        ),
+      );
       await tester.pumpAndSettle();
 
       await tester.ensureVisible(find.text('Iniciar sesión'));
       await tester.tap(find.text('Iniciar sesión'));
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('Acceso de administrador'));
-      await tester.tap(find.text('Acceso de administrador'));
+      await tester.ensureVisible(find.text('Entrar como administrador'));
+      await tester.tap(find.text('Entrar como administrador'));
       await tester.pumpAndSettle();
       final loginDialog = find.byType(Dialog);
       await tester.enterText(

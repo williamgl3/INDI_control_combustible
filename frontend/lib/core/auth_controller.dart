@@ -29,7 +29,6 @@ class AuthController {
     required String nombre,
     required String apellidoPaterno,
     String? apellidoMaterno,
-    required DateTime fechaNacimiento,
     required String correo,
     required String usuario,
     required String password,
@@ -40,7 +39,6 @@ class AuthController {
           nombre: nombre,
           apellidoPaterno: apellidoPaterno,
           apellidoMaterno: apellidoMaterno,
-          fechaNacimiento: fechaNacimiento,
           correo: correo,
           usuario: usuario,
           password: password,
@@ -90,8 +88,15 @@ class AuthController {
     final perfil = await _ref.read(sessionStorageProvider).leerPerfil();
     if (token == null || perfil == null) return;
 
-    _ref.read(sessionProvider.notifier).iniciarSesion(perfil);
+    // Precarga ANTES de anunciar la sesión: el guard de rutas navega en
+    // cuanto `sessionProvider` cambia, así que si `iniciarSesion` fuera
+    // primero, la pantalla de inicio del chofer podría alcanzar a
+    // renderizar con listas vacías por un instante antes de que lleguen
+    // los datos reales. El token ya está guardado por separado
+    // (`TokenStorage`, no depende de `sessionProvider`), así que
+    // `_precargarDatos` puede llamar al backend sin problema.
     await _precargarDatos(perfil);
+    _ref.read(sessionProvider.notifier).iniciarSesion(perfil);
   }
 
   Future<void> _completarSesion(ResultadoAuth resultado) async {
@@ -101,8 +106,9 @@ class AuthController {
         .read(tokenStorageProvider)
         .guardarRefreshToken(resultado.refreshToken);
     await _ref.read(sessionStorageProvider).guardarPerfil(perfil);
-    _ref.read(sessionProvider.notifier).iniciarSesion(perfil);
+    // Mismo orden que en `restaurarSesionAlIniciar` y por la misma razón.
     await _precargarDatos(perfil);
+    _ref.read(sessionProvider.notifier).iniciarSesion(perfil);
   }
 
   Future<void> _precargarDatos(Perfil perfil) async {

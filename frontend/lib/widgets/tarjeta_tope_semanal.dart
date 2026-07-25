@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_radii.dart';
 import '../theme/app_theme.dart';
+import 'app_card.dart';
 
 /// Tarjeta de progreso del tope semanal de un vehículo, reutilizada en el
 /// inicio del chofer y en el detalle de chofer del panel administrativo.
@@ -27,13 +28,8 @@ class TarjetaTopeSemanal extends StatelessWidget {
         ? colors.error
         : (progreso >= 0.7 ? colors.warning : colors.success);
 
-    return Container(
+    return AppCard(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: AppRadii.cardRadius,
-        boxShadow: context.shadows.card,
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

@@ -176,6 +176,39 @@ class ApiOperacionesRepository implements OperacionesRepository {
   }
 
   @override
+  Future<void> actualizarPresupuestoSemanalTotal(double nuevoValor) async {
+    final data =
+        await _client.patch(
+              '/precios/presupuesto-semanal',
+              body: {'nuevoValor': nuevoValor},
+            )
+            as Map<String, dynamic>;
+    presupuestoSemanalTotal = (data['presupuestoSemanalTotal'] as num)
+        .toDouble();
+  }
+
+  @override
+  Future<Carga> editarCarga({
+    required String cargaId,
+    double? litrosCargados,
+    double? kmAlCargar,
+  }) async {
+    final data = await _client.patch(
+      '/cargas/$cargaId',
+      body: {
+        if (litrosCargados != null) 'litrosCargados': litrosCargados,
+        if (kmAlCargar != null) 'kmAlCargar': kmAlCargar,
+      },
+    );
+    final carga = Carga.fromJson(data as Map<String, dynamic>);
+    final indice = _cargas.indexWhere((c) => c.id == carga.id);
+    if (indice != -1) {
+      _cargas = [..._cargas]..[indice] = carga;
+    }
+    return carga;
+  }
+
+  @override
   Future<SolicitudAutorizacion> enviarSolicitud({
     required String choferId,
     required Vehiculo vehiculo,
@@ -184,17 +217,19 @@ class ApiOperacionesRepository implements OperacionesRepository {
     String? motivoChofer,
     required String actividad,
     required DateTime fechaProgramada,
+    String? fotoTableroPath,
   }) async {
-    final data = await _client.post(
+    final data = await _client.postMultipart(
       '/solicitudes',
-      body: {
+      campos: {
         'vehiculoId': vehiculo.id,
-        'litrosSolicitados': litrosSolicitados,
-        'esUrgente': esUrgente,
-        'motivoChofer': motivoChofer,
+        'litrosSolicitados': '$litrosSolicitados',
+        'esUrgente': '$esUrgente',
+        if (motivoChofer != null) 'motivoChofer': motivoChofer,
         'actividad': actividad,
         'fechaProgramada': fechaProgramada.toIso8601String(),
       },
+      archivos: {'fotoTablero': fotoTableroPath},
     );
     final solicitud = SolicitudAutorizacion.fromJson(
       data as Map<String, dynamic>,
@@ -210,6 +245,19 @@ class ApiOperacionesRepository implements OperacionesRepository {
     } catch (_) {
       return null;
     }
+  }
+
+  @override
+  Future<SolicitudAutorizacion> cancelarSolicitud(String solicitudId) async {
+    final data = await _client.patch('/solicitudes/$solicitudId/cancelar');
+    final solicitud = SolicitudAutorizacion.fromJson(
+      data as Map<String, dynamic>,
+    );
+    final indice = _solicitudes.indexWhere((s) => s.id == solicitud.id);
+    if (indice != -1) {
+      _solicitudes = [..._solicitudes]..[indice] = solicitud;
+    }
+    return solicitud;
   }
 
   @override

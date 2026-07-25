@@ -11,16 +11,18 @@ import '../screens/administrativo/chofer_detalle_screen.dart';
 import '../screens/bienvenida/bienvenida_screen.dart';
 import '../screens/chofer/cerrar_dia_screen.dart';
 import '../screens/chofer/chofer_dashboard_screen.dart';
-import '../screens/chofer/chofer_home_screen.dart';
+import '../screens/chofer/chofer_home_shell.dart';
 import '../screens/chofer/comprobar_carga_screen.dart';
 import '../screens/chofer/mi_perfil_screen.dart';
 import '../screens/chofer/mis_solicitudes_screen.dart';
 import '../screens/chofer/respuesta_solicitud_screen.dart';
 import '../screens/chofer/solicitar_carga_screen.dart';
+import '../screens/chofer/subir_evidencias_screen.dart';
 import '../screens/login/login_screen.dart';
 import '../screens/recuperar_password/recuperar_password_screen.dart';
 import '../screens/registro_chofer/registro_chofer_screen.dart';
 import '../theme/app_motion.dart';
+import '../widgets/chofer_mobile_wrapper.dart';
 import 'placeholder_screen.dart';
 import 'route_paths.dart';
 
@@ -120,12 +122,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RoutePaths.chofer,
         pageBuilder: (context, state) =>
-            _conTransicion(state, const ChoferHomeScreen()),
+            _conTransicion(state, const ChoferHomeShell()),
       ),
       GoRoute(
         path: RoutePaths.choferSolicitar,
-        pageBuilder: (context, state) =>
-            _conTransicion(state, const SolicitarCargaScreen()),
+        pageBuilder: (context, state) => _conTransicion(
+          state,
+          const ChoferMobileWrapper(child: SolicitarCargaScreen()),
+        ),
       ),
       GoRoute(
         path: RoutePaths.choferRespuesta,
@@ -139,7 +143,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
           return _conTransicion(
             state,
-            RespuestaSolicitudScreen(solicitud: solicitud),
+            ChoferMobileWrapper(
+              child: RespuestaSolicitudScreen(solicitud: solicitud),
+            ),
           );
         },
       ),
@@ -155,7 +161,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
           return _conTransicion(
             state,
-            ComprobarCargaScreen(folioAutorizacion: folio),
+            ChoferMobileWrapper(
+              child: ComprobarCargaScreen(folioAutorizacion: folio),
+            ),
           );
         },
       ),
@@ -169,23 +177,39 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               RutaInvalidaScreen(onVolver: () => context.go(RoutePaths.chofer)),
             );
           }
-          return _conTransicion(state, CerrarDiaScreen(carga: carga));
+          return _conTransicion(
+            state,
+            ChoferMobileWrapper(child: CerrarDiaScreen(carga: carga)),
+          );
         },
       ),
       GoRoute(
         path: RoutePaths.choferSolicitudes,
-        pageBuilder: (context, state) =>
-            _conTransicion(state, const MisSolicitudesScreen()),
+        pageBuilder: (context, state) => _conTransicion(
+          state,
+          const ChoferMobileWrapper(child: MisSolicitudesScreen()),
+        ),
       ),
       GoRoute(
         path: RoutePaths.choferPerfil,
-        pageBuilder: (context, state) =>
-            _conTransicion(state, const MiPerfilScreen()),
+        pageBuilder: (context, state) => _conTransicion(
+          state,
+          const ChoferMobileWrapper(child: MiPerfilScreen()),
+        ),
       ),
       GoRoute(
         path: RoutePaths.choferDashboard,
-        pageBuilder: (context, state) =>
-            _conTransicion(state, const ChoferDashboardScreen()),
+        pageBuilder: (context, state) => _conTransicion(
+          state,
+          const ChoferMobileWrapper(child: ChoferDashboardScreen()),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.choferSubirEvidencias,
+        pageBuilder: (context, state) => _conTransicion(
+          state,
+          const ChoferMobileWrapper(child: SubirEvidenciasScreen()),
+        ),
       ),
       GoRoute(
         path: RoutePaths.administrativo,

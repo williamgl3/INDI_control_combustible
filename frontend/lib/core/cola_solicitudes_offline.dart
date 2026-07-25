@@ -25,6 +25,7 @@ class SolicitudPendienteOffline {
     required this.motivoChofer,
     required this.actividad,
     required this.fechaProgramada,
+    required this.fotoTableroPath,
     required this.creadaEn,
   });
 
@@ -35,6 +36,11 @@ class SolicitudPendienteOffline {
   final String? motivoChofer;
   final String actividad;
   final DateTime fechaProgramada;
+
+  /// Foto del tablero (km/horómetro) tomada al pedir — igual que en
+  /// [ComprobarCargaPendienteOffline], solo se guarda la ruta local; si el
+  /// archivo ya no existe al sincronizar, se descarta la pendiente.
+  final String fotoTableroPath;
   final DateTime creadaEn;
 
   factory SolicitudPendienteOffline.fromJson(Map<String, dynamic> json) {
@@ -46,6 +52,7 @@ class SolicitudPendienteOffline {
       motivoChofer: json['motivoChofer'] as String?,
       actividad: json['actividad'] as String,
       fechaProgramada: DateTime.parse(json['fechaProgramada'] as String),
+      fotoTableroPath: json['fotoTableroPath'] as String,
       creadaEn: DateTime.parse(json['creadaEn'] as String),
     );
   }
@@ -58,6 +65,7 @@ class SolicitudPendienteOffline {
     'motivoChofer': motivoChofer,
     'actividad': actividad,
     'fechaProgramada': fechaProgramada.toIso8601String(),
+    'fotoTableroPath': fotoTableroPath,
     'creadaEn': creadaEn.toIso8601String(),
   };
 }
@@ -274,20 +282,23 @@ class ColaCerrarDiaOffline {
   }
 }
 
-/// Reporte de incidencia/falla de vehículo pendiente de sincronizar — sin
-/// foto (`ReportarIncidenciaDialog` solo pide descripción).
+/// Reporte de incidencia/falla de vehículo pendiente de sincronizar — la
+/// foto es opcional (no toda incidencia es fotografiable), a diferencia
+/// de las otras 3 colas donde la(s) foto(s) son obligatorias.
 class IncidenciaPendienteOffline {
   const IncidenciaPendienteOffline({
     required this.idLocal,
     required this.vehiculoId,
     required this.descripcion,
     required this.creadaEn,
+    this.fotoPath,
   });
 
   final String idLocal;
   final String vehiculoId;
   final String descripcion;
   final DateTime creadaEn;
+  final String? fotoPath;
 
   factory IncidenciaPendienteOffline.fromJson(Map<String, dynamic> json) {
     return IncidenciaPendienteOffline(
@@ -295,6 +306,7 @@ class IncidenciaPendienteOffline {
       vehiculoId: json['vehiculoId'] as String,
       descripcion: json['descripcion'] as String,
       creadaEn: DateTime.parse(json['creadaEn'] as String),
+      fotoPath: json['fotoPath'] as String?,
     );
   }
 
@@ -303,6 +315,7 @@ class IncidenciaPendienteOffline {
     'vehiculoId': vehiculoId,
     'descripcion': descripcion,
     'creadaEn': creadaEn.toIso8601String(),
+    'fotoPath': fotoPath,
   };
 }
 
@@ -515,6 +528,15 @@ Future<void> _sincronizarSolicitudes(WidgetRef ref) async {
       );
       continue;
     }
+    if (!File(pendiente.fotoTableroPath).existsSync()) {
+      await cola.quitar(pendiente.idLocal);
+      AppLogger.error(
+        'sincronizarSolicitudesOffline',
+        'La foto del tablero de la solicitud ${pendiente.idLocal} ya no '
+            'existe en el dispositivo — se descarta.',
+      );
+      continue;
+    }
     try {
       await repo.enviarSolicitud(
         choferId: choferId,
@@ -524,6 +546,7 @@ Future<void> _sincronizarSolicitudes(WidgetRef ref) async {
         motivoChofer: pendiente.motivoChofer,
         actividad: pendiente.actividad,
         fechaProgramada: pendiente.fechaProgramada,
+        fotoTableroPath: pendiente.fotoTableroPath,
       );
       await cola.quitar(pendiente.idLocal);
     } on ApiException catch (e) {
@@ -635,7 +658,10 @@ Future<void> _sincronizarCerrarDia(WidgetRef ref) async {
   }
 }
 
-/// Reintenta cada reporte de incidencia encolado — sin foto que revisar.
+/// Reintenta cada reporte de incidencia encolado. La foto es opcional —
+/// si se tomó una y ya no existe en el dispositivo, se descarta solo esa
+/// foto (no toda la pendiente, a diferencia de las otras 3 colas donde
+/// la foto es obligatoria).
 Future<void> _sincronizarIncidencias(WidgetRef ref) async {
   final cola = ref.read(colaIncidenciasOfflineProvider);
   final pendientes = await cola.leer();
@@ -644,10 +670,13 @@ Future<void> _sincronizarIncidencias(WidgetRef ref) async {
   final repo = ref.read(incidenciasRepositoryProvider);
 
   for (final pendiente in pendientes) {
+    final fotoSigueExistiendo =
+        pendiente.fotoPath != null && File(pendiente.fotoPath!).existsSync();
     try {
       await repo.reportar(
         vehiculoId: pendiente.vehiculoId,
         descripcion: pendiente.descripcion,
+        fotoPath: fotoSigueExistiendo ? pendiente.fotoPath : null,
       );
       await cola.quitar(pendiente.idLocal);
     } on ApiException catch (e) {

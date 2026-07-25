@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Familias tipográficas de la app.
 ///
 /// Dirección "iOS": San Francisco (la fuente de sistema de Apple) no está
-/// disponible en Google Fonts, así que se usa **Inter** como sustituto —
+/// disponible como asset libre, así que se usa **Inter** como sustituto —
 /// misma familia humanista de un solo peso variable, usada por todo el
 /// sistema (títulos, cuerpo, labels) en vez de mezclar 2-3 familias
 /// distintas por jerarquía, como hacía la dirección "corporativa" anterior.
 /// IBM Plex Mono se mantiene para datos monoespaciados (folios, montos).
+///
+/// Ambas se empaquetan localmente en `assets/fonts/` (declaradas en
+/// `pubspec.yaml`) en vez de pedirse en runtime vía `google_fonts` — la
+/// app depende de que un chofer sin señal en obra pueda seguir usándola
+/// desde el primer arranque, no solo después de la cola offline.
 class AppTypography {
   const AppTypography._();
 
@@ -19,7 +23,8 @@ class AppTypography {
     double? letterSpacing,
     double? height,
   }) {
-    return GoogleFonts.inter(
+    return TextStyle(
+      fontFamily: 'Inter',
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,
@@ -35,7 +40,8 @@ class AppTypography {
     double? letterSpacing,
     double? height,
   }) {
-    return GoogleFonts.ibmPlexMono(
+    return TextStyle(
+      fontFamily: 'IBM Plex Mono',
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_radii.dart';
 import '../theme/app_theme.dart';
+import 'formato_numero.dart';
 
 /// Barra de progreso del presupuesto semanal en pesos, reutilizada en las
 /// pestañas Autorizaciones y Finanzas del panel administrativo.
@@ -50,18 +51,35 @@ class BarraPresupuesto extends StatelessWidget {
                       'Presupuesto semanal',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    if (etiquetaSemana != null)
-                      Text(
-                        'Semana del $etiquetaSemana',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colors.textMuted,
-                        ),
+                    if (etiquetaSemana != null) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_outlined,
+                            size: 13,
+                            color: colors.textMuted,
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Semana del $etiquetaSemana',
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodySmall?.copyWith(
+                                color: colors.textMuted,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
+                    ],
                   ],
                 ),
               ),
               Text(
-                '\$${restante.toStringAsFixed(0)} restantes',
+                '${formatearMoneda(restante)} restantes',
                 style: Theme.of(
                   context,
                 ).textTheme.labelLarge?.copyWith(color: color),
@@ -80,7 +98,7 @@ class BarraPresupuesto extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            '${(proporcion * 100).toStringAsFixed(0)}% ejercido de \$${total.toStringAsFixed(0)}',
+            '${(proporcion * 100).toStringAsFixed(0)}% ejercido de ${formatearMoneda(total)}',
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: colors.textMuted),

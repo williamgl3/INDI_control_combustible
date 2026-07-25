@@ -10,9 +10,8 @@ import 'app_typography.dart';
 /// ThemeData completo de la app, construido a partir de los tokens de
 /// [AppColors], [AppShadows], [AppRadii] y [AppTypography].
 ///
-/// TODO-SPEC: la coherencia visual (radios de botón/input, elevaciones)
-/// se basa en los valores placeholder de cada token file hasta tener
-/// SPEC.md.
+/// La coherencia visual (radios de botón/input, elevaciones) se define aquí
+/// usando los valores de cada token file, según SPEC.md.
 class AppTheme {
   const AppTheme._();
 
@@ -64,17 +63,43 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: colors.surfaceAlt,
-        // Sin contorno duro en reposo — el relleno (más oscuro que el
-        // fondo) ya define el campo, como en la referencia del usuario.
-        // El contorno solo aparece al enfocar o en error, para dar
-        // feedback de estado.
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 16,
+        ),
+        // minWidth un poco mayor que el ícono (24px) + su padding visual
+        // por defecto — antes quedaba pegado al borde izquierdo del campo.
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: 52,
+          minHeight: 44,
+        ),
+        suffixIconColor: colors.textMuted,
+        hintStyle: textTheme.bodyMedium?.copyWith(color: colors.textMuted),
+        floatingLabelBehavior: FloatingLabelBehavior.auto,
+        // En claro: sin contorno duro en reposo — el relleno (más oscuro
+        // que el fondo) ya define el campo, como en la referencia del
+        // usuario. En oscuro: el relleno de un input dentro de una card
+        // (surfaceAlt sobre surface) se distingue menos a simple vista que
+        // en claro, así que se agrega un trazo blanco muy sutil en reposo
+        // para que el campo no se confunda con la card que lo contiene.
+        // El contorno de foco/error se mantiene igual en ambos temas.
         border: OutlineInputBorder(
           borderRadius: AppRadii.inputRadius,
-          borderSide: BorderSide.none,
+          borderSide: brightness == Brightness.dark
+              ? BorderSide(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  width: AppBorders.hairline,
+                )
+              : BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: AppRadii.inputRadius,
-          borderSide: BorderSide.none,
+          borderSide: brightness == Brightness.dark
+              ? BorderSide(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  width: AppBorders.hairline,
+                )
+              : BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: AppRadii.inputRadius,
@@ -104,13 +129,12 @@ class AppTheme {
               foregroundColor: colors.primaryOn,
               disabledBackgroundColor: colors.border,
               disabledForegroundColor: colors.textMuted,
-              // Botón relleno estilo iOS: plano, sin sombra — el contraste de
-              // color ya es la señal, no la elevación.
-              elevation: 0,
+              elevation: 3,
+              shadowColor: Colors.black.withValues(alpha: 0.35),
               shape: RoundedRectangleBorder(
                 borderRadius: AppRadii.buttonRadius,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
               textStyle: textTheme.labelLarge,
             ).copyWith(
               overlayColor: WidgetStatePropertyAll(
@@ -119,14 +143,38 @@ class AppTheme {
             ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: colors.primary,
-          disabledForegroundColor: colors.textMuted,
-          side: BorderSide(color: colors.border, width: AppBorders.standard),
-          shape: RoundedRectangleBorder(borderRadius: AppRadii.navButtonRadius),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          textStyle: textTheme.labelLarge,
-        ),
+        style:
+            OutlinedButton.styleFrom(
+              foregroundColor: colors.textPrimary,
+              backgroundColor: colors.surface,
+              disabledForegroundColor: colors.textMuted,
+              side: BorderSide(
+                color: colors.border,
+                width: AppBorders.standard,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: AppRadii.navButtonRadius,
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+              textStyle: textTheme.labelLarge,
+            ).copyWith(
+              overlayColor: WidgetStatePropertyAll(
+                colors.surfaceAlt.withValues(alpha: 0.7),
+              ),
+            ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style:
+            TextButton.styleFrom(
+              foregroundColor: colors.primary,
+              disabledForegroundColor: colors.textMuted,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              textStyle: textTheme.labelLarge,
+            ).copyWith(
+              overlayColor: WidgetStatePropertyAll(
+                colors.primary.withValues(alpha: 0.08),
+              ),
+            ),
       ),
       cardTheme: CardThemeData(
         color: colors.surface,

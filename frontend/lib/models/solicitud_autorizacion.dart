@@ -33,6 +33,7 @@ class SolicitudAutorizacion {
     this.folioAutorizacion,
     this.comentario,
     this.pendienteDeSincronizar = false,
+    this.fotoTableroPath,
   });
 
   final String id;
@@ -87,6 +88,12 @@ class SolicitudAutorizacion {
   /// al backend.
   final bool pendienteDeSincronizar;
 
+  /// Foto del tablero (km/horómetro actual) al momento de pedir — mismo
+  /// respaldo visual que ya se manda por WhatsApp en el proceso real,
+  /// antes de ir a cargar combustible. `null` en solicitudes anteriores a
+  /// este campo.
+  final String? fotoTableroPath;
+
   SolicitudAutorizacion copyWith({
     String? id,
     String? choferId,
@@ -104,6 +111,7 @@ class SolicitudAutorizacion {
     String? folioAutorizacion,
     String? comentario,
     bool? pendienteDeSincronizar,
+    String? fotoTableroPath,
   }) {
     return SolicitudAutorizacion(
       id: id ?? this.id,
@@ -123,6 +131,7 @@ class SolicitudAutorizacion {
       comentario: comentario ?? this.comentario,
       pendienteDeSincronizar:
           pendienteDeSincronizar ?? this.pendienteDeSincronizar,
+      fotoTableroPath: fotoTableroPath ?? this.fotoTableroPath,
     );
   }
 
@@ -144,6 +153,7 @@ class SolicitudAutorizacion {
       folioAutorizacion: json['folioAutorizacion'] as String?,
       comentario: json['comentario'] as String?,
       pendienteDeSincronizar: json['pendienteDeSincronizar'] as bool? ?? false,
+      fotoTableroPath: json['fotoTableroPath'] as String?,
     );
   }
 
@@ -165,6 +175,7 @@ class SolicitudAutorizacion {
       'folioAutorizacion': folioAutorizacion,
       'comentario': comentario,
       'pendienteDeSincronizar': pendienteDeSincronizar,
+      'fotoTableroPath': fotoTableroPath,
     };
   }
 }

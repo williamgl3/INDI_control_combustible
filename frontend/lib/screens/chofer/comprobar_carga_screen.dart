@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -14,8 +15,13 @@ import '../../router/route_paths.dart';
 import '../../theme/app_breakpoints.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_elevated_button.dart';
+import '../../widgets/aviso_error.dart';
 import '../../widgets/captura_foto_field.dart';
+import '../../widgets/confirmar_fotos_dialog.dart';
+import '../../widgets/responsive_scroll_view.dart';
 import '../../widgets/selector_vehiculo.dart';
+import '../../widgets/sin_conexion_dialog.dart';
 import '../../widgets/stepper_numerico.dart';
 
 /// Registro 1 del día: se llena justo después de cargar combustible,
@@ -120,6 +126,15 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
       return;
     }
 
+    final confirmado = await ConfirmarFotosDialog.show(
+      context,
+      fotos: [
+        FotoPreview(etiqueta: 'Foto del tablero', ruta: _fotoTableroPath!),
+        FotoPreview(etiqueta: 'Foto del ticket', ruta: _fotoTicketPath!),
+      ],
+    );
+    if (!confirmado || !mounted) return;
+
     setState(() {
       _enviando = true;
       _errorGeneral = null;
@@ -147,6 +162,7 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
             fotoTableroPath: _fotoTableroPath,
             litrosDetectadosOcr: _resultadoOcr?.litros,
           );
+      HapticFeedback.mediumImpact();
       ref.read(operacionesTickProvider.notifier).state++;
       // 8 horas para "fin de jornada" confirmado por el usuario.
       await ref
@@ -201,22 +217,11 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
     ref.read(operacionesTickProvider.notifier).state++;
     if (!mounted) return;
     setState(() => _enviando = false);
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: const Icon(Icons.cloud_off_outlined),
-        title: const Text('Sin conexión'),
-        content: const Text(
+    await SinConexionDialog.show(
+      context,
+      mensaje:
           'Guardamos tu comprobación en este dispositivo. Se enviará sola '
           'en cuanto vuelvas a tener señal — no hace falta que la repitas.',
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Entendido'),
-          ),
-        ],
-      ),
     );
     if (mounted) context.go(RoutePaths.chofer);
   }
@@ -233,116 +238,99 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
         leading: BackButton(onPressed: () => context.go(RoutePaths.chofer)),
       ),
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: AppBreakpoints.contentMaxWidth,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: colors.surfaceAlt,
-                      borderRadius: AppRadii.cardRadius,
+        child: ResponsiveScrollView(
+          maxWidth: AppBreakpoints.contentMaxWidth,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: colors.surfaceAlt,
+                  borderRadius: AppRadii.cardRadius,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.confirmation_number_outlined,
+                      color: colors.textSecondary,
                     ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.confirmation_number_outlined,
-                          color: colors.textSecondary,
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Folio ${widget.folioAutorizacion}',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SelectorVehiculo(
-                    vehiculoSeleccionado: _vehiculo,
-                    onSeleccionar: (v) => setState(() => _vehiculo = v),
-                  ),
-                  const SizedBox(height: 20),
-                  CapturaFotoField(
-                    etiqueta: porHorometro
-                        ? 'Foto del tablero (horómetro al cargar)'
-                        : 'Foto del tablero (km al cargar)',
-                    icono: Icons.speed_outlined,
-                    rutaFoto: _fotoTableroPath,
-                    cargando: _cargandoFotoTablero,
-                    onTomarFoto: _tomarFotoTablero,
-                  ),
-                  const SizedBox(height: 12),
-                  CapturaFotoField(
-                    etiqueta: 'Foto del ticket de la gasolinera',
-                    icono: Icons.receipt_long_outlined,
-                    rutaFoto: _fotoTicketPath,
-                    cargando: _cargandoFotoTicket,
-                    onTomarFoto: _tomarFotoTicket,
-                  ),
-                  if (_resultadoOcr != null && !_resultadoOcr!.sinDatos) ...[
-                    const SizedBox(height: 8),
-                    _AvisoOcr(
-                      resultado: _resultadoOcr!,
-                      litrosEscritos: _litrosCargados,
-                    ),
-                  ],
-                  const SizedBox(height: 20),
-                  StepperNumerico(
-                    etiqueta: 'Litros cargados',
-                    valor: _litrosCargados,
-                    sufijo: 'L',
-                    paso: 1,
-                    decimales: 1,
-                    onChanged: (v) => setState(() => _litrosCargados = v),
-                  ),
-                  const SizedBox(height: 16),
-                  StepperNumerico(
-                    etiqueta: porHorometro
-                        ? 'Horómetro al cargar (según el tablero)'
-                        : 'Km al cargar (según el tablero)',
-                    valor: _kmAlCargar,
-                    sufijo: porHorometro ? 'h' : 'km',
-                    paso: 1,
-                    decimales: 0,
-                    onChanged: (v) => setState(() => _kmAlCargar = v),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _gasolineraController,
-                    decoration: const InputDecoration(labelText: 'Gasolinera'),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                  if (_errorGeneral != null) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(width: 12),
                     Text(
-                      _errorGeneral!,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: colors.error),
+                      'Folio ${widget.folioAutorizacion}',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ],
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _enviando ? null : _enviar,
-                    child: _enviando
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Enviar comprobación'),
-                  ),
-                ],
+                ),
               ),
-            ),
+              const SizedBox(height: 20),
+              SelectorVehiculo(
+                vehiculoSeleccionado: _vehiculo,
+                onSeleccionar: (v) => setState(() => _vehiculo = v),
+              ),
+              const SizedBox(height: 20),
+              CapturaFotoField(
+                etiqueta: porHorometro
+                    ? 'Foto del tablero (horómetro al cargar)'
+                    : 'Foto del tablero (km al cargar)',
+                icono: Icons.speed_outlined,
+                rutaFoto: _fotoTableroPath,
+                cargando: _cargandoFotoTablero,
+                onTomarFoto: _tomarFotoTablero,
+              ),
+              const SizedBox(height: 12),
+              CapturaFotoField(
+                etiqueta: 'Foto del ticket de la gasolinera',
+                icono: Icons.receipt_long_outlined,
+                rutaFoto: _fotoTicketPath,
+                cargando: _cargandoFotoTicket,
+                onTomarFoto: _tomarFotoTicket,
+              ),
+              if (_resultadoOcr != null && !_resultadoOcr!.sinDatos) ...[
+                const SizedBox(height: 8),
+                _AvisoOcr(
+                  resultado: _resultadoOcr!,
+                  litrosEscritos: _litrosCargados,
+                ),
+              ],
+              const SizedBox(height: 20),
+              StepperNumerico(
+                etiqueta: 'Litros cargados',
+                valor: _litrosCargados,
+                sufijo: 'L',
+                paso: 1,
+                decimales: 1,
+                onChanged: (v) => setState(() => _litrosCargados = v),
+              ),
+              const SizedBox(height: 16),
+              StepperNumerico(
+                etiqueta: porHorometro
+                    ? 'Horómetro al cargar (según el tablero)'
+                    : 'Km al cargar (según el tablero)',
+                valor: _kmAlCargar,
+                sufijo: porHorometro ? 'h' : 'km',
+                paso: 1,
+                decimales: 0,
+                onChanged: (v) => setState(() => _kmAlCargar = v),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _gasolineraController,
+                decoration: const InputDecoration(labelText: 'Gasolinera'),
+                onChanged: (_) => setState(() {}),
+              ),
+              if (_errorGeneral != null) ...[
+                const SizedBox(height: 12),
+                AvisoError(mensaje: _errorGeneral!),
+              ],
+              const SizedBox(height: 24),
+              AppElevatedButton(
+                onPressed: _enviar,
+                cargando: _enviando,
+                child: const Text('Enviar comprobación'),
+              ),
+            ],
           ),
         ),
       ),

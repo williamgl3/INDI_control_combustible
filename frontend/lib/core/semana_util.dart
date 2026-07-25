@@ -4,9 +4,7 @@ import '../widgets/fecha_formato.dart';
 /// acumulados, filtro "Semana" del Concentrado): lunes 00:00 a domingo
 /// 23:59:59, en la fecha/hora local del dispositivo.
 ///
-/// TODO-SPEC: no hay definición de "semana laboral" en SPEC.md (podría
-/// empezar en domingo o en otro huso horario según la obra) — se usa
-/// lunes-domingo por ser el estándar ISO más común en México.
+/// Se usa lunes-domingo por ser el estándar ISO más común en México.
 DateTime inicioDeSemana(DateTime fecha) {
   final soloFecha = DateTime(fecha.year, fecha.month, fecha.day);
   return soloFecha.subtract(Duration(days: soloFecha.weekday - 1));

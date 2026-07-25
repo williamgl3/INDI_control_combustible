@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:indi_combustible/router/app_router.dart';
+import 'package:indi_combustible/router/route_paths.dart';
 import 'package:indi_combustible/screens/administrativo/tabs/dashboard_calculo.dart';
 import 'package:indi_combustible/widgets/ios_segmented_control.dart';
 
@@ -27,18 +30,20 @@ void main() {
       await tester.tap(find.text('Ingresar'));
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('Mi consumo'));
-      await tester.tap(find.text('Mi consumo'));
+      // El dashboard ya no es una pestaña del bottom nav — se accede
+      // directamente por ruta.
+      final router = container.read(appRouterProvider);
+      router.go(RoutePaths.choferDashboard);
       await tester.pumpAndSettle();
 
       // Sin cargas registradas todavía (mock fresco): renderiza el hero en
       // cero y el estado vacío, en vez de tronar por listas vacías.
       expect(find.text('Mi consumo'), findsWidgets);
       expect(find.text('LITROS CONSUMIDOS'), findsOneWidget);
-      expect(find.text('0'), findsOneWidget);
+      expect(find.text('0'), findsWidgets);
       expect(find.byType(IosSegmentedControl<PeriodoDashboard>), findsOneWidget);
       expect(
-        find.text('No registraste cargas en este periodo.'),
+        find.text('Todavía no registras cargas en este periodo.'),
         findsOneWidget,
       );
     },

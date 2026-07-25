@@ -15,6 +15,7 @@ class RoutePaths {
   static const choferSolicitudes = '/chofer/solicitudes';
   static const choferPerfil = '/chofer/perfil';
   static const choferDashboard = '/chofer/dashboard';
+  static const choferSubirEvidencias = '/chofer/subir-evidencias';
 
   static const administrativo = '/administrativo';
   static const administrativoChoferDetalle = '/administrativo/chofer';

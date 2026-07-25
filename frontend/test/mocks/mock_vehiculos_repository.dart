@@ -1,6 +1,6 @@
-import '../core/catalogos_vehiculo.dart';
-import '../models/vehiculo.dart';
-import 'vehiculos_repository.dart';
+import 'package:indi_combustible/core/catalogos_vehiculo.dart';
+import 'package:indi_combustible/data/vehiculos_repository.dart';
+import 'package:indi_combustible/models/vehiculo.dart';
 
 /// Catálogo compartido de vehículos/maquinaria de la obra, en memoria.
 ///
@@ -13,7 +13,6 @@ import 'vehiculos_repository.dart';
 /// implementa `ApiVehiculosRepository`.
 class MockVehiculosRepository implements VehiculosRepository {
   MockVehiculosRepository() {
-    // Semilla de demo — antes vivía embebida en el chofer1 del mock de auth.
     _vehiculos.add(
       Vehiculo(
         id: 'veh-1',
@@ -33,7 +32,6 @@ class MockVehiculosRepository implements VehiculosRepository {
   @override
   List<Vehiculo> get todos => List.unmodifiable(_vehiculos);
 
-  /// Ya están "cargados" desde el constructor — no hace nada.
   @override
   Future<void> cargarVehiculos() async {}
 
@@ -46,8 +44,6 @@ class MockVehiculosRepository implements VehiculosRepository {
     }
   }
 
-  /// Alta de un vehículo ya formalizada por un administrativo, con su
-  /// tope semanal definido desde el inicio.
   @override
   Future<Vehiculo> crear({
     required String tipoUnidad,
@@ -72,11 +68,6 @@ class MockVehiculosRepository implements VehiculosRepository {
     return vehiculo;
   }
 
-  /// Un chofer reporta sobre la marcha una unidad que no está en el
-  /// catálogo (ej. una unidad recién llegada a la obra). Queda con tope
-  /// `0` — sin tope asignado — hasta que un administrativo la formalice
-  /// en la pestaña Vehículos; mientras tanto, cualquier solicitud que la
-  /// use cae a revisión manual (mismo comportamiento que "sin tope").
   @override
   Future<Vehiculo> reportarNuevo({
     required String tipoUnidad,
@@ -91,8 +82,6 @@ class MockVehiculosRepository implements VehiculosRepository {
     );
   }
 
-  /// Edita los datos de un vehículo ya existente (formalizar tope,
-  /// corregir identificador/tipo, intervalo de servicio, etc.).
   @override
   Future<Vehiculo> actualizar({
     required String id,
@@ -117,8 +106,6 @@ class MockVehiculosRepository implements VehiculosRepository {
     return actualizado;
   }
 
-  /// Marca que se realizó el servicio general mecánico de una unidad,
-  /// con la lectura del medidor (km u horas) en ese momento.
   @override
   Future<Vehiculo> registrarServicio({
     required String id,

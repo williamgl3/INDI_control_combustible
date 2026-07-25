@@ -96,9 +96,11 @@ class _VehiculosTabState extends ConsumerState<VehiculosTab> {
           ),
           const SizedBox(height: 24),
           if (vehiculos.isEmpty)
-            const EstadoVacio(
+            EstadoVacio(
               icono: Icons.local_shipping_outlined,
               mensaje: 'Aún no hay vehículos registrados.',
+              textoAccion: 'Agregar vehículo',
+              onAccion: _agregar,
             )
           else
             GroupedSection(

@@ -56,7 +56,12 @@ class SelectorTemaDialog extends ConsumerWidget {
                       children: [
                         Icon(opcion.icono, size: 20),
                         const SizedBox(width: 12),
-                        Text(opcion.etiqueta),
+                        Expanded(
+                          child: Text(
+                            opcion.etiqueta,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
                   ),

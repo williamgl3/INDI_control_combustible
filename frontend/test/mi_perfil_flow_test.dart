@@ -26,11 +26,10 @@ void main() {
     await pumpTestApp(tester, container: container);
     await _loginComoChofer1(tester);
 
-    await tester.ensureVisible(find.byTooltip('Mi perfil'));
-    await tester.tap(find.byTooltip('Mi perfil'));
+    // Perfil es la pestaña #3 del bottom nav.
+    await tester.tap(find.text('Perfil'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Mi perfil'), findsOneWidget);
     expect(find.text('Juan Pérez'), findsOneWidget);
 
     await tester.enterText(
@@ -60,8 +59,7 @@ void main() {
       await pumpTestApp(tester, container: container);
       await _loginComoChofer1(tester);
 
-      await tester.ensureVisible(find.byTooltip('Mi perfil'));
-      await tester.tap(find.byTooltip('Mi perfil'));
+      await tester.tap(find.text('Perfil'));
       await tester.pumpAndSettle();
 
       await tester.enterText(

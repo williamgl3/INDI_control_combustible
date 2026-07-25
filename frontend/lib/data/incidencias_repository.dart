@@ -17,6 +17,7 @@ abstract class IncidenciasRepository {
   Future<IncidenciaVehiculo> reportar({
     required String vehiculoId,
     required String descripcion,
+    String? fotoPath,
   });
 
   Future<IncidenciaVehiculo> resolver({

@@ -1,5 +1,5 @@
-import '../models/registro_auditoria.dart';
-import 'auditoria_repository.dart';
+import 'package:indi_combustible/data/auditoria_repository.dart';
+import 'package:indi_combustible/models/registro_auditoria.dart';
 
 /// Repositorio de auditoría MOCK — datos de ejemplo variados en memoria,
 /// para widget tests y como referencia de la interfaz que implementa
@@ -13,7 +13,7 @@ class MockAuditoriaRepository implements AuditoriaRepository {
         usuarioId: 'mock-admin-1',
         usuarioNombre: 'Ana Torres',
         accion: 'aprobó',
-        entidad: 'solicitud',
+        entidad: 'solicitud_autorizacion',
         entidadId: 'sol-1001',
         detalle: 'Autorizó 40 L de los 45 L solicitados.',
         creadoEn: ahora.subtract(const Duration(minutes: 12)),
@@ -33,7 +33,7 @@ class MockAuditoriaRepository implements AuditoriaRepository {
         usuarioId: 'mock-admin-1',
         usuarioNombre: 'Ana Torres',
         accion: 'resolvió',
-        entidad: 'incidencia',
+        entidad: 'incidencia_vehiculo',
         entidadId: 'inc-7',
         detalle: 'Llanta ponchada — se cambió por refacción en almacén.',
         creadoEn: ahora.subtract(const Duration(hours: 5)),
@@ -53,7 +53,7 @@ class MockAuditoriaRepository implements AuditoriaRepository {
         usuarioId: 'mock-admin-1',
         usuarioNombre: 'Ana Torres',
         accion: 'rechazó',
-        entidad: 'solicitud',
+        entidad: 'solicitud_autorizacion',
         entidadId: 'sol-998',
         detalle: 'Excede el presupuesto semanal restante.',
         creadoEn: ahora.subtract(const Duration(days: 1, hours: 4)),
@@ -87,6 +87,39 @@ class MockAuditoriaRepository implements AuditoriaRepository {
         entidadId: 'mock-chofer-1',
         detalle: 'Solicitado por el chofer vía WhatsApp.',
         creadoEn: ahora.subtract(const Duration(days: 4)),
+      ),
+      RegistroAuditoria(
+        id: 'aud-9',
+        usuarioId: 'mock-admin-1',
+        usuarioNombre: 'Ana Torres',
+        accion: 'editar_precio',
+        entidad: 'precio_combustible',
+        entidadId: 'Diésel',
+        detalle: const {'nuevoPrecio': 26.9},
+        creadoEn: ahora.subtract(const Duration(minutes: 30)),
+      ),
+      RegistroAuditoria(
+        id: 'aud-10',
+        usuarioId: 'mock-admin-1',
+        usuarioNombre: 'Ana Torres',
+        accion: 'editar_presupuesto_semanal',
+        entidad: 'configuracion',
+        entidadId: 'presupuesto_semanal_total',
+        detalle: const {'nuevoValor': 60000},
+        creadoEn: ahora.subtract(const Duration(hours: 1)),
+      ),
+      RegistroAuditoria(
+        id: 'aud-11',
+        usuarioId: 'mock-admin-2',
+        usuarioNombre: 'Carlos Ruiz',
+        accion: 'editar_carga',
+        entidad: 'carga',
+        entidadId: 'carga-55',
+        detalle: const {
+          'anterior': {'litrosCargados': 38.0, 'kmAlCargar': 1000.0},
+          'nuevo': {'litrosCargados': 40.0, 'kmAlCargar': 1005.0},
+        },
+        creadoEn: ahora.subtract(const Duration(hours: 3)),
       ),
     ];
   }

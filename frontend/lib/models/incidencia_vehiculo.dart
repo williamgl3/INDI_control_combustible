@@ -19,6 +19,7 @@ class IncidenciaVehiculo {
     this.resueltaPor,
     this.comentarioResolucion,
     this.resueltaEn,
+    this.fotoPath,
   });
 
   final String id;
@@ -30,6 +31,11 @@ class IncidenciaVehiculo {
   final String? resueltaPor;
   final String? comentarioResolucion;
   final DateTime? resueltaEn;
+
+  /// Foto del daño/falla — opcional (no toda incidencia es fotografiable,
+  /// ej. "ruido raro en el motor"), a diferencia de las fotos de
+  /// carga/cierre que sí son obligatorias.
+  final String? fotoPath;
 
   factory IncidenciaVehiculo.fromJson(Map<String, dynamic> json) {
     return IncidenciaVehiculo(
@@ -44,6 +50,7 @@ class IncidenciaVehiculo {
       resueltaEn: json['resueltaEn'] == null
           ? null
           : DateTime.parse(json['resueltaEn'] as String),
+      fotoPath: json['fotoPath'] as String?,
     );
   }
 
@@ -58,6 +65,7 @@ class IncidenciaVehiculo {
       'resueltaPor': resueltaPor,
       'comentarioResolucion': comentarioResolucion,
       'resueltaEn': resueltaEn?.toIso8601String(),
+      'fotoPath': fotoPath,
     };
   }
 }

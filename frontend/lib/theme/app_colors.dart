@@ -87,11 +87,10 @@ class AppColors extends ThemeExtension<AppColors> {
     textSecondary: Color(0xFF6C6C70),
     // tertiaryLabel / systemGray — placeholders, captions.
     textMuted: Color(0xFF8E8E93),
-    // Azul EXACTO muestreado del archivo de marca real
-    // (assets/images/logo_indi.jpeg) — coincide casi con el systemBlue de
-    // iOS, así que se mantiene como "tint color" de toda la app.
-    primary: Color(0xFF0165F9),
-    primaryHover: Color(0xFF0052D4),
+    // Azul de marca INDI (#1463FF) — único en toda la app: botones, acentos,
+    // header y sidebar usan el mismo tono.
+    primary: Color(0xFF1463FF),
+    primaryHover: Color(0xFF0D4FCC),
     primaryOn: Color(0xFFFFFFFF),
     headerBackground: Color(0xFFF2F2F7),
     // systemGreen/systemOrange/systemRed de iOS, oscurecidos lo justo para
@@ -107,24 +106,32 @@ class AppColors extends ThemeExtension<AppColors> {
     sidebarSurfaceAlt: Color(0xFFDCE9FF),
     sidebarText: Color(0xFF000000),
     sidebarTextMuted: Color(0xFF6C6C70),
-    brandHeaderStart: Color(0xFF0F3E7A),
-    brandHeaderEnd: Color(0xFF1D63B4),
-    brandHeaderDot: Color(0xFF5FA0E8),
+    brandHeaderStart: Color(0xFF0A2A54),
+    brandHeaderEnd: Color(0xFF1463FF),
+    brandHeaderDot: Color(0xFF5B8AFF),
   );
 
-  /// TODO-SPEC: paleta oscuro placeholder (systemBackground/label de iOS en
-  /// modo oscuro), preparada para un futuro modo oscuro — hoy la app fija
-  /// [ThemeMode.light] en `main.dart`.
+  /// Paleta oscura — 3 niveles de superficie con separación clara en vez
+  /// de negro puro plano: [background] (fondo general, negro suave tipo
+  /// Material `#121212`), [surface] (cards contenedoras, p. ej. la tarjeta
+  /// de accesos rápidos del login) y [surfaceAlt] (elementos anidados
+  /// dentro de una card, p. ej. el relleno de los inputs) — cada nivel
+  /// sensiblemente más claro que el anterior para que la jerarquía se
+  /// note sin depender solo del borde.
   static const dark = AppColors(
-    background: Color(0xFF000000),
-    surface: Color(0xFF1C1C1E),
-    surfaceAlt: Color(0xFF2C2C2E),
-    border: Color(0xFF38383A),
+    background: Color(0xFF121212),
+    surface: Color(0xFF1E1E1E),
+    surfaceAlt: Color(0xFF2A2A2A),
+    border: Color(0xFF3A3A3C),
     textPrimary: Color(0xFFFFFFFF),
-    textSecondary: Color(0xFFAEAEB2),
-    textMuted: Color(0xFF8E8E93),
-    primary: Color(0xFF3D8BFF),
-    primaryHover: Color(0xFF5B9CFF),
+    // >= 4.5:1 contra surface/surfaceAlt (WCAG AA para texto normal).
+    textSecondary: Color(0xFFB0B0B0),
+    textMuted: Color(0xFF9E9E9E),
+    // Mismo azul que en el tema claro (`brandHeaderEnd` es fijo en ambos
+    // temas) — ya tiene suficiente contraste sobre las superficies oscuras
+    // de arriba, no necesita un tono más claro aparte.
+    primary: Color(0xFF1463FF),
+    primaryHover: Color(0xFF5B8AFF),
     primaryOn: Color(0xFFFFFFFF),
     headerBackground: Color(0xFF000000),
     success: Color(0xFF32D74B),
@@ -135,9 +142,9 @@ class AppColors extends ThemeExtension<AppColors> {
     sidebarSurfaceAlt: Color(0xFF0A3A75),
     sidebarText: Color(0xFFFFFFFF),
     sidebarTextMuted: Color(0xFFAEAEB2),
-    brandHeaderStart: Color(0xFF0F3E7A),
-    brandHeaderEnd: Color(0xFF1D63B4),
-    brandHeaderDot: Color(0xFF5FA0E8),
+    brandHeaderStart: Color(0xFF0A2A54),
+    brandHeaderEnd: Color(0xFF1463FF),
+    brandHeaderDot: Color(0xFF5B8AFF),
   );
 
   @override

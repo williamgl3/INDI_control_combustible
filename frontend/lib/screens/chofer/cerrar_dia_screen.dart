@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -13,7 +14,11 @@ import '../../models/cierre_dia.dart';
 import '../../theme/app_breakpoints.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_elevated_button.dart';
+import '../../widgets/aviso_error.dart';
 import '../../widgets/captura_foto_field.dart';
+import '../../widgets/responsive_scroll_view.dart';
+import '../../widgets/sin_conexion_dialog.dart';
 import '../../widgets/stepper_numerico.dart';
 
 /// Registro 2 del día: se llena cuando el chofer termina de trabajar,
@@ -85,6 +90,7 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
         fotoTableroPath: _fotoTableroPath!,
       );
       final resultado = repo.rendimientoDe(cierre);
+      HapticFeedback.mediumImpact();
       ref.read(operacionesTickProvider.notifier).state++;
       await ref
           .read(recordatorioServiceProvider)
@@ -128,23 +134,12 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
     ref.read(operacionesTickProvider.notifier).state++;
     if (!mounted) return;
     setState(() => _enviando = false);
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: const Icon(Icons.cloud_off_outlined),
-        title: const Text('Sin conexión'),
-        content: const Text(
+    await SinConexionDialog.show(
+      context,
+      mensaje:
           'Guardamos el cierre de tu día en este dispositivo. Se enviará '
           'solo en cuanto vuelvas a tener señal — no hace falta que lo '
           'repitas.',
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Entendido'),
-          ),
-        ],
-      ),
     );
     if (mounted) context.pop();
   }
@@ -165,92 +160,74 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
         leading: BackButton(onPressed: () => context.pop()),
       ),
       body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: AppBreakpoints.contentMaxWidth,
-              ),
-              child: _resultado != null
-                  ? _ResultadoCierre(
-                      resultado: _resultado!,
-                      porHorometro: porHorometro,
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: colors.surfaceAlt,
-                            borderRadius: AppRadii.cardRadius,
+        child: ResponsiveScrollView(
+          maxWidth: AppBreakpoints.contentMaxWidth,
+          child: _resultado != null
+              ? _ResultadoCierre(
+                  resultado: _resultado!,
+                  porHorometro: porHorometro,
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: colors.surfaceAlt,
+                        borderRadius: AppRadii.cardRadius,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.speed_outlined,
+                            color: colors.textSecondary,
                           ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.speed_outlined,
-                                color: colors.textSecondary,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'Cargaste combustible hoy con '
-                                  '${widget.carga.kmAlCargar.toStringAsFixed(0)} $unidad en el tablero.',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        CapturaFotoField(
-                          etiqueta: porHorometro
-                              ? 'Foto del tablero (horómetro final)'
-                              : 'Foto del tablero (km final)',
-                          icono: Icons.speed_outlined,
-                          rutaFoto: _fotoTableroPath,
-                          cargando: _cargandoFoto,
-                          onTomarFoto: _tomarFoto,
-                        ),
-                        const SizedBox(height: 16),
-                        StepperNumerico(
-                          etiqueta: porHorometro
-                              ? 'Horómetro final del día'
-                              : 'Km final del día',
-                          valor: _kmFinal,
-                          sufijo: unidad,
-                          paso: 1,
-                          decimales: 0,
-                          minimo: widget.carga.kmAlCargar,
-                          onChanged: (v) => setState(() => _kmFinal = v),
-                        ),
-                        if (_errorGeneral != null) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            _errorGeneral!,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: colors.error),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Cargaste combustible hoy con '
+                              '${widget.carga.kmAlCargar.toStringAsFixed(0)} $unidad en el tablero.',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
                           ),
                         ],
-                        const SizedBox(height: 24),
-                        ElevatedButton(
-                          onPressed: _enviando ? null : _enviar,
-                          child: _enviando
-                              ? const SizedBox(
-                                  height: 18,
-                                  width: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Text('Cerrar mi día'),
-                        ),
-                      ],
+                      ),
                     ),
-            ),
-          ),
+                    const SizedBox(height: 20),
+                    CapturaFotoField(
+                      etiqueta: porHorometro
+                          ? 'Foto del tablero (horómetro final)'
+                          : 'Foto del tablero (km final)',
+                      icono: Icons.speed_outlined,
+                      rutaFoto: _fotoTableroPath,
+                      cargando: _cargandoFoto,
+                      onTomarFoto: _tomarFoto,
+                    ),
+                    const SizedBox(height: 16),
+                    StepperNumerico(
+                      etiqueta: porHorometro
+                          ? 'Horómetro final del día'
+                          : 'Km final del día',
+                      valor: _kmFinal,
+                      sufijo: unidad,
+                      paso: 1,
+                      decimales: 0,
+                      minimo: widget.carga.kmAlCargar,
+                      onChanged: (v) => setState(() => _kmFinal = v),
+                    ),
+                    if (_errorGeneral != null) ...[
+                      const SizedBox(height: 12),
+                      AvisoError(mensaje: _errorGeneral!),
+                    ],
+                    const SizedBox(height: 24),
+                    AppElevatedButton(
+                      onPressed: _enviar,
+                      cargando: _enviando,
+                      child: const Text('Cerrar mi día'),
+                    ),
+                  ],
+                ),
         ),
       ),
     );

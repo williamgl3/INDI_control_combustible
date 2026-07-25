@@ -1,5 +1,5 @@
 name: indi_combustible
-description: "A new Flutter project."
+description: "Sistema de control de combustible para flotillas de Grupo INDI."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -37,7 +37,6 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   http: ^1.6.0
-  google_fonts: ^8.2.0
   fl_chart: ^1.2.0
   shared_preferences: ^2.5.5
   connectivity_plus: ^7.3.0
@@ -51,6 +50,7 @@ dependencies:
   csv: ^6.0.0
   share_plus: ^10.1.4
   path_provider: ^2.1.5
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:
@@ -62,6 +62,53 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.6
+
+# Config de flutter_launcher_icons (`dart run flutter_launcher_icons`) — ícono
+# de la app con el logo de marca sobre fondo azul (#1463FF, azul de marca INDI).
+#
+# `logo_indi.jpeg` (fondo azul + marca blanca, sin transparencia) se usa tal
+# cual para íconos "planos" (iOS/web/Windows, que componen una sola imagen
+# cuadrada). Para el ícono ADAPTATIVO de Android, en cambio, el foreground
+# usa `logo_indi_mark.png` — la misma marca recortada a transparencia y
+# repadeada al ~55% del lienzo — porque Android recorta el foreground a
+# distintas formas (círculo, squircle, etc.) según el launcher; pegar el
+# logo plano completo ahí cortaba el wordmark en los bordes.
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/logo_indi.jpeg"
+  adaptive_icon_background: "#1463FF"
+  adaptive_icon_foreground: "assets/images/logo_indi_mark.png"
+  min_sdk_android: 21
+  web:
+    generate: true
+    image_path: "assets/images/logo_indi.jpeg"
+    background_color: "#1463FF"
+    theme_color: "#1463FF"
+  windows:
+    generate: true
+    image_path: "assets/images/logo_indi.jpeg"
+
+# Config de flutter_native_splash (`dart run flutter_native_splash:create`) —
+# splash screen con el logo centrado sobre fondo azul de marca, en claro Y
+# oscuro (mismo azul en ambos: es una superficie de marca fija, no sigue el
+# tema del sistema — mismo criterio que `sidebarBackground`/`headerBackground`
+# en el design system). Usa la marca transparente (`logo_indi_mark.png`) para
+# que no se vea un cuadro azul de fondo del propio logo sobre el fondo del
+# splash.
+flutter_native_splash:
+  color: "#1463FF"
+  image: assets/images/logo_indi_mark.png
+  color_dark: "#1463FF"
+  image_dark: assets/images/logo_indi_mark.png
+  android_12:
+    image: assets/images/logo_indi_mark.png
+    icon_background_color: "#1463FF"
+    image_dark: assets/images/logo_indi_mark.png
+    icon_background_color_dark: "#1463FF"
+  web: false
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -83,22 +130,20 @@ flutter:
   # For details regarding adding assets from package dependencies, see
   # https://flutter.dev/to/asset-from-package
 
-  # To add custom fonts to your application, add a fonts section here,
-  # in this "flutter" section. Each entry in this list should have a
-  # "family" key with the font family name, and a "fonts" key with a
-  # list giving the asset and other descriptors for the font. For
-  # example:
-  # fonts:
-  #   - family: Schyler
-  #     fonts:
-  #       - asset: fonts/Schyler-Regular.ttf
-  #       - asset: fonts/Schyler-Italic.ttf
-  #         style: italic
-  #   - family: Trajan Pro
-  #     fonts:
-  #       - asset: fonts/TrajanPro.ttf
-  #       - asset: fonts/TrajanPro_Bold.ttf
-  #         weight: 700
-  #
-  # For details regarding fonts from package dependencies,
-  # see https://flutter.dev/to/font-from-package
+  # Inter (variable) e IBM Plex Mono empaquetados localmente — antes se
+  # pedían en runtime vía el paquete `google_fonts`, lo que exige conexión
+  # a internet la primera vez que se usan (mal encaje con una app que ya
+  # tiene toda una cola offline para choferes sin señal en obra). Inter es
+  # variable font (un solo archivo cubre todos los pesos); IBM Plex Mono
+  # sí necesita un archivo por peso.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Variable.ttf
+    - family: IBM Plex Mono
+      fonts:
+        - asset: assets/fonts/IBMPlexMono-Regular.ttf
+        - asset: assets/fonts/IBMPlexMono-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/IBMPlexMono-SemiBold.ttf
+          weight: 600

@@ -61,10 +61,29 @@ void main() {
 
       // Solicitar carga. chofer1 no tiene historial todavía, así que queda
       // pendiente de revisión manual (no se auto-aprueba).
-      await tester.tap(find.text('Solicitar carga de combustible'));
+      await tester.tap(find.widgetWithText(FloatingActionButton, 'Solicitar carga'));
       await tester.pumpAndSettle();
       await _elegirVehiculo(tester, 'Vehículo · ABC-123');
-      await _fijarStepper(tester, 'Litros solicitados', '40');
+      await tester.ensureVisible(find.text('Tomar foto del tablero'));
+      await tester.tap(find.text('Tomar foto del tablero'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('L · toca para escribir'));
+      await tester.tap(find.text('L · toca para escribir'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.byType(TextField),
+        ),
+        '40',
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.text('Listo'),
+        ),
+      );
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Actividad'),
         'Actividad de prueba',
@@ -78,9 +97,20 @@ void main() {
       await tester.pumpAndSettle();
 
       // El admin la resuelve desde su propia sesión (esto también ejercita
-      // RevisarSolicitudDialog de punta a punta).
-      await tester.ensureVisible(find.byTooltip('Cerrar sesión'));
-      await tester.tap(find.byTooltip('Cerrar sesión'));
+      // RevisarSolicitudDialog de punta a punta). "Cerrar sesión" del
+      // chofer ahora está en la pestaña Perfil del bottom nav.
+      await tester.tap(find.text('Perfil'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Cerrar sesión'));
+      await tester.tap(find.text('Cerrar sesión'));
+      await tester.pumpAndSettle();
+      // Confirmación antes de cerrar sesión (ver ConfirmarCerrarSesionDialog).
+      await tester.tap(
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.text('Cerrar sesión'),
+        ),
+      );
       await tester.pumpAndSettle();
 
       // Sin sesión, la app aterriza en la pantalla de bienvenida.
@@ -88,8 +118,8 @@ void main() {
       await tester.tap(find.text('Iniciar sesión'));
       await tester.pumpAndSettle();
 
-      await tester.ensureVisible(find.text('Acceso de administrador'));
-      await tester.tap(find.text('Acceso de administrador'));
+      await tester.ensureVisible(find.text('Entrar como administrador'));
+      await tester.tap(find.text('Entrar como administrador'));
       await tester.pumpAndSettle();
       final loginDialog = find.byType(Dialog);
       await tester.enterText(
@@ -148,8 +178,8 @@ void main() {
       await tester.tap(find.text('Ingresar'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Tienes una carga aprobada'), findsOneWidget);
-      await tester.tap(find.textContaining('Tienes una carga aprobada'));
+      expect(find.text('Carga aprobada'), findsOneWidget);
+      await tester.tap(find.text('Carga aprobada'));
       await tester.pumpAndSettle();
 
       // Registro 1: fotos + litros + km al cargar + gasolinera.
@@ -169,6 +199,11 @@ void main() {
 
       await tester.ensureVisible(find.text('Enviar comprobación'));
       await tester.tap(find.text('Enviar comprobación'));
+      await tester.pumpAndSettle();
+
+      // Diálogo de revisión de fotos antes de enviar (ConfirmarFotosDialog).
+      await tester.ensureVisible(find.text('Confirmar y enviar'));
+      await tester.tap(find.text('Confirmar y enviar'));
       await tester.pumpAndSettle();
 
       // De vuelta en /chofer, debe verse la invitación a cerrar el día, y

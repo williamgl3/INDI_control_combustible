@@ -7,7 +7,9 @@ import '../../core/validators.dart';
 import '../../data/auth_repository.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_elevated_button.dart';
 import '../../widgets/auth_screen_shell.dart';
+import '../../widgets/aviso_error.dart';
 
 /// Flujo de "¿Olvidaste tu contraseña?": captura → confirmación.
 ///
@@ -73,7 +75,6 @@ class _RecuperarPasswordScreenState
   }
 
   Widget _buildFormulario(BuildContext context) {
-    final colors = context.colors;
     return Form(
       key: _formKey,
       autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -92,23 +93,13 @@ class _RecuperarPasswordScreenState
           ),
           if (_errorGeneral != null) ...[
             const SizedBox(height: 12),
-            Text(
-              _errorGeneral!,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: colors.error),
-            ),
+            AvisoError(mensaje: _errorGeneral!),
           ],
           const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _cargando ? null : _enviar,
-            child: _cargando
-                ? const SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Enviar instrucciones'),
+          AppElevatedButton(
+            onPressed: _enviar,
+            cargando: _cargando,
+            child: const Text('Enviar instrucciones'),
           ),
         ],
       ),

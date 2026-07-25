@@ -9,6 +9,7 @@ import '../../../theme/app_section_colors.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/estado_vacio.dart';
+import '../../../widgets/formato_numero.dart';
 import '../../../widgets/ios_segmented_control.dart';
 import '../../../widgets/responsive_scroll_view.dart';
 import '../../../widgets/stat_tile.dart';
@@ -68,13 +69,39 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Dashboard', style: Theme.of(context).textTheme.headlineSmall),
+          Text(
+            'Dashboard administrativo',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
           const SizedBox(height: 4),
           Text(
-            'Porcentajes y tendencia de consumo de combustible.',
+            'Resumen de consumo, importe y tendencia por periodo.',
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
+          ),
+          const SizedBox(height: 20),
+          StatTileRow(
+            tiles: [
+              StatTile(
+                icono: Icons.local_gas_station_outlined,
+                valor: totalLitros.toStringAsFixed(0),
+                etiqueta: 'Litros cargados',
+                color: AppSectionColors.autorizaciones,
+              ),
+              StatTile(
+                icono: Icons.payments_outlined,
+                valor: formatearMoneda(totalImporte),
+                etiqueta: 'Importe',
+                color: AppSectionColors.finanzas,
+              ),
+              StatTile(
+                icono: Icons.receipt_long_outlined,
+                valor: cargas.length.toString(),
+                etiqueta: 'Cargas',
+                color: AppSectionColors.dashboard,
+              ),
+            ],
           ),
           const SizedBox(height: 20),
           IosSegmentedControl<PeriodoDashboard>(
@@ -88,11 +115,24 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
             onChanged: (p) => setState(() => _periodo = p),
           ),
           const SizedBox(height: 8),
-          Text(
-            etiquetaPeriodoDashboard(_periodo, ahora),
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
+          Row(
+            children: [
+              Icon(
+                Icons.calendar_today_outlined,
+                size: 13,
+                color: colors.textMuted,
+              ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  etiquetaPeriodoDashboard(_periodo, ahora),
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           AnimatedSwitcher(
@@ -105,33 +145,19 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
               key: ValueKey(_periodo),
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                StatTileRow(
-                  tiles: [
-                    StatTile(
-                      icono: Icons.local_gas_station_outlined,
-                      valor: totalLitros.toStringAsFixed(0),
-                      etiqueta: 'Litros cargados',
-                      color: AppSectionColors.autorizaciones,
-                    ),
-                    StatTile(
-                      icono: Icons.payments_outlined,
-                      valor: '\$${totalImporte.toStringAsFixed(0)}',
-                      etiqueta: 'Importe',
-                      color: AppSectionColors.finanzas,
-                    ),
-                    StatTile(
-                      icono: Icons.receipt_long_outlined,
-                      valor: '${cargas.length}',
-                      etiqueta: 'Cargas',
-                      color: AppSectionColors.dashboard,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
                 if (cargas.isEmpty)
-                  EstadoVacio(
-                    icono: Icons.bar_chart_outlined,
-                    mensaje: 'No hay cargas registradas en este periodo.',
+                  // Le da presencia vertical real al estado vacío en vez
+                  // de dejarlo compacto pegado arriba con un vacío
+                  // grande debajo — mismo criterio que en
+                  // `concentrado_tab.dart`.
+                  SizedBox(
+                    height: MediaQuery.sizeOf(context).height * 0.4,
+                    child: const Center(
+                      child: EstadoVacio(
+                        icono: Icons.bar_chart_outlined,
+                        mensaje: 'No hay cargas registradas en este periodo.',
+                      ),
+                    ),
                   )
                 else ...[
                   _TarjetaDesglose(desglose: desglose),

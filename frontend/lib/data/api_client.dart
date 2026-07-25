@@ -41,7 +41,7 @@ class ApiClient {
   }
 
   /// Intenta renovar el access token con el refresh token guardado
-  /// (`POST /auth/refresh`). Devuelve `true` si obtuvo y guardó un par de
+  /// (`POST /refresh`). Devuelve `true` si obtuvo y guardó un par de
   /// tokens nuevo. No lanza — cualquier falla (sin refresh token, refresh
   /// token vencido, sin conexión) se traduce a `false`, para que quien
   /// llama decida qué hacer (reintentar una vez, o limpiar la sesión).
@@ -50,7 +50,7 @@ class ApiClient {
     if (refreshToken == null) return false;
     try {
       final res = await _http.post(
-        _uri('/auth/refresh'),
+        _uri('/refresh'),
         headers: const {'Content-Type': 'application/json'},
         body: jsonEncode({'refreshToken': refreshToken}),
       );

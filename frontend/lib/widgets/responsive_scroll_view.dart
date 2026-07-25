@@ -5,11 +5,15 @@ import 'package:flutter/material.dart';
 /// (monitores de 1920px+) el contenido se estira horrible (filas
 /// larguísimas, texto perdido en el espacio). En teléfonos/tablets
 /// angostos, [maxWidth] simplemente no se alcanza y no tiene efecto.
+///
+/// `900` subía a 1200: en monitores anchos reales (>=1920px) dejaba
+/// márgenes laterales enormes y sin usar en pestañas tipo lista/tabla
+/// (Dashboard, Choferes, Auditoría, etc.) — confirmado navegando la app.
 class ResponsiveScrollView extends StatelessWidget {
   const ResponsiveScrollView({
     super.key,
     required this.child,
-    this.maxWidth = 900,
+    this.maxWidth = 1200,
     this.padding = const EdgeInsets.all(20),
     this.primary,
     this.physics,

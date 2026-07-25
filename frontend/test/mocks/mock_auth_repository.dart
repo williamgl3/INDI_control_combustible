@@ -1,5 +1,5 @@
-import '../models/perfil.dart';
-import 'auth_repository.dart';
+import 'package:indi_combustible/data/auth_repository.dart';
+import 'package:indi_combustible/models/perfil.dart';
 
 /// Repositorio de autenticación MOCK.
 ///
@@ -11,8 +11,7 @@ class MockAuthRepository implements AuthRepository {
   MockAuthRepository();
 
   /// Usuarios de prueba precargados para poder probar el login sin pasar
-  /// por /registro-chofer. TODO-SPEC: eliminar/ajustar cuando exista
-  /// backend real.
+  /// por /registro-chofer.
   final Map<String, ({String password, Perfil perfil})> _usuarios = {
     'chofer1': (
       password: 'chofer123',
@@ -75,7 +74,6 @@ class MockAuthRepository implements AuthRepository {
     required String nombre,
     required String apellidoPaterno,
     String? apellidoMaterno,
-    required DateTime fechaNacimiento,
     required String correo,
     required String usuario,
     required String password,
@@ -91,7 +89,6 @@ class MockAuthRepository implements AuthRepository {
       apellidoPaterno: apellidoPaterno,
       apellidoMaterno: apellidoMaterno,
       correo: correo,
-      fechaNacimiento: fechaNacimiento,
       rol: RolUsuario.chofer,
     );
     _usuarios[usuario] = (password: password, perfil: perfil);
@@ -192,9 +189,8 @@ class MockAuthRepository implements AuthRepository {
 
   /// Simula la solicitud de recuperación de contraseña.
   ///
-  /// TODO-SPEC: no implementado en la app original; aquí se define un
-  /// mock funcional. Solo falla si el usuario/correo no existe entre los
-  /// usuarios de prueba, para poder probar el caso de error en UI.
+  /// Solo falla si el usuario/correo no existe entre los usuarios de
+  /// prueba, para poder probar el caso de error en UI.
   @override
   Future<void> recuperarPassword({required String usuarioOCorreo}) async {
     await Future.delayed(const Duration(milliseconds: 500));

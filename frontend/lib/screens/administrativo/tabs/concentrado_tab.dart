@@ -6,8 +6,11 @@ import '../../../core/semana_util.dart';
 import '../../../theme/app_motion.dart';
 import '../../../theme/app_radii.dart';
 import '../../../theme/app_theme.dart';
+import '../../../widgets/celda_editable.dart';
 import '../../../widgets/estado_vacio.dart';
 import '../../../widgets/fecha_formato.dart';
+import '../../../widgets/filtro_columna_boton.dart';
+import '../../../widgets/formato_numero.dart';
 import '../../../widgets/ios_segmented_control.dart';
 import '../../../widgets/responsive_scroll_view.dart';
 import 'concentrado_csv.dart';
@@ -15,8 +18,10 @@ import 'concentrado_csv.dart';
 enum _Periodo { dia, semana, mes, anio }
 
 /// Pestaña "Concentrado": tabla de todas las cargas de combustible,
-/// filtrable por periodo, con anomalías de rendimiento y tickets
-/// pendientes resaltados — el reporte que usaría finanzas/auditoría.
+/// filtrable por periodo Y por columna (chofer, vehículo, combustible,
+/// ticket — estilo Excel), con litros/km editables directo en la celda
+/// (corrección administrativa, queda en auditoría del lado del backend) y
+/// anomalías de rendimiento/tickets pendientes resaltados.
 class ConcentradoTab extends ConsumerStatefulWidget {
   const ConcentradoTab({super.key});
 
@@ -26,6 +31,13 @@ class ConcentradoTab extends ConsumerStatefulWidget {
 
 class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
   _Periodo _periodo = _Periodo.semana;
+
+  // Filtros por columna estilo Excel — vacío significa "todos". Se
+  // aplican DESPUÉS del filtro de periodo.
+  Set<String> _filtroChoferes = {};
+  Set<String> _filtroVehiculos = {};
+  Set<String> _filtroCombustibles = {};
+  Set<bool> _filtroTicket = {};
 
   bool _dentroDelPeriodo(DateTime fecha, DateTime hoy) {
     switch (_periodo) {
@@ -69,6 +81,18 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
     }
   }
 
+  Future<void> _editarLitros(FilaConcentrado fila, double nuevo) async {
+    final repo = ref.read(operacionesRepositoryProvider);
+    await repo.editarCarga(cargaId: fila.carga.id, litrosCargados: nuevo);
+    ref.read(operacionesTickProvider.notifier).state++;
+  }
+
+  Future<void> _editarKm(FilaConcentrado fila, double nuevo) async {
+    final repo = ref.read(operacionesRepositoryProvider);
+    await repo.editarCarga(cargaId: fila.carga.id, kmAlCargar: nuevo);
+    ref.read(operacionesTickProvider.notifier).state++;
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -79,11 +103,11 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
     final vehiculosRepo = ref.watch(vehiculosRepositoryProvider);
 
     final hoy = DateTime.now();
-    final cargas = repo.todasLasCargas
+    final cargasDelPeriodo = repo.todasLasCargas
         .where((c) => _dentroDelPeriodo(c.creadaEn, hoy))
         .toList();
 
-    final filas = cargas.map((carga) {
+    final filasDelPeriodo = cargasDelPeriodo.map((carga) {
       final cierre = repo.cierreDe(carga);
       final chofer = choferesPorId[carga.choferId];
       final vehiculo = vehiculosRepo.porId(carga.vehiculoId);
@@ -105,11 +129,52 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
       );
     }).toList();
 
+    // Opciones de cada filtro: se calculan sobre el periodo ya elegido
+    // (no sobre el resultado ya filtrado por otras columnas), para que la
+    // lista de opciones no se vaya encogiendo sola al combinar filtros.
+    final opcionesChofer = {
+      for (final f in filasDelPeriodo)
+        if (f.chofer != null) f.chofer!.nombreCompleto,
+    }.toList()..sort();
+    final opcionesVehiculo = {
+      for (final f in filasDelPeriodo)
+        if (f.vehiculo != null) f.vehiculo!.identificador,
+    }.toList()..sort();
+    final opcionesCombustible = {
+      for (final f in filasDelPeriodo)
+        if (f.vehiculo != null) f.vehiculo!.tipoCombustible,
+    }.toList()..sort();
+
+    final filas = filasDelPeriodo.where((f) {
+      if (_filtroChoferes.isNotEmpty &&
+          !_filtroChoferes.contains(f.chofer?.nombreCompleto)) {
+        return false;
+      }
+      if (_filtroVehiculos.isNotEmpty &&
+          !_filtroVehiculos.contains(f.vehiculo?.identificador)) {
+        return false;
+      }
+      if (_filtroCombustibles.isNotEmpty &&
+          !_filtroCombustibles.contains(f.vehiculo?.tipoCombustible)) {
+        return false;
+      }
+      if (_filtroTicket.isNotEmpty &&
+          !_filtroTicket.contains(f.ticketPendiente)) {
+        return false;
+      }
+      return true;
+    }).toList();
+
     final totalLitros = filas.fold(0.0, (s, f) => s + f.carga.litrosCargados);
     final totalImporte = filas.fold(0.0, (s, f) => s + f.importe);
+    final hayFiltrosDeColumna =
+        _filtroChoferes.isNotEmpty ||
+        _filtroVehiculos.isNotEmpty ||
+        _filtroCombustibles.isNotEmpty ||
+        _filtroTicket.isNotEmpty;
 
     return ResponsiveScrollView(
-      maxWidth: 1100,
+      maxWidth: 1300,
       primary: false,
       physics: const ClampingScrollPhysics(),
       child: Column(
@@ -144,15 +209,34 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
             ],
           ),
           const SizedBox(height: 20),
-          IosSegmentedControl<_Periodo>(
-            valor: _periodo,
-            opciones: const {
-              _Periodo.dia: 'Día',
-              _Periodo.semana: 'Semana',
-              _Periodo.mes: 'Mes',
-              _Periodo.anio: 'Año',
-            },
-            onChanged: (p) => setState(() => _periodo = p),
+          Row(
+            children: [
+              Expanded(
+                child: IosSegmentedControl<_Periodo>(
+                  valor: _periodo,
+                  opciones: const {
+                    _Periodo.dia: 'Día',
+                    _Periodo.semana: 'Semana',
+                    _Periodo.mes: 'Mes',
+                    _Periodo.anio: 'Año',
+                  },
+                  onChanged: (p) => setState(() => _periodo = p),
+                ),
+              ),
+              if (hayFiltrosDeColumna) ...[
+                const SizedBox(width: 12),
+                TextButton.icon(
+                  onPressed: () => setState(() {
+                    _filtroChoferes = {};
+                    _filtroVehiculos = {};
+                    _filtroCombustibles = {};
+                    _filtroTicket = {};
+                  }),
+                  icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
+                  label: const Text('Quitar filtros'),
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: 16),
           AnimatedSwitcher(
@@ -162,16 +246,47 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
             transitionBuilder: (child, animation) =>
                 FadeTransition(opacity: animation, child: child),
             child: KeyedSubtree(
-              key: ValueKey(_periodo),
+              key: ValueKey((_periodo, filas.length, hayFiltrosDeColumna)),
               child: filas.isEmpty
-                  ? const EstadoVacio(
-                      icono: Icons.table_chart_outlined,
-                      mensaje: 'No hay cargas registradas en este periodo.',
+                  ? SizedBox(
+                      // Le da presencia vertical real al estado vacío en
+                      // vez de dejarlo compacto pegado arriba con un
+                      // vacío grande debajo (mala sensación de balance en
+                      // monitores anchos/altos) — no usa `Expanded` para
+                      // evitar el error clásico de Flutter de "flex
+                      // hijo con alto entrante no acotado" dentro de un
+                      // `SingleChildScrollView`.
+                      height: MediaQuery.sizeOf(context).height * 0.4,
+                      child: Center(
+                        child: EstadoVacio(
+                          icono: Icons.table_chart_outlined,
+                          mensaje: hayFiltrosDeColumna
+                              ? 'Ninguna carga coincide con los filtros elegidos.'
+                              : 'No hay cargas registradas en este periodo.',
+                        ),
+                      ),
                     )
                   : _TablaConcentrado(
                       filas: filas,
                       totalLitros: totalLitros,
                       totalImporte: totalImporte,
+                      opcionesChofer: opcionesChofer,
+                      opcionesVehiculo: opcionesVehiculo,
+                      opcionesCombustible: opcionesCombustible,
+                      filtroChoferes: _filtroChoferes,
+                      filtroVehiculos: _filtroVehiculos,
+                      filtroCombustibles: _filtroCombustibles,
+                      filtroTicket: _filtroTicket,
+                      onCambiarFiltroChoferes: (v) =>
+                          setState(() => _filtroChoferes = v),
+                      onCambiarFiltroVehiculos: (v) =>
+                          setState(() => _filtroVehiculos = v),
+                      onCambiarFiltroCombustibles: (v) =>
+                          setState(() => _filtroCombustibles = v),
+                      onCambiarFiltroTicket: (v) =>
+                          setState(() => _filtroTicket = v),
+                      onEditarLitros: _editarLitros,
+                      onEditarKm: _editarKm,
                     ),
             ),
           ),
@@ -188,6 +303,10 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
                 color: colors.warning,
                 texto: 'Ticket pendiente de subir',
               ),
+              _Leyenda(
+                color: colors.primary,
+                texto: 'Celda editable (toca para corregir)',
+              ),
             ],
           ),
         ],
@@ -201,17 +320,79 @@ class _TablaConcentrado extends StatelessWidget {
     required this.filas,
     required this.totalLitros,
     required this.totalImporte,
+    required this.opcionesChofer,
+    required this.opcionesVehiculo,
+    required this.opcionesCombustible,
+    required this.filtroChoferes,
+    required this.filtroVehiculos,
+    required this.filtroCombustibles,
+    required this.filtroTicket,
+    required this.onCambiarFiltroChoferes,
+    required this.onCambiarFiltroVehiculos,
+    required this.onCambiarFiltroCombustibles,
+    required this.onCambiarFiltroTicket,
+    required this.onEditarLitros,
+    required this.onEditarKm,
   });
 
   final List<FilaConcentrado> filas;
   final double totalLitros;
   final double totalImporte;
 
+  final List<String> opcionesChofer;
+  final List<String> opcionesVehiculo;
+  final List<String> opcionesCombustible;
+  final Set<String> filtroChoferes;
+  final Set<String> filtroVehiculos;
+  final Set<String> filtroCombustibles;
+  final Set<bool> filtroTicket;
+  final ValueChanged<Set<String>> onCambiarFiltroChoferes;
+  final ValueChanged<Set<String>> onCambiarFiltroVehiculos;
+  final ValueChanged<Set<String>> onCambiarFiltroCombustibles;
+  final ValueChanged<Set<bool>> onCambiarFiltroTicket;
+  final Future<void> Function(FilaConcentrado fila, double nuevo)
+  onEditarLitros;
+  final Future<void> Function(FilaConcentrado fila, double nuevo) onEditarKm;
+
   static const _anchos = <double>[76, 150, 130, 90, 60, 70, 60, 60, 80, 90, 60];
+
+  Widget _celdaTexto(
+    BuildContext context,
+    String texto, {
+    TextStyle? estilo,
+    Color? color,
+  }) {
+    final colors = context.colors;
+    final base =
+        estilo ??
+        Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: colors.textPrimary,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        );
+    return Text(
+      texto,
+      style: color == null ? base : base?.copyWith(color: color),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final estiloEncabezado = Theme.of(
+      context,
+    ).textTheme.labelSmall?.copyWith(color: colors.textMuted, fontWeight: FontWeight.w700);
+
+    Widget encabezado(String texto, {Widget? filtro}) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: Text(texto, style: estiloEncabezado, overflow: TextOverflow.ellipsis),
+          ),
+          if (filtro != null) filtro,
+        ],
+      );
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -234,24 +415,55 @@ class _TablaConcentrado extends StatelessWidget {
               _FilaTabla(
                 anchos: _anchos,
                 fondo: colors.surfaceAlt,
-                celdas: const [
-                  'FECHA',
-                  'RESPONSABLE',
-                  'VEHÍCULO',
-                  'PLACAS',
-                  'KM',
-                  'LITROS',
-                  'KM/L',
-                  '\$/L',
-                  'COMB.',
-                  'IMPORTE',
-                  'TICKET',
-                ],
-                estilo: (context) =>
-                    Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: colors.textMuted,
-                      fontWeight: FontWeight.w700,
+                celdas: [
+                  encabezado('FECHA'),
+                  encabezado(
+                    'RESPONSABLE',
+                    filtro: FiltroColumnaBoton<String>(
+                      titulo: 'responsable',
+                      opciones: opcionesChofer,
+                      etiquetaDe: (v) => v,
+                      seleccionados: filtroChoferes,
+                      onCambiar: onCambiarFiltroChoferes,
                     ),
+                  ),
+                  encabezado(
+                    'VEHÍCULO',
+                    filtro: FiltroColumnaBoton<String>(
+                      titulo: 'vehículo',
+                      opciones: opcionesVehiculo,
+                      etiquetaDe: (v) => v,
+                      seleccionados: filtroVehiculos,
+                      onCambiar: onCambiarFiltroVehiculos,
+                    ),
+                  ),
+                  encabezado('PLACAS'),
+                  encabezado('KM'),
+                  encabezado('LITROS'),
+                  encabezado('KM/L'),
+                  encabezado('\$/L'),
+                  encabezado(
+                    'COMB.',
+                    filtro: FiltroColumnaBoton<String>(
+                      titulo: 'combustible',
+                      opciones: opcionesCombustible,
+                      etiquetaDe: (v) => v,
+                      seleccionados: filtroCombustibles,
+                      onCambiar: onCambiarFiltroCombustibles,
+                    ),
+                  ),
+                  encabezado('IMPORTE'),
+                  encabezado(
+                    'TICKET',
+                    filtro: FiltroColumnaBoton<bool>(
+                      titulo: 'ticket',
+                      opciones: const [true, false],
+                      etiquetaDe: (v) => v ? 'Pendiente' : 'Completo',
+                      seleccionados: filtroTicket,
+                      onCambiar: onCambiarFiltroTicket,
+                    ),
+                  ),
+                ],
               ),
               for (final fila in filas)
                 _FilaTabla(
@@ -262,49 +474,95 @@ class _TablaConcentrado extends StatelessWidget {
                       ? colors.warning.withValues(alpha: 0.08)
                       : null,
                   celdas: [
-                    formatearFechaCorta(fila.carga.creadaEn).split(',').first,
-                    fila.chofer?.nombreCompleto ?? fila.carga.choferId,
-                    fila.vehiculo?.modelo ?? fila.vehiculo?.tipoUnidad ?? '—',
-                    fila.vehiculo?.identificador ?? '—',
-                    fila.rendimiento == null
-                        ? '—'
-                        : fila.rendimiento!.kmRecorridos.toStringAsFixed(0),
-                    fila.carga.litrosCargados.toStringAsFixed(1),
-                    fila.rendimiento?.rendimiento == null
-                        ? 'n/a'
-                        : fila.rendimiento!.rendimiento!.toStringAsFixed(1),
-                    fila.precioPorLitro.toStringAsFixed(2),
-                    fila.vehiculo?.tipoCombustible ?? '—',
-                    '\$${fila.importe.toStringAsFixed(2)}',
-                    fila.ticketPendiente ? 'pend.' : '✓',
+                    _celdaTexto(
+                      context,
+                      formatearFechaCorta(fila.carga.creadaEn).split(',').first,
+                    ),
+                    _celdaTexto(
+                      context,
+                      fila.chofer?.nombreCompleto ?? fila.carga.choferId,
+                    ),
+                    _celdaTexto(
+                      context,
+                      fila.vehiculo?.modelo ?? fila.vehiculo?.tipoUnidad ?? '—',
+                    ),
+                    _celdaTexto(
+                      context,
+                      fila.vehiculo?.identificador ?? '—',
+                    ),
+                    CeldaEditable(
+                      valor: fila.carga.kmAlCargar,
+                      decimales: 0,
+                      estilo: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: fila.rendimientoAnomalo
+                            ? colors.error
+                            : colors.textPrimary,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                      onGuardar: (nuevo) => onEditarKm(fila, nuevo),
+                    ),
+                    CeldaEditable(
+                      valor: fila.carga.litrosCargados,
+                      decimales: 1,
+                      estilo: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colors.textPrimary,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                      onGuardar: (nuevo) => onEditarLitros(fila, nuevo),
+                    ),
+                    _celdaTexto(
+                      context,
+                      fila.rendimiento?.rendimiento == null
+                          ? 'n/a'
+                          : fila.rendimiento!.rendimiento!.toStringAsFixed(1),
+                    ),
+                    _celdaTexto(context, fila.precioPorLitro.toStringAsFixed(2)),
+                    _celdaTexto(context, fila.vehiculo?.tipoCombustible ?? '—'),
+                    _celdaTexto(context, formatearMonedaDecimal(fila.importe)),
+                    _celdaTexto(
+                      context,
+                      fila.ticketPendiente ? 'pend.' : '✓',
+                      color: fila.ticketPendiente ? colors.warning : null,
+                    ),
                   ],
-                  colorTexto: (i) {
-                    if (i == 4 && fila.rendimientoAnomalo) return colors.error;
-                    if (i == 10 && fila.ticketPendiente) return colors.warning;
-                    return null;
-                  },
                 ),
               _FilaTabla(
                 anchos: _anchos,
                 fondo: colors.info.withValues(alpha: 0.08),
                 celdas: [
-                  'TOTALES',
-                  '',
-                  '',
-                  '',
-                  '',
-                  totalLitros.toStringAsFixed(1),
-                  '',
-                  '',
-                  '',
-                  '\$${totalImporte.toStringAsFixed(2)}',
-                  '',
-                ],
-                estilo: (context) =>
-                    Theme.of(context).textTheme.labelMedium?.copyWith(
+                  _celdaTexto(
+                    context,
+                    'TOTALES',
+                    estilo: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: colors.primary,
                       fontWeight: FontWeight.w700,
                     ),
+                  ),
+                  const SizedBox.shrink(),
+                  const SizedBox.shrink(),
+                  const SizedBox.shrink(),
+                  const SizedBox.shrink(),
+                  _celdaTexto(
+                    context,
+                    totalLitros.toStringAsFixed(1),
+                    estilo: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox.shrink(),
+                  const SizedBox.shrink(),
+                  const SizedBox.shrink(),
+                  _celdaTexto(
+                    context,
+                    formatearMonedaDecimal(totalImporte),
+                    estilo: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox.shrink(),
+                ],
               ),
             ],
           ),
@@ -315,46 +573,22 @@ class _TablaConcentrado extends StatelessWidget {
 }
 
 class _FilaTabla extends StatelessWidget {
-  const _FilaTabla({
-    required this.anchos,
-    required this.celdas,
-    this.fondo,
-    this.estilo,
-    this.colorTexto,
-  });
+  const _FilaTabla({required this.anchos, required this.celdas, this.fondo});
 
   final List<double> anchos;
-  final List<String> celdas;
+  final List<Widget> celdas;
   final Color? fondo;
-  final TextStyle? Function(BuildContext)? estilo;
-  final Color? Function(int indice)? colorTexto;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    final estiloBase =
-        estilo?.call(context) ??
-        Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: colors.textPrimary,
-          fontFeatures: const [FontFeature.tabularFigures()],
-        );
-
     return Container(
       color: fondo,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
-        children: List.generate(celdas.length, (i) {
-          final colorCelda = colorTexto?.call(i);
-          return SizedBox(
-            width: anchos[i],
-            child: Text(
-              celdas[i],
-              style: colorCelda == null
-                  ? estiloBase
-                  : estiloBase?.copyWith(color: colorCelda),
-            ),
-          );
-        }),
+        children: List.generate(
+          celdas.length,
+          (i) => SizedBox(width: anchos[i], child: celdas[i]),
+        ),
       ),
     );
   }

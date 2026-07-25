@@ -4,7 +4,7 @@ import '../../../models/vehiculo.dart';
 import '../../../widgets/fecha_formato.dart';
 
 /// Umbral de "próximo" — cuando el uso desde el último servicio ya
-/// alcanzó este porcentaje del intervalo. TODO-SPEC: valor PLACEHOLDER.
+/// alcanzó este porcentaje del intervalo (85%).
 const _umbralProximo = 0.85;
 
 enum EstadoMantenimiento { alDia, proximo, vencido, sinDatos }

@@ -2,24 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/auth_controller.dart';
 import '../../core/cola_solicitudes_offline.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
+import '../../data/vehiculos_repository.dart';
+import '../../models/perfil.dart';
 import '../../models/solicitud_autorizacion.dart';
 import '../../models/vehiculo.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_radii.dart';
+import '../../theme/app_sizes.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/brand_header.dart';
-import '../../widgets/estado_solicitud_badge.dart';
 import '../../widgets/estado_vacio.dart';
 import '../../widgets/fecha_formato.dart';
-import '../../widgets/grouped_section.dart';
-import '../../widgets/notificaciones_bell.dart';
-import '../../widgets/selector_tema_dialog.dart';
+import '../../widgets/logo_glass.dart';
+import '../../widgets/section_label.dart';
+import '../../widgets/tarjeta_accion_sugerida.dart';
 import '../../widgets/tarjeta_tope_semanal.dart';
+import 'detalle_solicitud_dialog.dart';
 
 class ChoferHomeScreen extends ConsumerStatefulWidget {
   const ChoferHomeScreen({super.key});
@@ -29,8 +31,6 @@ class ChoferHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
-  // Se refresca al volver de /chofer/solicitar o /chofer/comprobar
-  // (el repositorio mock es en memoria, no notifica cambios por sí solo).
   int _refreshKey = 0;
 
   Future<void> _refrescarAlVolver(Future<void> Function() accion) async {
@@ -40,17 +40,11 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
     final perfil = ref.watch(sessionProvider);
-    // El guard de rutas redirige a /login en cuanto la sesión se cierra,
-    // pero este widget puede reconstruirse un frame antes de que el
-    // router lo retire — evita el crash mientras tanto.
     if (perfil == null) return const SizedBox.shrink();
     final repo = ref.watch(operacionesRepositoryProvider);
     final vehiculosRepo = ref.watch(vehiculosRepositoryProvider);
-    ref.watch(
-      operacionesTickProvider,
-    ); // fuerza rebuild tras mutaciones externas
+    ref.watch(operacionesTickProvider);
 
     final solicitudes = repo.solicitudesDeChofer(perfil.id);
     final cargas = repo.cargasDeChofer(perfil.id);
@@ -67,8 +61,6 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
         : pendienteDeComprobar.first.folioAutorizacion;
     final cargaAbiertaDeHoy = repo.cargaAbiertaDeHoy(perfil.id);
 
-    // El tope semanal ya no es del chofer, es del vehículo que esté
-    // usando hoy — solo se muestra si ya cargó combustible hoy.
     final vehiculoDeHoy = cargaAbiertaDeHoy == null
         ? null
         : vehiculosRepo.porId(cargaAbiertaDeHoy.vehiculoId);
@@ -76,312 +68,267 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
         ? 0.0
         : repo.litrosAutorizadosAcumulados(vehiculoDeHoy.id);
     final tope = vehiculoDeHoy?.topeSemanal ?? 0;
-    final disponible = (tope - usado).clamp(0, tope == 0 ? 0 : double.infinity);
-    final progreso = tope > 0 ? (usado / tope).clamp(0, 1).toDouble() : 0.0;
+    final disponible =
+        (tope - usado).clamp(0.0, tope == 0 ? 0.0 : double.infinity).toDouble();
+    final progreso =
+        tope > 0 ? (usado / tope).clamp(0, 1).toDouble() : 0.0;
 
     return Scaffold(
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: _FabSolicitar(
+        onPressed: () => _refrescarAlVolver(
+          () => context.push(RoutePaths.choferSolicitar),
+        ),
+      ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
+        child: _buildMovil(
+          perfil: perfil,
+          solicitudes: solicitudes,
+          vehiculosRepo: vehiculosRepo,
+          vehiculoDeHoy: vehiculoDeHoy,
+          tope: tope,
+          usado: usado,
+          disponible: disponible,
+          progreso: progreso,
+          folioPendiente: folioPendiente,
+          cargaAbiertaDeHoy: cargaAbiertaDeHoy,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, Perfil perfil) {
+    return BrandHeader(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LogoGlass(size: AppSizes.logoHeaderSize),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Hola, ${perfil.nombreCompleto.split(' ').first}',
+                  style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                    color: BrandHeader.onColor,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Control de combustible en obra',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: BrandHeader.onColorMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAlertas({
+    required BuildContext context,
+    required Vehiculo? vehiculoDeHoy,
+    required double tope,
+    required double usado,
+    required double disponible,
+    required double progreso,
+    required String? folioPendiente,
+    required dynamic cargaAbiertaDeHoy,
+  }) {
+    final colors = context.colors;
+    return AnimatedSize(
+      duration: AppMotion.base,
+      curve: AppMotion.curve,
+      alignment: Alignment.topCenter,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (vehiculoDeHoy != null) ...[
+            Text(
+              'Hoy usas: ${vehiculoDeHoy.tipoUnidad} · ${vehiculoDeHoy.identificador}',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            TarjetaTopeSemanal(
+              tope: tope,
+              usado: usado,
+              disponible: disponible,
+              progreso: progreso,
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (folioPendiente != null) ...[
+            _BannerCargaAprobada(
+              folio: folioPendiente,
+              onTap: () => _refrescarAlVolver(
+                () => context.push(
+                  RoutePaths.choferComprobar,
+                  extra: folioPendiente,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (cargaAbiertaDeHoy != null) ...[
+            TarjetaAccionSugerida(
+              icono: Icons.nights_stay_outlined,
+              color: colors.info,
+              titulo: '¿Ya terminaste tu día?',
+              subtitulo: 'Toca para registrar tu km final',
+              onTap: () => _refrescarAlVolver(
+                () => context.push(
+                  RoutePaths.choferCerrarDia,
+                  extra: cargaAbiertaDeHoy,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          Consumer(
+            builder: (context, ref, _) {
+              final total =
+                  ref
+                      .watch(totalPendientesOfflineProvider)
+                      .valueOrNull ??
+                  0;
+              if (total == 0) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: _BannerPendientesOffline(cantidad: total),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActividad({
+    required BuildContext context,
+    required List<SolicitudAutorizacion> solicitudes,
+    required VehiculosRepository vehiculosRepo,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Actividad reciente',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 12),
+        if (solicitudes.isEmpty)
+          EstadoVacio(
+            icono: Icons.receipt_long_outlined,
+            mensaje: 'Aún no tienes solicitudes de carga.',
+            textoAccion: 'Solicitar carga',
+            onAccion: () => context.push(RoutePaths.choferSolicitar),
+          )
+        else
+          for (final grupo in agruparPorFecha(
+            solicitudes.take(5).toList(),
+            (s) => s.creadaEn,
+          ))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  BrandHeader(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(5),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: AppRadii.inputRadius,
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(5),
-                            child: Image.asset(
-                              'assets/images/logo_indi.jpeg',
-                              width: 34,
-                              height: 34,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Hola, ${perfil.nombreCompleto.split(' ').first}',
-                                style: Theme.of(context).textTheme.displayLarge
-                                    ?.copyWith(color: BrandHeader.onColor),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Control de combustible en obra',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: BrandHeader.onColorMuted,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const NotificacionesBell(color: BrandHeader.onColor),
-                        IconButton(
-                          tooltip: 'Mi perfil',
-                          onPressed: () =>
-                              context.push(RoutePaths.choferPerfil),
-                          icon: const Icon(
-                            Icons.person_outline,
-                            color: BrandHeader.onColor,
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Tema',
-                          onPressed: () => SelectorTemaDialog.show(context),
-                          icon: const Icon(
-                            Icons.brightness_6_outlined,
-                            color: BrandHeader.onColor,
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'Cerrar sesión',
-                          onPressed: () =>
-                              ref.read(authControllerProvider).logout(),
-                          icon: const Icon(
-                            Icons.logout,
-                            color: BrandHeader.onColor,
-                          ),
-                        ),
-                      ],
+                  SectionLabel(grupo.etiqueta),
+                  for (final s in grupo.items)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: _SolicitudTile(
+                        solicitud: s,
+                        vehiculo: vehiculosRepo.porId(s.vehiculoId),
+                      ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        AnimatedSize(
-                          duration: AppMotion.base,
-                          curve: AppMotion.curve,
-                          alignment: Alignment.topCenter,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              if (vehiculoDeHoy != null) ...[
-                                Text(
-                                  'Hoy usas: ${vehiculoDeHoy.tipoUnidad} · ${vehiculoDeHoy.identificador}',
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(color: colors.textSecondary),
-                                ),
-                                const SizedBox(height: 8),
-                                TarjetaTopeSemanal(
-                                  tope: tope,
-                                  usado: usado,
-                                  disponible: disponible.toDouble(),
-                                  progreso: progreso,
-                                ),
-                                const SizedBox(height: 20),
-                              ],
-                              if (folioPendiente != null) ...[
-                                _TarjetaCargaPendiente(
-                                  folio: folioPendiente,
-                                  onTap: () => _refrescarAlVolver(
-                                    () => context.push(
-                                      RoutePaths.choferComprobar,
-                                      extra: folioPendiente,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-                              ],
-                              if (cargaAbiertaDeHoy != null) ...[
-                                _TarjetaCerrarDia(
-                                  onTap: () => _refrescarAlVolver(
-                                    () => context.push(
-                                      RoutePaths.choferCerrarDia,
-                                      extra: cargaAbiertaDeHoy,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-                              ],
-                            ],
-                          ),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: () => _refrescarAlVolver(
-                            () => context.push(RoutePaths.choferSolicitar),
-                          ),
-                          icon: const Icon(Icons.local_gas_station_outlined),
-                          label: const Text('Solicitar carga de combustible'),
-                        ),
-                        const SizedBox(height: 16),
-                        _AccesosRapidos(
-                          onMiConsumo: () =>
-                              context.push(RoutePaths.choferDashboard),
-                          onMisSolicitudes: () =>
-                              context.push(RoutePaths.choferSolicitudes),
-                        ),
-                        Consumer(
-                          builder: (context, ref, _) {
-                            // Cuenta las cuatro colas offline (solicitar
-                            // carga, comprobar carga, cerrar día, reportar
-                            // incidencia) — no solo la primera.
-                            final total = ref
-                                    .watch(totalPendientesOfflineProvider)
-                                    .valueOrNull ??
-                                0;
-                            if (total == 0) return const SizedBox.shrink();
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 12),
-                              child: _BannerPendientesOffline(cantidad: total),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 28),
-                        Text(
-                          'Actividad reciente',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 12),
-                        if (solicitudes.isEmpty)
-                          EstadoVacio(
-                            icono: Icons.receipt_long_outlined,
-                            mensaje: 'Aún no tienes solicitudes de carga.',
-                          )
-                        else
-                          GroupedSection(
-                            children: [
-                              for (final s in solicitudes.take(8))
-                                _SolicitudTile(
-                                  solicitud: s,
-                                  vehiculo: vehiculosRepo.porId(s.vehiculoId),
-                                ),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
+      ],
+    );
+  }
+
+  Widget _buildMovil({
+    required Perfil perfil,
+    required List<SolicitudAutorizacion> solicitudes,
+    required VehiculosRepository vehiculosRepo,
+    required Vehiculo? vehiculoDeHoy,
+    required double tope,
+    required double usado,
+    required double disponible,
+    required double progreso,
+    required String? folioPendiente,
+    required dynamic cargaAbiertaDeHoy,
+  }) {
+    return Column(
+      children: [
+        _buildHeader(context, perfil),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildAlertas(
+                  context: context,
+                  vehiculoDeHoy: vehiculoDeHoy,
+                  tope: tope,
+                  usado: usado,
+                  disponible: disponible,
+                  progreso: progreso,
+                  folioPendiente: folioPendiente,
+                  cargaAbiertaDeHoy: cargaAbiertaDeHoy,
+                ),
+                const SizedBox(height: 20),
+                _buildActividad(
+                  context: context,
+                  solicitudes: solicitudes,
+                  vehiculosRepo: vehiculosRepo,
+                ),
+              ],
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 }
 
-class _TarjetaCargaPendiente extends StatelessWidget {
-  const _TarjetaCargaPendiente({required this.folio, required this.onTap});
+class _FabSolicitar extends StatelessWidget {
+  const _FabSolicitar({required this.onPressed});
 
-  final String folio;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    return Material(
-      color: colors.success.withValues(alpha: 0.08),
-      borderRadius: AppRadii.cardRadius,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadii.cardRadius,
-        hoverColor: colors.success.withValues(alpha: 0.12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            borderRadius: AppRadii.cardRadius,
-            border: Border.all(color: colors.success.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: colors.success.withValues(alpha: 0.15),
-                child: Icon(Icons.check_circle_outline, color: colors.success),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Tienes una carga aprobada · Folio $folio',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Toca para comprobarla',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right, color: colors.success),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TarjetaCerrarDia extends StatelessWidget {
-  const _TarjetaCerrarDia({required this.onTap});
-
-  final VoidCallback onTap;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    return Material(
-      color: colors.info.withValues(alpha: 0.08),
-      borderRadius: AppRadii.cardRadius,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadii.cardRadius,
-        hoverColor: colors.info.withValues(alpha: 0.12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            borderRadius: AppRadii.cardRadius,
-            border: Border.all(color: colors.info.withValues(alpha: 0.3)),
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: FloatingActionButton.extended(
+          onPressed: onPressed,
+          backgroundColor: const Color(0xFF1463FF),
+          foregroundColor: Colors.white,
+          elevation: 6,
+          focusElevation: 8,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: colors.info.withValues(alpha: 0.15),
-                child: Icon(Icons.nights_stay_outlined, color: colors.info),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '¿Ya terminaste tu día?',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Toca para registrar tu km final',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.chevron_right, color: colors.info),
-            ],
+          icon: const Icon(Icons.local_gas_station_rounded, size: 24),
+          label: const Text(
+            'Solicitar carga',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 16,
+            ),
           ),
         ),
       ),
@@ -398,118 +345,208 @@ class _SolicitudTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final fecha = formatearFechaCorta(solicitud.creadaEn);
+    final hora = formatearHora(solicitud.creadaEn);
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    return Card(
+      margin: EdgeInsets.zero,
+      child: InkWell(
+        onTap: () => DetalleSolicitudDialog.show(
+          context,
+          solicitud: solicitud,
+          vehiculo: vehiculo,
+        ),
+        borderRadius: AppRadii.cardRadius,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '${solicitud.litrosSolicitados.toStringAsFixed(1)} L',
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontFamily: 'IBM Plex Mono',
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          ' solicitados',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        hora,
+                        if (vehiculo != null) vehiculo!.tipoUnidad,
+                        if (vehiculo != null) vehiculo!.identificador,
+                        if (vehiculo != null) '· ${vehiculo!.tipoCombustible}',
+                      ].join(' · '),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
+                    ),
+                    if (solicitud.comentario != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        solicitud.comentario!,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: colors.error),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              _BadgeEstado(estado: solicitud.estado),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BadgeEstado extends StatelessWidget {
+  const _BadgeEstado({required this.estado});
+
+  final EstadoSolicitud estado;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final (color, texto, icono) = switch (estado) {
+      EstadoSolicitud.pendiente => (
+        colors.warning,
+        'En espera',
+        Icons.schedule_outlined,
+      ),
+      EstadoSolicitud.aprobada => (
+        colors.success,
+        'Autorizado',
+        Icons.check_circle_outline,
+      ),
+      EstadoSolicitud.rechazada => (
+        colors.error,
+        'Rechazado',
+        Icons.cancel_outlined,
+      ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${solicitud.litrosSolicitados.toStringAsFixed(1)} L solicitados',
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  vehiculo == null
-                      ? fecha
-                      : '$fecha · ${vehiculo!.tipoUnidad} ${vehiculo!.identificador}',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
-                ),
-                if (solicitud.comentario != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    solicitud.comentario!,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: colors.error),
-                  ),
-                ],
-              ],
+          Icon(icono, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            texto.toUpperCase(),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.3,
             ),
           ),
-          EstadoSolicitudBadge(estado: solicitud.estado),
         ],
       ),
     );
   }
 }
 
-/// Fila de atajos a las secciones nuevas del chofer — antes de esto solo
-/// existían "Solicitar carga" y "Comprobar carga"/"Cerrar día" (estas
-/// últimas solo aparecen como tarjeta cuando aplican).
-class _AccesosRapidos extends StatelessWidget {
-  const _AccesosRapidos({
-    required this.onMiConsumo,
-    required this.onMisSolicitudes,
-  });
+class _BannerCargaAprobada extends StatelessWidget {
+  const _BannerCargaAprobada({required this.folio, required this.onTap});
 
-  final VoidCallback onMiConsumo;
-  final VoidCallback onMisSolicitudes;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _BotonAcceso(
-            icono: Icons.insights_outlined,
-            etiqueta: 'Mi consumo',
-            onTap: onMiConsumo,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _BotonAcceso(
-            icono: Icons.assignment_outlined,
-            etiqueta: 'Mis solicitudes',
-            onTap: onMisSolicitudes,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _BotonAcceso extends StatelessWidget {
-  const _BotonAcceso({
-    required this.icono,
-    required this.etiqueta,
-    required this.onTap,
-  });
-
-  final IconData icono;
-  final String etiqueta;
+  final String folio;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
     return Material(
-      color: colors.surface,
-      borderRadius: AppRadii.cardRadius,
+      color: const Color(0xFF0D2818),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
-        borderRadius: AppRadii.cardRadius,
+        borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            borderRadius: AppRadii.cardRadius,
-            border: Border.all(color: colors.border),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color(0xFF2E7D32).withValues(alpha: 0.5),
+            ),
           ),
-          child: Column(
+          child: Row(
             children: [
-              Icon(icono, color: colors.primary, size: 22),
-              const SizedBox(height: 6),
-              Text(
-                etiqueta,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: colors.textPrimary,
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2E7D32).withValues(alpha: 0.25),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.local_gas_station,
+                  color: Color(0xFF66BB6A),
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Carga aprobada',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Folio $folio',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFFA5D6A7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2E7D32),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.bolt, size: 14, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Text(
+                      'COMPROBAR AHORA',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],

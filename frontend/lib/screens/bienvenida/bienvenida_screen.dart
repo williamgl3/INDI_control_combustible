@@ -30,7 +30,7 @@ class BienvenidaScreen extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Controla la carga de combustible de tu flotilla en un solo lugar.',
+            'Contro de combustible registra tus datos facil y rapido.',
             textAlign: TextAlign.center,
             style: Theme.of(
               context,

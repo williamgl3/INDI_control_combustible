@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/carga.dart';
+import '../models/incidencia_vehiculo.dart';
 import '../models/solicitud_autorizacion.dart';
 import 'cola_solicitudes_offline.dart';
 import 'providers.dart';
@@ -113,6 +114,79 @@ final notificacionesChoferProvider = FutureProvider<List<NotificacionItem>>((
         id: aviso.id,
         titulo: 'No se pudo sincronizar: ${aviso.descripcion}',
         subtitulo: aviso.motivo,
+        icono: 'error_outline',
+      ),
+    );
+  }
+
+  return items;
+});
+
+/// Notificaciones pendientes del administrativo en sesión: solicitudes
+/// nuevas por revisar, incidencias reportadas sin resolver, y un aviso si
+/// el presupuesto semanal ya se acerca a agotarse — antes el admin no
+/// tenía ninguna señal dentro de la app (la campanita solo existía para
+/// el chofer) y dependía de entrar a cada pestaña "por si acaso".
+final notificacionesAdminProvider = FutureProvider<List<NotificacionItem>>((
+  ref,
+) async {
+  final perfil = ref.watch(sessionProvider);
+  if (perfil == null || !perfil.esAdministrativo) return const [];
+
+  ref.watch(operacionesTickProvider);
+  final repo = ref.watch(operacionesRepositoryProvider);
+  final vistas = await ref.read(notificacionesVistasStorageProvider).leerVistas();
+
+  final pendientes = repo.todasLasSolicitudes.where(
+    (s) => s.estado == EstadoSolicitud.pendiente && !vistas.contains(s.id),
+  );
+
+  final items = <NotificacionItem>[
+    for (final s in pendientes)
+      NotificacionItem(
+        id: s.id,
+        titulo: 'Nueva solicitud por revisar',
+        subtitulo: '${s.litrosSolicitados.toStringAsFixed(1)} L solicitados',
+        icono: 'assignment_outlined',
+      ),
+  ];
+
+  final incidencias = ref.watch(incidenciasRepositoryProvider).todasLasIncidencias;
+  for (final inc in incidencias.where(
+    (i) => i.estado == EstadoIncidencia.abierta && !vistas.contains(i.id),
+  )) {
+    items.add(
+      NotificacionItem(
+        id: inc.id,
+        titulo: 'Incidencia reportada',
+        subtitulo: inc.descripcion,
+        icono: 'report_problem_outlined',
+      ),
+    );
+  }
+
+  // Presupuesto semanal cerca de agotarse — mismos umbrales que
+  // `BarraPresupuesto` (0.7/0.9), pero como aviso activo en vez de solo un
+  // color pasivo que solo se ve si el admin entra a Autorizaciones/Finanzas.
+  final total = repo.presupuestoSemanalTotal;
+  final proporcion = total > 0 ? repo.presupuestoEjercido / total : 0.0;
+  if (proporcion >= 0.9) {
+    items.insert(
+      0,
+      const NotificacionItem(
+        id: 'presupuesto-90',
+        titulo: 'Presupuesto casi agotado',
+        subtitulo: 'Ya se ejerció el 90% o más del presupuesto semanal.',
+        icono: 'error_outline',
+      ),
+    );
+  } else if (proporcion >= 0.7) {
+    items.insert(
+      0,
+      const NotificacionItem(
+        id: 'presupuesto-70',
+        titulo: 'Presupuesto por agotarse',
+        subtitulo: 'Ya se ejerció el 70% o más del presupuesto semanal.',
         icono: 'error_outline',
       ),
     );

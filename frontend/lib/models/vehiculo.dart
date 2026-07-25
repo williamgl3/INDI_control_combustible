@@ -26,8 +26,7 @@ class Vehiculo {
 
   final String id;
 
-  /// Ej. "Vehículo", "Pipa", "Maquinaria". TODO-SPEC: valores exactos
-  /// permitidos pendientes de confirmar contra SPEC.md.
+  /// Ej. "Vehículo", "Pipa", "Maquinaria".
   final String tipoUnidad;
 
   /// Placa, número económico, o una descripción libre si la unidad no
@@ -35,7 +34,7 @@ class Vehiculo {
   /// amarilla frente norte").
   final String identificador;
 
-  /// Ej. "Diésel", "Gasolina". TODO-SPEC: enum exacto pendiente de SPEC.md.
+  /// Ej. "Diésel", "Magna", "Premium".
   final String tipoCombustible;
 
   /// Tope semanal de litros asignado a esta unidad. `0` significa "sin

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
@@ -62,6 +63,7 @@ class _ResetearPasswordDialogState
             usuarioId: widget.usuario.id,
             passwordNueva: _passwordController.text,
           );
+      HapticFeedback.mediumImpact();
       if (mounted) Navigator.of(context).pop(true);
     } on AuthException catch (e) {
       if (mounted) setState(() => _errorGeneral = e.mensaje);
@@ -96,6 +98,7 @@ class _ResetearPasswordDialogState
             const SizedBox(height: 20),
             TextFormField(
               controller: _passwordController,
+              autofocus: true,
               decoration: InputDecoration(
                 labelText: 'Contraseña nueva',
                 prefixIcon: const Icon(Icons.lock_outline),

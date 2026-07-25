@@ -8,8 +8,8 @@ import 'package:indi_combustible/models/registro_auditoria.dart';
 import 'test_helpers.dart';
 
 Future<void> _loginComoAdmin(WidgetTester tester) async {
-  await tester.ensureVisible(find.text('Acceso de administrador'));
-  await tester.tap(find.text('Acceso de administrador'));
+  await tester.ensureVisible(find.text('Entrar como administrador'));
+  await tester.tap(find.text('Entrar como administrador'));
   await tester.pumpAndSettle();
 
   final dialog = find.byType(Dialog);

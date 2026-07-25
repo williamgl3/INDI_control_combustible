@@ -38,10 +38,12 @@ class ApiIncidenciasRepository implements IncidenciasRepository {
   Future<IncidenciaVehiculo> reportar({
     required String vehiculoId,
     required String descripcion,
+    String? fotoPath,
   }) async {
-    final data = await _client.post(
+    final data = await _client.postMultipart(
       '/incidencias',
-      body: {'vehiculoId': vehiculoId, 'descripcion': descripcion},
+      campos: {'vehiculoId': vehiculoId, 'descripcion': descripcion},
+      archivos: {'foto': fotoPath},
     );
     final incidencia = IncidenciaVehiculo.fromJson(
       data as Map<String, dynamic>,
