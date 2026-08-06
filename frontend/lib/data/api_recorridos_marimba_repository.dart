@@ -1,0 +1,115 @@
+import '../models/despacho_marimba.dart';
+import '../models/recorrido_marimba.dart';
+import 'api_client.dart';
+import 'recorridos_marimba_repository.dart';
+
+class ApiRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
+  ApiRecorridosMarimbaRepository(this._client);
+
+  final ApiClient _client;
+
+  @override
+  Future<RecorridoMarimba> abrirRecorrido({
+    required String marimbaId,
+    required String frente,
+    String? cargaId,
+    required double litrosIniciales,
+    double? kmInicio,
+    double? horasEquipoMenorInicio,
+  }) async {
+    final data = await _client.post(
+      '/recorridos-marimba',
+      body: {
+        'marimbaId': marimbaId,
+        'frente': frente,
+        'cargaId': ?cargaId,
+        'litrosIniciales': litrosIniciales,
+        'kmInicio': ?kmInicio,
+        'horasEquipoMenorInicio': ?horasEquipoMenorInicio,
+      },
+    );
+    return RecorridoMarimba.fromJson(data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<RecorridoMarimba?> buscarRecorrido(String id) async {
+    final data = await _client.get('/recorridos-marimba/$id');
+    return data == null
+        ? null
+        : RecorridoMarimba.fromJson(data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<List<DespachoMarimba>> listarDespachosDeRecorrido(
+    String recorridoId,
+  ) async {
+    final data = await _client.get('/recorridos-marimba/$recorridoId/despachos');
+    return (data as List)
+        .map((j) => DespachoMarimba.fromJson(j as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<DespachoMarimba> agregarDespacho({
+    required String recorridoId,
+    String? vehiculoDestinoId,
+    String? destinoTexto,
+    required String operadorTexto,
+    String? residenteTexto,
+    double? litrosSolicitados,
+    required double litrosSuministrados,
+    double? lecturaMedidor,
+    String? fotoEvidenciaPath,
+  }) async {
+    final data = await _client.postMultipart(
+      '/recorridos-marimba/$recorridoId/despachos',
+      campos: {
+        'vehiculoDestinoId': ?vehiculoDestinoId,
+        'destinoTexto': ?destinoTexto,
+        'operadorTexto': operadorTexto,
+        'residenteTexto': ?residenteTexto,
+        'litrosSolicitados': ?litrosSolicitados?.toString(),
+        'litrosSuministrados': '$litrosSuministrados',
+        'lecturaMedidor': ?lecturaMedidor?.toString(),
+      },
+      archivos: {'fotoEvidencia': fotoEvidenciaPath},
+    );
+    return DespachoMarimba.fromJson(data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<RecorridoMarimba> cerrarRecorrido({
+    required String recorridoId,
+    double? kmCierre,
+    double? horasEquipoMenorCierre,
+    required String fotoCierrePath,
+  }) async {
+    final data = await _client.postMultipart(
+      '/recorridos-marimba/$recorridoId/cerrar',
+      campos: {
+        'kmCierre': ?kmCierre?.toString(),
+        'horasEquipoMenorCierre': ?horasEquipoMenorCierre?.toString(),
+      },
+      archivos: {'fotoCierre': fotoCierrePath},
+    );
+    return RecorridoMarimba.fromJson(data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<List<RecorridoMarimba>> listarRecorridos({
+    String? marimbaId,
+    bool? requiereRevision,
+  }) async {
+    final params = <String, String>{
+      'marimbaId': ?marimbaId,
+      'requiereRevision': ?requiereRevision?.toString(),
+    };
+    final query = params.isEmpty
+        ? ''
+        : '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
+    final data = await _client.get('/recorridos-marimba$query');
+    return (data as List)
+        .map((j) => RecorridoMarimba.fromJson(j as Map<String, dynamic>))
+        .toList();
+  }
+}
