@@ -1,26 +1,31 @@
 import 'package:flutter/material.dart';
 
-/// Envoltura que simula una experiencia de app móvil nativa incluso en
-/// pantallas anchas (laptop/desktop). En teléfonos (width <= 500px)
-/// simplemente pasa el [child] sin modificaciones.
+import '../theme/app_breakpoints.dart';
+
+/// Envoltura de las pantallas de chofer en ventanas anchas (laptop/
+/// desktop). Antes forzaba un ancho de teléfono (480px) sin importar la
+/// ventana — se quitó esa restricción para que el flujo de chofer se
+/// sienta como una app de escritorio real (igual que el panel
+/// administrativo, con su sidebar) en vez de una app móvil estirada.
 ///
-/// En ventanas anchas, restringe el contenido a un ancho máximo de 480px
-/// centrado horizontalmente — igual que el patrón de login
-/// ([AuthScreenShell]), para que todas las pantallas del flujo del chofer
-/// se vean y se sientan como en un teléfono real sin importar el tamaño
-/// de la ventana del navegador.
+/// Estas pantallas (Solicitar, Comprobar, Cerrar día, etc.) son rutas
+/// empujadas por separado (`context.push`, ver `app_router.dart`), no
+/// tabs dentro de un shell — no pueden traer su propio sidebar sin
+/// restructurar la navegación a rutas anidadas. Por eso, en vez de un
+/// sidebar propio, usan un ancho generoso (`maxWidth`) centrado: se
+/// aprovecha mucho más espacio que antes, sin estirar un formulario de
+/// una sola columna a todo el ancho de un monitor, que se vería mal.
 class ChoferMobileWrapper extends StatelessWidget {
   const ChoferMobileWrapper({super.key, required this.child});
 
   final Widget child;
 
-  static const double maxWidth = 480;
-  static const double _breakpoint = 500;
+  static const double maxWidth = 720;
 
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    if (width <= _breakpoint) return child;
+    if (!AppBreakpoints.isTabletOrDesktop(width)) return child;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: maxWidth),

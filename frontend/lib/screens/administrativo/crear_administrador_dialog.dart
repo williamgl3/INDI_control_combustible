@@ -7,10 +7,16 @@ import '../../data/auth_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_dialog.dart';
 
-/// Modal para dar de alta a un nuevo usuario administrativo. Formulario
-/// simple (nombre, usuario, correo, password) — a diferencia del registro
-/// de chofer no pide fecha de nacimiento ni apellidos por separado, ya
-/// que el personal administrativo no pasa por el flujo de auto-registro.
+/// Modal para dar de alta a un nuevo usuario administrativo. A diferencia
+/// del registro de chofer no pide fecha de nacimiento (no aplica una
+/// validación de edad mínima a una cuenta de escritorio), pero sí nombre +
+/// apellidos, igual que el chofer.
+///
+/// Solo un `superadmin` puede ver/usar este modal — la restricción real
+/// vive en el backend (`requireRole('superadmin')` en
+/// `POST /usuarios/administrativos`); quien invoca `.show()` debe además
+/// ocultar el botón que lo abre para quien no sea superadmin (ver
+/// `choferes_tab.dart`).
 class CrearAdministradorDialog extends ConsumerStatefulWidget {
   const CrearAdministradorDialog({super.key});
 
@@ -30,6 +36,8 @@ class _CrearAdministradorDialogState
     extends ConsumerState<CrearAdministradorDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nombreController = TextEditingController();
+  final _apellidoPaternoController = TextEditingController();
+  final _apellidoMaternoController = TextEditingController();
   final _usuarioController = TextEditingController();
   final _correoController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -40,6 +48,8 @@ class _CrearAdministradorDialogState
   @override
   void dispose() {
     _nombreController.dispose();
+    _apellidoPaternoController.dispose();
+    _apellidoMaternoController.dispose();
     _usuarioController.dispose();
     _correoController.dispose();
     _passwordController.dispose();
@@ -59,6 +69,8 @@ class _CrearAdministradorDialogState
           .read(authRepositoryProvider)
           .crearAdministrativo(
             nombre: _nombreController.text.trim(),
+            apellidoPaterno: _apellidoPaternoController.text.trim(),
+            apellidoMaterno: _apellidoMaternoController.text.trim(),
             usuario: _usuarioController.text.trim(),
             correo: _correoController.text.trim(),
             password: _passwordController.text,
@@ -98,7 +110,29 @@ class _CrearAdministradorDialogState
               validator: Validators.nombre,
               textCapitalization: TextCapitalization.words,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+            TextFormField(
+              controller: _apellidoPaternoController,
+              decoration: const InputDecoration(
+                labelText: 'Apellido paterno',
+                prefixIcon: Icon(Icons.badge_outlined),
+              ),
+              validator: (v) =>
+                  Validators.apellido(v, etiqueta: 'El apellido paterno'),
+              textCapitalization: TextCapitalization.words,
+            ),
+            const SizedBox(height: 20),
+            TextFormField(
+              controller: _apellidoMaternoController,
+              decoration: const InputDecoration(
+                labelText: 'Apellido materno',
+                prefixIcon: Icon(Icons.badge_outlined),
+              ),
+              validator: (v) =>
+                  Validators.apellido(v, etiqueta: 'El apellido materno'),
+              textCapitalization: TextCapitalization.words,
+            ),
+            const SizedBox(height: 20),
             TextFormField(
               controller: _usuarioController,
               decoration: const InputDecoration(
@@ -108,7 +142,7 @@ class _CrearAdministradorDialogState
               validator: Validators.usuario,
               autocorrect: false,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             TextFormField(
               controller: _correoController,
               decoration: const InputDecoration(
@@ -119,7 +153,7 @@ class _CrearAdministradorDialogState
               keyboardType: TextInputType.emailAddress,
               autocorrect: false,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             TextFormField(
               controller: _passwordController,
               decoration: InputDecoration(

@@ -8,7 +8,10 @@ class RoutePaths {
   static const recuperarPassword = '/recuperar-password';
 
   static const chofer = '/chofer';
+  static const choferTipoOperacion = '/chofer/tipo-operacion';
   static const choferSolicitar = '/chofer/solicitar';
+  static const choferRegistrarDespacho = '/chofer/registrar-despacho';
+  static const choferRecorridoMarimba = '/chofer/recorrido-marimba';
   static const choferRespuesta = '/chofer/respuesta';
   static const choferComprobar = '/chofer/comprobar';
   static const choferCerrarDia = '/chofer/cerrar-dia';

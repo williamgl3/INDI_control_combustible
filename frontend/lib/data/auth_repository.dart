@@ -63,9 +63,14 @@ abstract class AuthRepository {
     required String passwordNueva,
   });
 
-  /// Crea un nuevo usuario con rol administrativo.
+  /// Crea un nuevo usuario con rol administrativo. Solo permitido para un
+  /// usuario en sesión con rol `superadmin` — el backend responde 403
+  /// para cualquier otro rol (ver `requireRole('superadmin')` en
+  /// `usuarios.routes.ts`).
   Future<Perfil> crearAdministrativo({
     required String nombre,
+    required String apellidoPaterno,
+    required String apellidoMaterno,
     required String usuario,
     required String correo,
     required String password,

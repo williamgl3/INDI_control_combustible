@@ -108,6 +108,10 @@ void main() {
         'Gómez',
       );
       await tester.enterText(
+        find.widgetWithText(TextFormField, 'Apellido materno'),
+        'Ruiz',
+      );
+      await tester.enterText(
         find.widgetWithText(TextFormField, 'Correo'),
         'luis.gomez@example.com',
       );

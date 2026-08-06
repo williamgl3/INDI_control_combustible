@@ -3,24 +3,38 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/api_auditoria_repository.dart';
 import '../data/api_auth_repository.dart';
 import '../data/api_client.dart';
+import '../data/api_evidencias_repository.dart';
 import '../data/api_incidencias_repository.dart';
+import '../data/api_despachos_marimba_repository.dart';
 import '../data/api_operaciones_repository.dart';
+import '../data/api_recorridos_marimba_repository.dart';
 import '../data/api_vehiculos_repository.dart';
 import '../data/auditoria_repository.dart';
 import '../data/auth_repository.dart';
+import '../data/despachos_marimba_repository.dart';
+import '../data/evidencias_repository.dart';
 import '../data/incidencias_repository.dart';
 import '../data/operaciones_repository.dart';
+import '../data/recorridos_marimba_repository.dart';
 import '../data/vehiculos_repository.dart';
 import 'auth_controller.dart';
 import 'exportador_service.dart';
 import 'foto_picker.dart';
 import 'recordatorio_service.dart';
+import 'session_provider.dart';
 import 'session_storage.dart';
 import 'ticket_ocr_service.dart';
 import 'token_storage.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) {
-  return ApiClient(tokenStorage: ref.watch(tokenStorageProvider));
+  return ApiClient(
+    tokenStorage: ref.watch(tokenStorageProvider),
+    // Sin esto, una sesión expirada (401 + refresh fallido) solo se
+    // reflejaba en el storage — el guard de rutas no reaccionaba hasta el
+    // siguiente arranque de la app (ver comentario en
+    // `ApiClient._limpiarSesionExpirada`).
+    onSesionExpirada: () => ref.read(sessionProvider.notifier).cerrarSesion(),
+  );
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
@@ -52,6 +66,15 @@ final operacionesTickProvider = StateProvider<int>((ref) => 0);
 final vehiculosRepositoryProvider = Provider<VehiculosRepository>((ref) {
   return ApiVehiculosRepository(ref.watch(apiClientProvider));
 });
+
+final despachosMarimbaRepositoryProvider = Provider<DespachosMarimbaRepository>((ref) {
+  return ApiDespachosMarimbaRepository(ref.watch(apiClientProvider));
+});
+
+final recorridosMarimbaRepositoryProvider =
+    Provider<RecorridosMarimbaRepository>((ref) {
+      return ApiRecorridosMarimbaRepository(ref.watch(apiClientProvider));
+    });
 
 final incidenciasRepositoryProvider = Provider<IncidenciasRepository>((ref) {
   return ApiIncidenciasRepository(ref.watch(apiClientProvider));
@@ -88,3 +111,7 @@ final recordatorioServiceProvider = Provider<RecordatorioService>(
 final exportadorServiceProvider = Provider<ExportadorService>(
   (ref) => const ArchivoExportadorService(),
 );
+
+final evidenciasRepositoryProvider = Provider<EvidenciasRepository>((ref) {
+  return ApiEvidenciasRepository(ref.watch(apiClientProvider));
+});

@@ -18,11 +18,13 @@ import '../screens/chofer/mis_solicitudes_screen.dart';
 import '../screens/chofer/respuesta_solicitud_screen.dart';
 import '../screens/chofer/solicitar_carga_screen.dart';
 import '../screens/chofer/subir_evidencias_screen.dart';
+import '../screens/chofer/registrar_despacho_screen.dart';
+import '../screens/chofer/recorrido_marimba_screen.dart';
+import '../screens/chofer/tipo_operacion_screen.dart';
 import '../screens/login/login_screen.dart';
 import '../screens/recuperar_password/recuperar_password_screen.dart';
 import '../screens/registro_chofer/registro_chofer_screen.dart';
 import '../theme/app_motion.dart';
-import '../widgets/chofer_mobile_wrapper.dart';
 import 'placeholder_screen.dart';
 import 'route_paths.dart';
 
@@ -72,13 +74,17 @@ String? _redirigirSegunSesion(Perfil? perfil, GoRouterState state) {
   }
 
   // Con sesión: no debe poder volver a login/registro/recuperar.
+  // El supervisor opera la marimba con las mismas pantallas que un chofer
+  // (solicitar/comprobar carga + su propia pantalla de despacho) — ver
+  // `Perfil.esSupervisor`.
+  final esDelPanelDeChofer = perfil.esChofer || perfil.esSupervisor;
   if (esPublica) {
-    return perfil.esChofer ? RoutePaths.chofer : RoutePaths.administrativo;
+    return esDelPanelDeChofer ? RoutePaths.chofer : RoutePaths.administrativo;
   }
 
   final esRutaDeChofer = destino.startsWith(RoutePaths.chofer);
   final esRutaDeAdministrativo = destino.startsWith(RoutePaths.administrativo);
-  if (esRutaDeChofer && !perfil.esChofer) {
+  if (esRutaDeChofer && !esDelPanelDeChofer) {
     return RoutePaths.administrativo;
   }
   if (esRutaDeAdministrativo && !perfil.esAdministrativo) {
@@ -125,11 +131,45 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             _conTransicion(state, const ChoferHomeShell()),
       ),
       GoRoute(
+        path: RoutePaths.choferTipoOperacion,
+        // Sin `ChoferMobileWrapper` — a diferencia de las demás rutas de
+        // chofer, esta pantalla ya maneja su propio ancho responsivo
+        // (sidebar + contenido, igual que `ChoferHomeShell`, que tampoco
+        // lo usa a este nivel). Envolverla aquí encogía la pantalla
+        // completa (sidebar y contenido juntos) a 480px, en vez de
+        // dejar solo el contenido capado.
+        pageBuilder: (context, state) =>
+            _conTransicion(state, const TipoOperacionScreen()),
+      ),
+      GoRoute(
         path: RoutePaths.choferSolicitar,
-        pageBuilder: (context, state) => _conTransicion(
-          state,
-          const ChoferMobileWrapper(child: SolicitarCargaScreen()),
-        ),
+        // Sin `ChoferMobileWrapper` — igual que `choferTipoOperacion`, esta
+        // pantalla ya maneja su propio ancho con `ContenidoResponsivo`.
+        // Envolverla aquí anidaba dos `Center`/`ConstrainedBox` (el de
+        // `ChoferMobileWrapper` a 720px + el propio de la pantalla), lo que
+        // además rompía la apertura del menú de `SelectorVehiculo` en
+        // pruebas de widget (el toque no llegaba a abrir el dropdown).
+        pageBuilder: (context, state) {
+          final categoriaFiltro = state.extra;
+          return _conTransicion(
+            state,
+            SolicitarCargaScreen(
+              categoriaFiltro: categoriaFiltro is String
+                  ? categoriaFiltro
+                  : null,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: RoutePaths.choferRegistrarDespacho,
+        pageBuilder: (context, state) =>
+            _conTransicion(state, const RegistrarDespachoScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.choferRecorridoMarimba,
+        pageBuilder: (context, state) =>
+            _conTransicion(state, const RecorridoMarimbaScreen()),
       ),
       GoRoute(
         path: RoutePaths.choferRespuesta,
@@ -143,9 +183,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
           return _conTransicion(
             state,
-            ChoferMobileWrapper(
-              child: RespuestaSolicitudScreen(solicitud: solicitud),
-            ),
+            RespuestaSolicitudScreen(solicitud: solicitud),
           );
         },
       ),
@@ -161,9 +199,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
           return _conTransicion(
             state,
-            ChoferMobileWrapper(
-              child: ComprobarCargaScreen(folioAutorizacion: folio),
-            ),
+            ComprobarCargaScreen(folioAutorizacion: folio),
           );
         },
       ),
@@ -177,39 +213,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               RutaInvalidaScreen(onVolver: () => context.go(RoutePaths.chofer)),
             );
           }
-          return _conTransicion(
-            state,
-            ChoferMobileWrapper(child: CerrarDiaScreen(carga: carga)),
-          );
+          return _conTransicion(state, CerrarDiaScreen(carga: carga));
         },
       ),
       GoRoute(
         path: RoutePaths.choferSolicitudes,
-        pageBuilder: (context, state) => _conTransicion(
-          state,
-          const ChoferMobileWrapper(child: MisSolicitudesScreen()),
-        ),
+        // Ya trae su propio `SidebarChofer` + `ContenidoResponsivo` en su
+        // rama standalone (ver `MisSolicitudesScreen.build`).
+        pageBuilder: (context, state) =>
+            _conTransicion(state, const MisSolicitudesScreen()),
       ),
       GoRoute(
         path: RoutePaths.choferPerfil,
-        pageBuilder: (context, state) => _conTransicion(
-          state,
-          const ChoferMobileWrapper(child: MiPerfilScreen()),
-        ),
+        pageBuilder: (context, state) =>
+            _conTransicion(state, const MiPerfilScreen()),
       ),
       GoRoute(
         path: RoutePaths.choferDashboard,
-        pageBuilder: (context, state) => _conTransicion(
-          state,
-          const ChoferMobileWrapper(child: ChoferDashboardScreen()),
-        ),
+        pageBuilder: (context, state) =>
+            _conTransicion(state, const ChoferDashboardScreen()),
       ),
       GoRoute(
         path: RoutePaths.choferSubirEvidencias,
-        pageBuilder: (context, state) => _conTransicion(
-          state,
-          const ChoferMobileWrapper(child: SubirEvidenciasScreen()),
-        ),
+        pageBuilder: (context, state) =>
+            _conTransicion(state, const SubirEvidenciasScreen()),
       ),
       GoRoute(
         path: RoutePaths.administrativo,

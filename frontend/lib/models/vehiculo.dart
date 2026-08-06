@@ -1,47 +1,69 @@
 import 'package:flutter/foundation.dart';
 
+/// Sentinel de `Vehiculo.copyWith` — distingue "parámetro omitido" de
+/// "`null` explícito" para los campos donde `??` no alcanza.
+const Object _sinTocar = Object();
+
 /// Un vehículo o maquinaria del catálogo compartido de la obra —
 /// administrado por el área administrativa, no por cada chofer.
 ///
 /// Varios choferes pueden usar la misma unidad en días distintos (y un
 /// mismo chofer puede usar unidades distintas), así que el vehículo ya
 /// NO vive embebido en el [Perfil] del chofer: se elige en cada
-/// solicitud/comprobación de carga. El tope semanal es del vehículo, no
-/// de la persona que lo maneja ese día.
-///
-/// Dato que vendrá del backend en el futuro (hoy solo existe vía mocks).
+/// solicitud/comprobación de carga.
 @immutable
 class Vehiculo {
   const Vehiculo({
     required this.id,
     required this.tipoUnidad,
-    required this.identificador,
+    required this.placas,
+    required this.numeroEconomico,
     required this.tipoCombustible,
-    required this.topeSemanal,
     required this.intervaloServicio,
     this.modelo,
     this.lecturaUltimoServicio,
     this.fechaUltimoServicio,
-  });
+    this.activo = true,
+    this.unidadPadreId,
+    this.ubicacion,
+  }) : assert(
+         placas != null || numeroEconomico != null,
+         'Toda unidad necesita placas o número económico (o ambos).',
+       );
 
   final String id;
 
-  /// Ej. "Vehículo", "Pipa", "Maquinaria".
+  /// Ej. "Vehículo", "Marimba", "Maquinaria".
   final String tipoUnidad;
 
-  /// Placa, número económico, o una descripción libre si la unidad no
-  /// tiene ninguno de los dos (ej. maquinaria sin placas: "Retroexcavadora
-  /// amarilla frente norte").
-  final String identificador;
+  /// Placa física — `null` en maquinaria pesada (no circula por
+  /// carretera, se identifica solo por [numeroEconomico]).
+  final String? placas;
 
-  /// Ej. "Diésel", "Magna", "Premium".
-  final String tipoCombustible;
+  /// Número económico interno (GAMI) — `null` en vehículo ligero puro.
+  /// La marimba tiene AMBOS (circula por carretera y además lleva
+  /// económico de control interno).
+  final String? numeroEconomico;
 
-  /// Tope semanal de litros asignado a esta unidad. `0` significa "sin
-  /// asignar todavía" — normalmente porque el chofer la reportó como
-  /// unidad nueva y el administrativo aún no la formaliza (ver
-  /// `MockVehiculosRepository.reportarNuevo`).
-  final double topeSemanal;
+  /// Identificador único para mostrar al usuario: [numeroEconomico] si
+  /// existe, si no [placas]. Toda unidad tiene al menos uno (ver el
+  /// `assert` del constructor y `chk_identificador` en la base de
+  /// datos) — nunca hace falta un fallback de "sin identificador".
+  ///
+  /// Úsala en cualquier pantalla/listado/exportación que hoy muestre
+  /// placas — es la ÚNICA fuente de esta decisión, no repitas
+  /// `numeroEconomico ?? placas` en otro lado.
+  String get etiquetaUnidad => numeroEconomico ?? placas!;
+
+  /// Para pantallas de detalle de la marimba (la única unidad con AMBOS
+  /// datos): "económico · placa" en vez de solo el principal. `null` si
+  /// la unidad solo tiene uno de los dos (nada que combinar).
+  String? get etiquetaCompleta =>
+      (placas != null && numeroEconomico != null) ? '$numeroEconomico · $placas' : null;
+
+  /// Ej. "Diésel", "Magna", "Premium". `null` si aún no se confirma con
+  /// el cliente (ej. maquinaria pesada recién importada).
+  final String? tipoCombustible;
 
   /// Descripción/modelo opcional (ej. "Chevrolet NPR 2020").
   final String? modelo;
@@ -60,32 +82,67 @@ class Vehiculo {
   /// registrado uno.
   final DateTime? fechaUltimoServicio;
 
-  /// `true` mientras el administrativo no le haya asignado tope — es la
-  /// señal de "reportada por un chofer, falta formalizar".
-  bool get esNuevaSinFormalizar => topeSemanal <= 0;
+  /// `false` si el administrativo lo desactivó (soft-delete) — deja de
+  /// ofrecerse en [SelectorVehiculo] pero conserva su historial de
+  /// solicitudes/cargas.
+  final bool activo;
 
+  /// Unidad de la que esta fila es accesorio/sub-unidad (ej. el equipo
+  /// menor de gasolina de una marimba) — `null` en toda unidad "normal".
+  /// Se modela como otra fila de [Vehiculo] en vez de agregar un segundo
+  /// combustible/métrica a esta misma fila (ver migración 0025), así que
+  /// cada fila sigue siendo "1 combustible + 1 métrica" sin excepciones.
+  final String? unidadPadreId;
+
+  /// Frente/banco donde opera hoy (ej. "BANCO EL HUIZACHITO") — filtra el
+  /// catálogo de máquinas destino al capturar despachos de marimba por
+  /// recorrido (ver `RecorridoMarimba.frente`). `null` si no se ha
+  /// asignado.
+  final String? ubicacion;
+
+  /// `placas`/`numeroEconomico`/`tipoCombustible` distinguen "no lo
+  /// toques" (parámetro omitido) de "bórralo" (`null` explícito) —
+  /// necesario para cuando el admin cambia de categoría (ej. Marimba →
+  /// Maquinaria) y `placas` debe quedar en `null`, no conservar el valor
+  /// anterior. Un `??` normal no puede representar "pon esto en null a
+  /// propósito", por eso usan `Object?` + sentinel en vez de `String?` +
+  /// `??` como el resto de los campos.
   Vehiculo copyWith({
     String? id,
     String? tipoUnidad,
-    String? identificador,
-    String? tipoCombustible,
-    double? topeSemanal,
+    Object? placas = _sinTocar,
+    Object? numeroEconomico = _sinTocar,
+    Object? tipoCombustible = _sinTocar,
     String? modelo,
     double? intervaloServicio,
     double? lecturaUltimoServicio,
     DateTime? fechaUltimoServicio,
+    bool? activo,
+    Object? unidadPadreId = _sinTocar,
+    Object? ubicacion = _sinTocar,
   }) {
     return Vehiculo(
       id: id ?? this.id,
       tipoUnidad: tipoUnidad ?? this.tipoUnidad,
-      identificador: identificador ?? this.identificador,
-      tipoCombustible: tipoCombustible ?? this.tipoCombustible,
-      topeSemanal: topeSemanal ?? this.topeSemanal,
+      placas: identical(placas, _sinTocar) ? this.placas : placas as String?,
+      numeroEconomico: identical(numeroEconomico, _sinTocar)
+          ? this.numeroEconomico
+          : numeroEconomico as String?,
+      tipoCombustible: identical(tipoCombustible, _sinTocar)
+          ? this.tipoCombustible
+          : tipoCombustible as String?,
       modelo: modelo ?? this.modelo,
       intervaloServicio: intervaloServicio ?? this.intervaloServicio,
       lecturaUltimoServicio:
           lecturaUltimoServicio ?? this.lecturaUltimoServicio,
       fechaUltimoServicio: fechaUltimoServicio ?? this.fechaUltimoServicio,
+      activo: activo ?? this.activo,
+      unidadPadreId: identical(unidadPadreId, _sinTocar)
+          ? this.unidadPadreId
+          : unidadPadreId as String?,
+      ubicacion: identical(ubicacion, _sinTocar)
+          ? this.ubicacion
+          : ubicacion as String?,
     );
   }
 
@@ -93,9 +150,9 @@ class Vehiculo {
     return Vehiculo(
       id: json['id'] as String,
       tipoUnidad: json['tipoUnidad'] as String,
-      identificador: json['identificador'] as String,
-      tipoCombustible: json['tipoCombustible'] as String,
-      topeSemanal: (json['topeSemanal'] as num).toDouble(),
+      placas: json['placas'] as String?,
+      numeroEconomico: json['numeroEconomico'] as String?,
+      tipoCombustible: json['tipoCombustible'] as String?,
       modelo: json['modelo'] as String?,
       intervaloServicio: (json['intervaloServicio'] as num).toDouble(),
       lecturaUltimoServicio: (json['lecturaUltimoServicio'] as num?)
@@ -103,6 +160,9 @@ class Vehiculo {
       fechaUltimoServicio: json['fechaUltimoServicio'] == null
           ? null
           : DateTime.parse(json['fechaUltimoServicio'] as String),
+      activo: json['activo'] as bool? ?? true,
+      unidadPadreId: json['unidadPadreId'] as String?,
+      ubicacion: json['ubicacion'] as String?,
     );
   }
 
@@ -110,13 +170,16 @@ class Vehiculo {
     return {
       'id': id,
       'tipoUnidad': tipoUnidad,
-      'identificador': identificador,
+      'placas': placas,
+      'numeroEconomico': numeroEconomico,
       'tipoCombustible': tipoCombustible,
-      'topeSemanal': topeSemanal,
       'modelo': modelo,
       'intervaloServicio': intervaloServicio,
       'lecturaUltimoServicio': lecturaUltimoServicio,
       'fechaUltimoServicio': fechaUltimoServicio?.toIso8601String(),
+      'activo': activo,
+      'unidadPadreId': unidadPadreId,
+      'ubicacion': ubicacion,
     };
   }
 
@@ -125,25 +188,31 @@ class Vehiculo {
     return other is Vehiculo &&
         other.id == id &&
         other.tipoUnidad == tipoUnidad &&
-        other.identificador == identificador &&
+        other.placas == placas &&
+        other.numeroEconomico == numeroEconomico &&
         other.tipoCombustible == tipoCombustible &&
-        other.topeSemanal == topeSemanal &&
         other.modelo == modelo &&
         other.intervaloServicio == intervaloServicio &&
         other.lecturaUltimoServicio == lecturaUltimoServicio &&
-        other.fechaUltimoServicio == fechaUltimoServicio;
+        other.fechaUltimoServicio == fechaUltimoServicio &&
+        other.activo == activo &&
+        other.unidadPadreId == unidadPadreId &&
+        other.ubicacion == ubicacion;
   }
 
   @override
   int get hashCode => Object.hash(
     id,
     tipoUnidad,
-    identificador,
+    placas,
+    numeroEconomico,
     tipoCombustible,
-    topeSemanal,
     modelo,
     intervaloServicio,
     lecturaUltimoServicio,
     fechaUltimoServicio,
+    activo,
+    unidadPadreId,
+    ubicacion,
   );
 }

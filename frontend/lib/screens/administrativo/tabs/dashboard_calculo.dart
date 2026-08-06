@@ -152,11 +152,11 @@ List<SegmentoLitros> agruparLitrosPorSubperiodo(
 /// tipo de combustible de cada carga por su `vehiculoId`.
 List<DesgloseCombustible> desglosarPorCombustible(
   List<Carga> cargasDelPeriodo,
-  Map<String, String> tipoCombustiblePorVehiculo,
+  Map<String, String?> tipoCombustiblePorVehiculo,
 ) {
   final litrosPorTipo = <String, double>{};
   for (final carga in cargasDelPeriodo) {
-    final tipo = tipoCombustiblePorVehiculo[carga.vehiculoId] ?? 'Sin datos';
+    final tipo = tipoCombustiblePorVehiculo[carga.vehiculoId] ?? 'Sin especificar';
     litrosPorTipo[tipo] = (litrosPorTipo[tipo] ?? 0) + carga.litrosCargados;
   }
   final total = litrosPorTipo.values.fold(0.0, (s, v) => s + v);

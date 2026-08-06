@@ -142,6 +142,8 @@ class ApiAuthRepository implements AuthRepository {
   @override
   Future<Perfil> crearAdministrativo({
     required String nombre,
+    required String apellidoPaterno,
+    required String apellidoMaterno,
     required String usuario,
     required String correo,
     required String password,
@@ -151,6 +153,8 @@ class ApiAuthRepository implements AuthRepository {
         '/usuarios/administrativos',
         body: {
           'nombre': nombre,
+          'apellidoPaterno': apellidoPaterno,
+          'apellidoMaterno': apellidoMaterno,
           'usuario': usuario,
           'correo': correo,
           'password': password,

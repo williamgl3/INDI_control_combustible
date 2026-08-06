@@ -107,7 +107,7 @@ class _AdminLoginDialogState extends ConsumerState<AdminLoginDialog> {
               validator: Validators.usuario,
               textInputAction: TextInputAction.next,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             TextFormField(
               controller: _passwordController,
               decoration: InputDecoration(

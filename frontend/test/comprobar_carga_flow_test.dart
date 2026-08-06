@@ -63,7 +63,9 @@ void main() {
       // pendiente de revisión manual (no se auto-aprueba).
       await tester.tap(find.widgetWithText(FloatingActionButton, 'Solicitar carga'));
       await tester.pumpAndSettle();
-      await _elegirVehiculo(tester, 'Vehículo · ABC-123');
+      await tester.tap(find.text('Vehículo Ligero'));
+      await tester.pumpAndSettle();
+      await _elegirVehiculo(tester, 'ABC-123-A');
       await tester.ensureVisible(find.text('Tomar foto del tablero'));
       await tester.tap(find.text('Tomar foto del tablero'));
       await tester.pumpAndSettle();
@@ -158,6 +160,15 @@ void main() {
 
       await tester.ensureVisible(find.byTooltip('Cerrar sesión'));
       await tester.tap(find.byTooltip('Cerrar sesión'));
+      await tester.pumpAndSettle();
+      // Confirmación antes de cerrar sesión (ver ConfirmarCerrarSesionDialog)
+      // — el panel admin ahora también la pide, igual que el de chofer.
+      await tester.tap(
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.text('Cerrar sesión'),
+        ),
+      );
       await tester.pumpAndSettle();
 
       // Sin sesión, la app aterriza en la pantalla de bienvenida.

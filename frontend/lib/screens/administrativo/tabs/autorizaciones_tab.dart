@@ -16,7 +16,7 @@ import '../../../widgets/estado_vacio.dart';
 import '../../../widgets/fecha_formato.dart';
 import '../../../widgets/grouped_section.dart';
 import '../../../widgets/ios_segmented_control.dart';
-import '../../../widgets/responsive_scroll_view.dart';
+import '../../../widgets/contenido_responsivo.dart';
 import '../../../widgets/stat_tile.dart';
 import '../../../widgets/stat_tile_row.dart';
 import '../revisar_solicitud_dialog.dart';
@@ -60,7 +60,12 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
       solicitud: solicitud,
       nombreChofer: nombreChofer,
     );
-    if (resuelta == true && mounted) setState(() {});
+    if (resuelta == true && mounted) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Solicitud revisada correctamente.')),
+      );
+    }
   }
 
   void _alternarSeleccion(String solicitudId, bool marcada) {
@@ -183,7 +188,7 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
         : solicitudes.where((s) => s.estado == _filtro).toList();
     final mostradas = filtradas.take(_limiteMostradas).toList();
 
-    return ResponsiveScrollView(
+    return ContenidoResponsivo(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -571,7 +576,7 @@ class _SolicitudTile extends StatelessWidget {
                   ],
                 ),
               ),
-              EstadoSolicitudBadge(estado: solicitud.estado),
+              EstadoSolicitudBadge(estadoVisual: solicitud.estadoVisual),
             ],
           ),
           if (esPendiente && onRevisar != null) ...[

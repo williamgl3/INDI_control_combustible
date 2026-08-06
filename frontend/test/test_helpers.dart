@@ -14,6 +14,7 @@ import 'package:indi_combustible/core/ticket_ocr_service.dart';
 import 'package:indi_combustible/core/token_storage.dart';
 import 'mocks/mock_auditoria_repository.dart';
 import 'mocks/mock_auth_repository.dart';
+import 'mocks/mock_evidencias_repository.dart';
 import 'mocks/mock_incidencias_repository.dart';
 import 'mocks/mock_operaciones_repository.dart';
 import 'mocks/mock_vehiculos_repository.dart';
@@ -150,6 +151,7 @@ ProviderContainer makeTestContainer({
       recordatorioServiceProvider.overrideWithValue(FakeRecordatorioService()),
       exportadorServiceProvider.overrideWithValue(FakeExportadorService()),
       authRepositoryProvider.overrideWithValue(MockAuthRepository()),
+      evidenciasRepositoryProvider.overrideWithValue(MockEvidenciasRepository()),
       operacionesRepositoryProvider.overrideWithValue(
         MockOperacionesRepository(),
       ),

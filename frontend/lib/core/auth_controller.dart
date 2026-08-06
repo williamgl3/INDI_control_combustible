@@ -127,6 +127,7 @@ class AuthController {
         if (perfil.esAdministrativo) ...[
           _ref.read(authRepositoryProvider).cargarChoferes(),
           _ref.read(incidenciasRepositoryProvider).cargarTodasLasIncidencias(),
+          _ref.read(evidenciasRepositoryProvider).cargarTodasLasEvidencias(),
         ] else
           _ref.read(incidenciasRepositoryProvider).cargarMisIncidencias(),
       ]);

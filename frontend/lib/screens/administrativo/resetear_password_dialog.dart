@@ -123,7 +123,7 @@ class _ResetearPasswordDialogState
               validator: Validators.password,
               onFieldSubmitted: (_) => _guardar(),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             TextFormField(
               controller: _confirmarController,
               decoration: InputDecoration(

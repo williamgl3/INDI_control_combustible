@@ -7,14 +7,16 @@ import '../../core/session_provider.dart';
 import '../../core/theme_mode_provider.dart';
 import '../../core/validators.dart';
 import '../../data/auth_repository.dart';
+import '../../theme/app_breakpoints.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_elevated_button.dart';
 import '../../widgets/aviso_error.dart';
 import '../../widgets/confirmar_cerrar_sesion_dialog.dart';
+import '../../widgets/contenido_responsivo.dart';
 import '../../widgets/grouped_section.dart';
-import '../../widgets/responsive_scroll_view.dart';
 import '../../widgets/selector_tema_dialog.dart';
+import '../../widgets/sidebar_chofer.dart';
 
 /// Datos personales del usuario en sesión (chofer o administrativo) +
 /// cambiar contraseña + configuración de tema + cerrar sesión.
@@ -31,6 +33,10 @@ class MiPerfilScreen extends ConsumerStatefulWidget {
 }
 
 class _MiPerfilScreenState extends ConsumerState<MiPerfilScreen> {
+  /// "Perfil" (índice 4) — el destino del sidebar que representa esta
+  /// pantalla, usado solo en la ruta standalone (fuera del shell).
+  static const _indiceSidebar = 4;
+
   final _formKey = GlobalKey<FormState>();
   final _actualController = TextEditingController();
   final _nuevaController = TextEditingController();
@@ -280,26 +286,52 @@ class _MiPerfilScreenState extends ConsumerState<MiPerfilScreen> {
     );
 
     if (widget.mostrarComoTab) {
+      // Mismo `ContenidoResponsivo` compartido por todo el panel de
+      // chofer — ver `ChoferHomeShell` (ya no envuelve las pestañas en un
+      // tope de 480px, cada una controla el suyo).
       return SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 80),
+        child: ContenidoResponsivo(
+          paddingSuperior: 16,
+          paddingInferior: 80,
           child: bodyContent,
         ),
       );
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mi perfil'),
-        leading: BackButton(onPressed: () => context.pop()),
-      ),
-      body: SafeArea(
-        child: ResponsiveScrollView(
-          maxWidth: 480,
-          child: bodyContent,
-        ),
-      ),
+    final appBar = AppBar(
+      title: const Text('Mi perfil'),
+      leading: BackButton(onPressed: () => context.pop()),
     );
+    // Antes 480px aquí vs. 900px en modo pestaña — misma pantalla, dos
+    // anchos máximos distintos según la ruta. Unificado a
+    // `ContenidoResponsivo` (mismo maxWidth que el resto del panel).
+    final contenidoForm = ContenidoResponsivo(child: bodyContent);
+
+    // Ruta standalone (fuera del `IndexedStack` de `ChoferHomeShell` — se
+    // llega aquí, por ejemplo, desde el sidebar de otra pantalla de
+    // chofer). Sin el shell alrededor, necesita su propio sidebar en
+    // pantallas anchas — mismo patrón que `TipoOperacionScreen`/
+    // `SubirEvidenciasScreen`/`MisSolicitudesScreen`.
+    if (AppBreakpoints.isTabletOrDesktop(MediaQuery.sizeOf(context).width)) {
+      return Scaffold(
+        appBar: appBar,
+        body: SafeArea(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SidebarChofer(
+                indiceSeleccionado: _indiceSidebar,
+                onSeleccionar: (i) =>
+                    navegarDesdeSidebarChofer(context, _indiceSidebar, i),
+              ),
+              Expanded(child: contenidoForm),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(appBar: appBar, body: SafeArea(child: contenidoForm));
   }
 }
 

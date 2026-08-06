@@ -1,44 +1,59 @@
 import 'package:flutter/material.dart';
 
-/// Corte ondulado ("wave") para el borde inferior del header de las
-/// pantallas de autenticación — el header azul termina en una curva de
-/// dos vientres en vez de una línea recta. Se aplica directamente sobre
-/// el propio header (no como una capa superpuesta al contenido), así que
-/// la división queda fija y no puede interferir con el scroll del
-/// formulario de abajo.
+/// Recorte que divide el header en una diagonal fluida tipo "S" —el lado
+/// izquierdo del header baja más (más área azul) y el lado derecho sube
+/// más (menos área azul), en vez de una onda centrada y simétrica.
+///
+/// `leftHeightFactor` y `rightHeightFactor` son fracciones del alto del
+/// contenedor (`size.height`), no píxeles fijos, para que la diagonal se
+/// vea proporcional en móvil, tablet y web.
+///
+/// Sobre el fix del "hueco negro": a diferencia de la onda anterior, este
+/// trazo NO necesita tocar `size.height` en los extremos. Esa corrección
+/// ya no depende de la geometría de la curva — depende de que el color
+/// detrás de este header (`Scaffold.backgroundColor` en el flujo móvil, o
+/// el `Container` de la tarjeta en escritorio, ambos en
+/// `auth_screen_shell.dart`) sea exactamente `colors.surface`, el mismo
+/// que usa el área debajo del header. Por eso cualquier zona entre esta
+/// curva y el borde inferior real, que el degradado no llega a cubrir, se
+/// funde con ese fondo en vez de dejar ver un color distinto. Ese archivo
+/// no se toca aquí.
 class WaveBottomClipper extends CustomClipper<Path> {
-  const WaveBottomClipper({this.amplitude = 28});
+  const WaveBottomClipper({
+    this.leftHeightFactor = 0.68,
+    this.rightHeightFactor = 0.45,
+  });
 
-  final double amplitude;
+  /// Fracción del alto donde la curva llega al borde izquierdo (x = 0).
+  final double leftHeightFactor;
+
+  /// Fracción del alto donde la curva llega al borde derecho (x = w).
+  final double rightHeightFactor;
 
   @override
   Path getClip(Size size) {
     final w = size.width;
     final h = size.height;
-    final path = Path()..moveTo(0, h - amplitude);
-    path.cubicTo(
-      w * 0.22,
-      h,
-      w * 0.30,
-      h - amplitude * 2,
-      w * 0.52,
-      h - amplitude * 1.15,
-    );
-    path.cubicTo(
-      w * 0.72,
-      h - amplitude * 0.35,
-      w * 0.82,
-      h + amplitude * 0.4,
-      w,
-      h - amplitude * 0.55,
-    );
-    path.lineTo(w, 0);
-    path.lineTo(0, 0);
-    path.close();
-    return path;
+    final yLeft = h * leftHeightFactor;
+    final yRight = h * rightHeightFactor;
+    final yMid = (yLeft + yRight) / 2;
+
+    return Path()
+      ..moveTo(0, yLeft)
+      // Primer tramo: de la altura izquierda a la altura media, con
+      // salida y llegada horizontales (mismo `y` que el punto vecino) —
+      // así la curva es un solo trazo fluido, sin quiebres.
+      ..cubicTo(w * 0.25, yLeft, w * 0.25, yMid, w * 0.5, yMid)
+      // Segundo tramo: de la altura media a la altura derecha, con la
+      // inflexión opuesta al primer tramo — esto forma la "S".
+      ..cubicTo(w * 0.75, yMid, w * 0.75, yRight, w, yRight)
+      ..lineTo(w, 0)
+      ..lineTo(0, 0)
+      ..close();
   }
 
   @override
   bool shouldReclip(covariant WaveBottomClipper oldClipper) =>
-      oldClipper.amplitude != amplitude;
+      oldClipper.leftHeightFactor != leftHeightFactor ||
+      oldClipper.rightHeightFactor != rightHeightFactor;
 }

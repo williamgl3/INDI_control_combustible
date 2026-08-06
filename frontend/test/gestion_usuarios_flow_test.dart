@@ -17,8 +17,13 @@ Finder _accionesDe(String usuarioId) =>
 
 /// Réplica del helper de `administrativo_flow_test.dart` — inicia sesión
 /// como el admin de prueba (`admin1`) para poder llegar a las pestañas
-/// del panel administrativo.
-Future<void> _loginComoAdmin(WidgetTester tester) async {
+/// del panel administrativo. `usuario`/`password` permiten reutilizarlo
+/// para el superadmin de prueba (`superadmin1`, ver `MockAuthRepository`).
+Future<void> _loginComoAdmin(
+  WidgetTester tester, {
+  String usuario = 'admin1',
+  String password = 'admin1234',
+}) async {
   await tester.ensureVisible(find.text('Entrar como administrador'));
   await tester.tap(find.text('Entrar como administrador'));
   await tester.pumpAndSettle();
@@ -32,14 +37,14 @@ Future<void> _loginComoAdmin(WidgetTester tester) async {
         'Usuario del administrador',
       ),
     ),
-    'admin1',
+    usuario,
   );
   await tester.enterText(
     find.descendant(
       of: dialog,
       matching: find.widgetWithText(TextFormField, 'Contraseña'),
     ),
-    'admin1234',
+    password,
   );
   await tester.tap(
     find.descendant(of: dialog, matching: find.text('Ingresar')),
@@ -181,7 +186,14 @@ void main() {
       final container = makeTestContainer();
       addTearDown(container.dispose);
       await pumpTestApp(tester, container: container);
-      await _loginComoAdmin(tester);
+      // "Crear administrador" es exclusivo de superadmin — un
+      // administrativo normal ni siquiera ve el botón (ver el test de
+      // abajo, "un administrativo normal no ve el botón...").
+      await _loginComoAdmin(
+        tester,
+        usuario: 'superadmin1',
+        password: 'superadmin1234',
+      );
       await _irASeccion(tester, 'Choferes');
 
       await tester.tap(find.text('Crear administrador'));
@@ -190,6 +202,14 @@ void main() {
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Nombre'),
         'Beto Nuevo',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Apellido paterno'),
+        'Nuevo',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Apellido materno'),
+        'García',
       );
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Usuario'),
@@ -215,6 +235,23 @@ void main() {
             .login(usuario: 'beto.nuevo', password: 'password123');
         expect(resultado.perfil.esAdministrativo, isTrue);
       });
+    },
+  );
+
+  testWidgets(
+    'un administrativo normal no ve el botón "Crear administrador"',
+    (tester) async {
+      tester.view.physicalSize = const Size(1600, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final container = makeTestContainer();
+      addTearDown(container.dispose);
+      await pumpTestApp(tester, container: container);
+      await _loginComoAdmin(tester);
+      await _irASeccion(tester, 'Choferes');
+
+      expect(find.text('Crear administrador'), findsNothing);
     },
   );
 

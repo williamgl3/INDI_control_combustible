@@ -80,12 +80,16 @@ class MockOperacionesRepository implements OperacionesRepository {
   @override
   List<PrecioCombustible> get precios => List.unmodifiable(_precios);
 
-  double _precioDe(String tipoCombustible) {
-    final precio = _precios.firstWhere(
-      (p) => p.tipoCombustible == tipoCombustible,
-      orElse: () => _precios.first,
-    );
-    return precio.precioPorLitro;
+  /// `null` si no hay precio configurado para ese tipo — a diferencia de
+  /// antes, YA NO cae al primer precio de la lista (de otro tipo de
+  /// combustible): ese fallback silencioso era el mismo bug real que se
+  /// encontró en `concentrado_tab.dart` (ver migración backend 0029).
+  /// Réplica exacta de `preciosService.precioDeDecimal` en el backend.
+  double? _precioDe(String tipoCombustible) {
+    for (final p in _precios) {
+      if (p.tipoCombustible == tipoCombustible) return p.precioPorLitro;
+    }
+    return null;
   }
 
   /// Actualiza el precio por litro de un tipo de combustible ya existente
@@ -181,7 +185,7 @@ class MockOperacionesRepository implements OperacionesRepository {
               s.estado == EstadoSolicitud.aprobada &&
               estaEnSemanaDe(s.creadaEn, hoy),
         )
-        .fold(0.0, (suma, s) => suma + s.costoEstimado);
+        .fold(0.0, (suma, s) => suma + (s.costoEstimado ?? 0));
   }
 
   @override
@@ -241,17 +245,42 @@ class MockOperacionesRepository implements OperacionesRepository {
   }) async {
     await Future.delayed(const Duration(milliseconds: 400));
 
-    final costoEstimado =
-        litrosSolicitados * _precioDe(vehiculo.tipoCombustible);
+    // Bifurcación (réplica de `solicitudesService.enviarSolicitud` en el
+    // backend, ver migración 0029): "sin tipoCombustible confirmado" ya
+    // NO bloquea la solicitud — 55 de 96 unidades del catálogo real
+    // (maquinaria/pipa) no tienen el dato, y bloquearlas dejaba a más de
+    // la mitad de la flota sin poder pedir combustible. Se crea con
+    // `costoEstimado = null` y nunca se auto-aprueba (va a revisión
+    // manual). Si el tipo SÍ está confirmado pero no hay precio
+    // configurado para él (ej. Premium), sí se lanza — es una
+    // configuración faltante real, no un dato pendiente del chofer.
+    final tipoCombustible = vehiculo.tipoCombustible;
+    double? costoEstimado;
+    if (tipoCombustible != null) {
+      final precio = _precioDe(tipoCombustible);
+      if (precio == null) {
+        throw ApiException(
+          'No hay precio vigente configurado para $tipoCombustible — pide '
+          'a un administrativo que lo capture antes de continuar.',
+          status: 409,
+        );
+      }
+      costoEstimado = litrosSolicitados * precio;
+    }
     final tieneHistorial = _tieneHistorialSuficiente(vehiculo.id);
     final seSalePatron = _seSaleDePatron(vehiculo.id, litrosSolicitados);
-    final presupuestoOk = costoEstimado <= presupuestoRestante;
+    final presupuestoOk =
+        costoEstimado != null && costoEstimado <= presupuestoRestante;
 
     final seAutoAprueba = tieneHistorial && !seSalePatron && presupuestoOk;
 
     String? comentario;
     if (!seAutoAprueba) {
-      if (!tieneHistorial) {
+      if (tipoCombustible == null) {
+        comentario =
+            'Esta unidad no tiene combustible confirmado en el catálogo — '
+            'un administrativo revisará y completará el dato.';
+      } else if (!tieneHistorial) {
         comentario =
             'Este vehículo aún no tiene historial suficiente — un '
             'administrativo revisará esta solicitud.';
@@ -360,6 +389,7 @@ class MockOperacionesRepository implements OperacionesRepository {
     required String choferId,
     required String vehiculoId,
     required String folioAutorizacion,
+    List<String>? foliosAdicionales,
     required double litrosCargados,
     required double kmAlCargar,
     required String gasolinera,
@@ -368,11 +398,19 @@ class MockOperacionesRepository implements OperacionesRepository {
     double? litrosDetectadosOcr,
   }) async {
     await Future.delayed(const Duration(milliseconds: 400));
+    // Sin snapshot de precio de referencia aquí: a diferencia del
+    // backend real (`cargasService.registrarCarga`), este mock no recibe
+    // el `Vehiculo` completo, solo su id — no tiene de dónde resolver
+    // `tipoCombustible` sin depender de `VehiculosRepository`. Las filas
+    // de Concentrado construidas en tests quedan en
+    // `FuenteGasto.sinDato` a menos que el test arme la `Carga`
+    // directamente con estos campos poblados.
     final carga = Carga(
       id: 'carga-${_idSeq++}',
       choferId: choferId,
       vehiculoId: vehiculoId,
       folioAutorizacion: folioAutorizacion,
+      foliosAdicionales: foliosAdicionales ?? const [],
       litrosCargados: litrosCargados,
       kmAlCargar: kmAlCargar,
       gasolinera: gasolinera,

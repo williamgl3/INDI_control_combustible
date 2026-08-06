@@ -7,6 +7,7 @@ import '../../core/session_provider.dart';
 import '../../models/solicitud_autorizacion.dart';
 import '../../models/vehiculo.dart';
 import '../../router/route_paths.dart';
+import '../../theme/app_breakpoints.dart';
 import '../../theme/app_section_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
@@ -14,14 +15,15 @@ import '../../widgets/brand_sub_header.dart';
 import '../../widgets/estado_solicitud_badge.dart';
 import '../../widgets/estado_vacio.dart';
 import '../../widgets/fecha_formato.dart';
+import '../../widgets/contenido_responsivo.dart';
 import '../../widgets/ios_segmented_control.dart';
-import '../../widgets/responsive_scroll_view.dart';
 import '../../widgets/section_label.dart';
+import '../../widgets/sidebar_chofer.dart';
 import '../../widgets/stat_tile.dart';
 import '../../widgets/stat_tile_row.dart';
 import 'detalle_solicitud_dialog.dart';
 
-enum _FiltroEstado { todas, pendientes, aprobadas, rechazadas }
+enum _FiltroEstado { todas, pendientes, autorizadas, ajustadas, rechazadas }
 
 /// Historial completo de las solicitudes del chofer, con filtro por
 /// estado — antes solo se veían las últimas en "Actividad reciente" del
@@ -43,13 +45,18 @@ class MisSolicitudesScreen extends ConsumerStatefulWidget {
 }
 
 class _MisSolicitudesScreenState extends ConsumerState<MisSolicitudesScreen> {
+  /// "Historial" (índice 2) — el destino del sidebar que representa esta
+  /// pantalla, usado solo en la ruta standalone (fuera del shell).
+  static const _indiceSidebar = 2;
+
   _FiltroEstado _filtroVista = _FiltroEstado.todas;
 
-  EstadoSolicitud? get _filtro => switch (_filtroVista) {
+  EstadoVisualSolicitud? get _filtro => switch (_filtroVista) {
     _FiltroEstado.todas => null,
-    _FiltroEstado.pendientes => EstadoSolicitud.pendiente,
-    _FiltroEstado.aprobadas => EstadoSolicitud.aprobada,
-    _FiltroEstado.rechazadas => EstadoSolicitud.rechazada,
+    _FiltroEstado.pendientes => EstadoVisualSolicitud.pendiente,
+    _FiltroEstado.autorizadas => EstadoVisualSolicitud.autorizada,
+    _FiltroEstado.ajustadas => EstadoVisualSolicitud.ajustada,
+    _FiltroEstado.rechazadas => EstadoVisualSolicitud.rechazada,
   };
 
   @override
@@ -76,7 +83,7 @@ class _MisSolicitudesScreenState extends ConsumerState<MisSolicitudesScreen> {
 
     final filtradas = _filtro == null
         ? solicitudes
-        : solicitudes.where((s) => s.estado == _filtro).toList();
+        : solicitudes.where((s) => s.estadoVisual == _filtro).toList();
 
     final listaSolicitudes = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -102,17 +109,22 @@ class _MisSolicitudesScreenState extends ConsumerState<MisSolicitudesScreen> {
               etiqueta: 'L autorizados',
               color: AppSectionColors.autorizaciones,
               onTap: () =>
-                  setState(() => _filtroVista = _FiltroEstado.aprobadas),
+                  setState(() => _filtroVista = _FiltroEstado.autorizadas),
             ),
           ],
         ),
         const SizedBox(height: 20),
+        // 5 opciones en vez de 4 — mismo caso que el filtro de
+        // Mantenimiento (ver doc de `IosSegmentedControl`): si no caben en
+        // móvil, el control ya se envuelve en scroll horizontal en vez de
+        // truncarse, sin que haga falta ningún ajuste aquí.
         IosSegmentedControl<_FiltroEstado>(
           valor: _filtroVista,
           opciones: const {
             _FiltroEstado.todas: 'Todas',
             _FiltroEstado.pendientes: 'Pendientes',
-            _FiltroEstado.aprobadas: 'Aprobadas',
+            _FiltroEstado.autorizadas: 'Autorizadas',
+            _FiltroEstado.ajustadas: 'Ajustadas',
             _FiltroEstado.rechazadas: 'Rechazadas',
           },
           onChanged: (f) => setState(() => _filtroVista = f),
@@ -126,7 +138,7 @@ class _MisSolicitudesScreenState extends ConsumerState<MisSolicitudesScreen> {
                 : 'No hay solicitudes con este filtro.',
             textoAccion: _filtro == null ? 'Solicitar carga' : null,
             onAccion: _filtro == null
-                ? () => context.push(RoutePaths.choferSolicitar)
+                ? () => context.push(RoutePaths.choferTipoOperacion)
                 : null,
           )
         else
@@ -161,40 +173,59 @@ class _MisSolicitudesScreenState extends ConsumerState<MisSolicitudesScreen> {
     );
 
     if (widget.mostrarComoTab) {
+      // Mismo criterio que Inicio: el encabezado (banner de marca a todo
+      // el ancho) va fuera de `ContenidoResponsivo`, para que no se encoja
+      // como el resto del contenido — antes quedaba metido dentro del
+      // scroll y se veía angosto y centrado, a diferencia de Inicio/Solicitar.
       return SafeArea(
-        child: ResponsiveScrollView(
-          maxWidth: 900,
-          padding: EdgeInsets.zero,
-          child: Column(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            encabezado,
+            Expanded(
+              child: ContenidoResponsivo(child: listaSolicitudes),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final contenidoStandalone = Column(
+      children: [
+        encabezado,
+        Expanded(
+          child: SafeArea(
+            top: false,
+            child: ContenidoResponsivo(child: listaSolicitudes),
+          ),
+        ),
+      ],
+    );
+
+    // Ruta standalone (fuera del `IndexedStack` de `ChoferHomeShell` — se
+    // llega aquí, por ejemplo, desde el sidebar de otra pantalla de
+    // chofer). Sin el shell alrededor, necesita su propio sidebar en
+    // pantallas anchas — mismo patrón que `TipoOperacionScreen`/
+    // `SubirEvidenciasScreen`.
+    if (AppBreakpoints.isTabletOrDesktop(MediaQuery.sizeOf(context).width)) {
+      return Scaffold(
+        body: SafeArea(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              encabezado,
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: listaSolicitudes,
+              SidebarChofer(
+                indiceSeleccionado: _indiceSidebar,
+                onSeleccionar: (i) =>
+                    navegarDesdeSidebarChofer(context, _indiceSidebar, i),
               ),
+              Expanded(child: contenidoStandalone),
             ],
           ),
         ),
       );
     }
 
-    return Scaffold(
-      body: Column(
-        children: [
-          encabezado,
-          Expanded(
-            child: SafeArea(
-              top: false,
-              child: ResponsiveScrollView(
-                maxWidth: 900,
-                child: listaSolicitudes,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    return Scaffold(body: contenidoStandalone);
   }
 }
 
@@ -207,7 +238,7 @@ class _SolicitudTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final identificadorVehiculo = vehiculo?.identificador;
+    final identificadorVehiculo = vehiculo?.etiquetaUnidad;
 
     return AppCard(
       onTap: () => DetalleSolicitudDialog.show(
@@ -280,7 +311,7 @@ class _SolicitudTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          EstadoSolicitudBadge(estado: solicitud.estado),
+          EstadoSolicitudBadge(estadoVisual: solicitud.estadoVisual),
         ],
       ),
     );

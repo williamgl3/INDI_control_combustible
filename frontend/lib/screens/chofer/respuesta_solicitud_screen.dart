@@ -4,11 +4,11 @@ import 'package:go_router/go_router.dart';
 import '../../models/solicitud_autorizacion.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_motion.dart';
-import '../../theme/app_radii.dart';
 import '../../theme/app_text_styles.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_card.dart';
 import '../../widgets/fecha_formato.dart';
-import '../../widgets/responsive_scroll_view.dart';
+import '../../widgets/contenido_responsivo.dart';
 
 /// Muestra el resultado de una [SolicitudAutorizacion] recién creada.
 /// Llega vía `state.extra` desde /chofer/solicitar. Puede estar ya
@@ -42,8 +42,7 @@ class RespuestaSolicitudScreen extends StatelessWidget {
 
     return Scaffold(
       body: SafeArea(
-        child: ResponsiveScrollView(
-          maxWidth: 420,
+        child: ContenidoResponsivo(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -81,13 +80,9 @@ class RespuestaSolicitudScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               if (solicitud.estado == EstadoSolicitud.aprobada)
-                Container(
-                  width: double.infinity,
+                AppCard(
+                  floating: true,
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: colors.surfaceAlt,
-                    borderRadius: AppRadii.cardRadius,
-                  ),
                   child: Column(
                     children: [
                       if (solicitud.litrosAutorizados != null &&

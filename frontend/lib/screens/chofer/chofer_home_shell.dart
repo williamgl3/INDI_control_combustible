@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../router/route_paths.dart';
+import '../../theme/app_breakpoints.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/chofer_mobile_wrapper.dart';
+import '../../widgets/sidebar_chofer.dart';
 import 'chofer_home_screen.dart';
 import 'mi_perfil_screen.dart';
 import 'mis_solicitudes_screen.dart';
@@ -33,7 +35,7 @@ class _ChoferHomeShellState extends ConsumerState<ChoferHomeShell> {
   void _onDestinationSelected(int index) {
     if (index == 1) {
       // "Solicitar" es navegación directa, no cambia el tab seleccionado.
-      context.push(RoutePaths.choferSolicitar);
+      context.push(RoutePaths.choferTipoOperacion);
       return;
     }
     setState(() => _indice = index);
@@ -41,17 +43,36 @@ class _ChoferHomeShellState extends ConsumerState<ChoferHomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    final visibleIndex = _indice >= 1 ? _indice : _indice;
+    final ancho = MediaQuery.sizeOf(context).width;
+    final esAncho = AppBreakpoints.isTabletOrDesktop(ancho);
 
-    return Scaffold(
-      body: SafeArea(
-        child: ChoferMobileWrapper(
-          child: IndexedStack(
-            index: visibleIndex,
-            children: _paginas,
+    final paginas = IndexedStack(index: _indice, children: _paginas);
+
+    if (esAncho) {
+      // Sin `ChoferMobileWrapper` aquí: con el sidebar ya dando la
+      // experiencia de escritorio, envolver el contenido en el simulador
+      // de "ancho de teléfono" (480px) lo apretaba a todos por igual
+      // -incluido Inicio-, solo que se notaba menos ahí que en
+      // Historial/Evidencias. Cada pantalla controla su propio ancho
+      // máximo con `ResponsiveScrollView` (mismo criterio en las 4).
+      return Scaffold(
+        body: SafeArea(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SidebarChofer(
+                indiceSeleccionado: _indice,
+                onSeleccionar: _onDestinationSelected,
+              ),
+              Expanded(child: paginas),
+            ],
           ),
         ),
-      ),
+      );
+    }
+
+    return Scaffold(
+      body: SafeArea(child: ChoferMobileWrapper(child: paginas)),
       bottomNavigationBar: _BottomNavChofer(
         indiceSeleccionado: _indice,
         onSeleccionar: _onDestinationSelected,
@@ -80,32 +101,13 @@ class _BottomNavChofer extends StatelessWidget {
       indicatorColor: colors.primary.withValues(alpha: 0.12),
       height: 64,
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home_rounded),
-          label: 'Inicio',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.local_gas_station_outlined),
-          selectedIcon: Icon(Icons.local_gas_station_rounded),
-          label: 'Solicitar',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.history_outlined),
-          selectedIcon: Icon(Icons.history_rounded),
-          label: 'Historial',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.camera_alt_outlined),
-          selectedIcon: Icon(Icons.camera_alt_rounded),
-          label: 'Evidencias',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.person_outline),
-          selectedIcon: Icon(Icons.person_rounded),
-          label: 'Perfil',
-        ),
+      destinations: [
+        for (final d in destinosChofer)
+          NavigationDestination(
+            icon: Icon(d.icono),
+            selectedIcon: Icon(d.iconoSeleccionado),
+            label: d.etiqueta,
+          ),
       ],
     );
   }

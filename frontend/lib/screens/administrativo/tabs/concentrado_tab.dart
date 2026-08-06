@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
 import '../../../core/semana_util.dart';
+import '../../../models/carga.dart';
+import '../../../models/evidencia.dart';
+import '../../../models/solicitud_autorizacion.dart';
 import '../../../theme/app_motion.dart';
 import '../../../theme/app_radii.dart';
 import '../../../theme/app_theme.dart';
@@ -12,10 +15,100 @@ import '../../../widgets/fecha_formato.dart';
 import '../../../widgets/filtro_columna_boton.dart';
 import '../../../widgets/formato_numero.dart';
 import '../../../widgets/ios_segmented_control.dart';
-import '../../../widgets/responsive_scroll_view.dart';
+import '../../../widgets/contenido_responsivo.dart';
 import 'concentrado_csv.dart';
 
 enum _Periodo { dia, semana, mes, anio }
+
+typedef _Gasto = ({double? precioPorLitro, double? importe, FuenteGasto fuente});
+
+/// Resuelve, para CADA carga, de dónde sale su gasto — jerarquía completa
+/// en [FuenteGasto]. Nunca recalcula contra el precio de HOY (ese era el
+/// bug de este archivo, ver migración 0029): la fuente es siempre una
+/// evidencia real capturada por el chofer, o el snapshot de referencia
+/// congelado al momento de la carga (`carga.costoReferencia`).
+///
+/// Sobre TODAS las cargas/evidencias (no solo las del periodo elegido en
+/// pantalla) — la ambigüedad "esta solicitud tiene más de una carga" es
+/// una propiedad de los datos, no debe cambiar según qué periodo esté
+/// viendo el admin en este momento.
+Map<String, _Gasto> _resolverGastoPorCarga({
+  required List<Carga> todasLasCargas,
+  required List<Evidencia> todasLasEvidencias,
+  required List<SolicitudAutorizacion> todasLasSolicitudes,
+}) {
+  final evidenciasComprobante = todasLasEvidencias.where(
+    (e) => e.tipo == TipoEvidencia.comprobante && e.montoPagado != null,
+  );
+
+  final evidenciasPorCarga = <String, List<Evidencia>>{};
+  final evidenciasPorSolicitud = <String, List<Evidencia>>{};
+  for (final e in evidenciasComprobante) {
+    if (e.cargaId != null) {
+      evidenciasPorCarga.putIfAbsent(e.cargaId!, () => []).add(e);
+    } else if (e.folioId != null) {
+      evidenciasPorSolicitud.putIfAbsent(e.folioId!, () => []).add(e);
+    }
+  }
+
+  // `carga.folioAutorizacion` es el folio TEXTO (ej. "FA-0042");
+  // `evidencia.folioId` es el id (uuid) de la SOLICITUD — son
+  // identificadores distintos del mismo folio, hace falta este puente.
+  final solicitudIdPorFolio = {
+    for (final s in todasLasSolicitudes)
+      if (s.folioAutorizacion != null) s.folioAutorizacion!: s.id,
+  };
+
+  // Cuántas cargas comparten cada folio — si son 2+, "hay una sola
+  // evidencia para el folio" ya no basta para saber a CUÁL le pertenece.
+  final cargasPorFolio = <String, int>{};
+  for (final c in todasLasCargas) {
+    cargasPorFolio[c.folioAutorizacion] = (cargasPorFolio[c.folioAutorizacion] ?? 0) + 1;
+  }
+
+  return {
+    for (final carga in todasLasCargas)
+      carga.id: () {
+        // 1. Evidencia vinculada DIRECTO a esta carga — gasto real, sin
+        //    ambigüedad posible (la FK ya identifica la carga exacta).
+        final porCarga = evidenciasPorCarga[carga.id];
+        if (porCarga != null && porCarga.length == 1) {
+          final e = porCarga.single;
+          return (precioPorLitro: e.precioPorLitro, importe: e.montoPagado, fuente: FuenteGasto.real);
+        }
+
+        // 2. Exactamente una evidencia comprobante para el folio de esta
+        //    carga, Y esta carga es la única con ese folio — se infiere
+        //    que es la de esta carga.
+        final solicitudId = solicitudIdPorFolio[carga.folioAutorizacion];
+        final porSolicitud = solicitudId == null ? null : evidenciasPorSolicitud[solicitudId];
+        final folioSinAmbiguedad = (cargasPorFolio[carga.folioAutorizacion] ?? 0) <= 1;
+        if (porSolicitud != null && porSolicitud.length == 1 && folioSinAmbiguedad) {
+          final e = porSolicitud.single;
+          return (
+            precioPorLitro: e.precioPorLitro,
+            importe: e.montoPagado,
+            fuente: FuenteGasto.inferidoPorFolio,
+          );
+        }
+
+        // 3. Ambiguo (N cargas o M evidencias sobre el mismo folio) o sin
+        //    evidencia todavía — snapshot de referencia congelado al
+        //    momento de la carga, nunca el precio de hoy.
+        if (carga.costoReferencia != null) {
+          return (
+            precioPorLitro: carga.precioReferenciaPorLitro,
+            importe: carga.costoReferencia,
+            fuente: FuenteGasto.estimado,
+          );
+        }
+
+        // 4. Sin snapshot posible (vehículo sin tipoCombustible
+        //    confirmado) — nunca 0, "—" en la UI.
+        return (precioPorLitro: null, importe: null, fuente: FuenteGasto.sinDato);
+      }(),
+  };
+}
 
 /// Pestaña "Concentrado": tabla de todas las cargas de combustible,
 /// filtrable por periodo Y por columna (chofer, vehículo, combustible,
@@ -107,25 +200,26 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
         .where((c) => _dentroDelPeriodo(c.creadaEn, hoy))
         .toList();
 
+    final gastoPorCarga = _resolverGastoPorCarga(
+      todasLasCargas: repo.todasLasCargas,
+      todasLasEvidencias: ref.watch(evidenciasRepositoryProvider).todasLasEvidencias,
+      todasLasSolicitudes: repo.todasLasSolicitudes,
+    );
+
     final filasDelPeriodo = cargasDelPeriodo.map((carga) {
       final cierre = repo.cierreDe(carga);
       final chofer = choferesPorId[carga.choferId];
       final vehiculo = vehiculosRepo.porId(carga.vehiculoId);
-      final precioPorLitro = vehiculo == null
-          ? 0.0
-          : repo.precios
-                .firstWhere(
-                  (p) => p.tipoCombustible == vehiculo.tipoCombustible,
-                  orElse: () => repo.precios.first,
-                )
-                .precioPorLitro;
+      final gasto = gastoPorCarga[carga.id]!;
       return FilaConcentrado(
         carga: carga,
         cierre: cierre,
         chofer: chofer,
         vehiculo: vehiculo,
         rendimiento: cierre == null ? null : repo.rendimientoDe(cierre),
-        precioPorLitro: precioPorLitro,
+        precioPorLitro: gasto.precioPorLitro,
+        importe: gasto.importe,
+        fuenteGasto: gasto.fuente,
       );
     }).toList();
 
@@ -138,11 +232,11 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
     }.toList()..sort();
     final opcionesVehiculo = {
       for (final f in filasDelPeriodo)
-        if (f.vehiculo != null) f.vehiculo!.identificador,
+        if (f.vehiculo != null) f.vehiculo!.etiquetaUnidad,
     }.toList()..sort();
     final opcionesCombustible = {
       for (final f in filasDelPeriodo)
-        if (f.vehiculo != null) f.vehiculo!.tipoCombustible,
+        if (f.vehiculo?.tipoCombustible != null) f.vehiculo!.tipoCombustible!,
     }.toList()..sort();
 
     final filas = filasDelPeriodo.where((f) {
@@ -151,7 +245,7 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
         return false;
       }
       if (_filtroVehiculos.isNotEmpty &&
-          !_filtroVehiculos.contains(f.vehiculo?.identificador)) {
+          !_filtroVehiculos.contains(f.vehiculo?.etiquetaUnidad)) {
         return false;
       }
       if (_filtroCombustibles.isNotEmpty &&
@@ -166,14 +260,14 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
     }).toList();
 
     final totalLitros = filas.fold(0.0, (s, f) => s + f.carga.litrosCargados);
-    final totalImporte = filas.fold(0.0, (s, f) => s + f.importe);
+    final totalImporte = filas.fold(0.0, (s, f) => s + (f.importe ?? 0));
     final hayFiltrosDeColumna =
         _filtroChoferes.isNotEmpty ||
         _filtroVehiculos.isNotEmpty ||
         _filtroCombustibles.isNotEmpty ||
         _filtroTicket.isNotEmpty;
 
-    return ResponsiveScrollView(
+    return ContenidoResponsivo(
       maxWidth: 1300,
       primary: false,
       physics: const ClampingScrollPhysics(),
@@ -389,7 +483,7 @@ class _TablaConcentrado extends StatelessWidget {
           Flexible(
             child: Text(texto, style: estiloEncabezado, overflow: TextOverflow.ellipsis),
           ),
-          if (filtro != null) filtro,
+          ?filtro,
         ],
       );
     }
@@ -488,7 +582,7 @@ class _TablaConcentrado extends StatelessWidget {
                     ),
                     _celdaTexto(
                       context,
-                      fila.vehiculo?.identificador ?? '—',
+                      fila.vehiculo?.etiquetaUnidad ?? '—',
                     ),
                     CeldaEditable(
                       valor: fila.carga.kmAlCargar,
@@ -516,9 +610,27 @@ class _TablaConcentrado extends StatelessWidget {
                           ? 'n/a'
                           : fila.rendimiento!.rendimiento!.toStringAsFixed(1),
                     ),
-                    _celdaTexto(context, fila.precioPorLitro.toStringAsFixed(2)),
+                    // 'estimado' se marca con color muted — es un
+                    // snapshot de referencia, no el gasto real pagado en
+                    // el ticket (ver FuenteGasto). Nunca se muestra "0"
+                    // cuando no hubo snapshot posible (sinDato) — "—".
+                    _celdaTexto(
+                      context,
+                      fila.precioPorLitro?.toStringAsFixed(2) ?? '—',
+                      color: fila.fuenteGasto == FuenteGasto.estimado
+                          ? colors.textMuted
+                          : null,
+                    ),
                     _celdaTexto(context, fila.vehiculo?.tipoCombustible ?? '—'),
-                    _celdaTexto(context, formatearMonedaDecimal(fila.importe)),
+                    _celdaTexto(
+                      context,
+                      fila.importe == null
+                          ? '—'
+                          : '${fila.fuenteGasto == FuenteGasto.estimado ? "~" : ""}${formatearMonedaDecimal(fila.importe!)}',
+                      color: fila.fuenteGasto == FuenteGasto.estimado
+                          ? colors.textMuted
+                          : null,
+                    ),
                     _celdaTexto(
                       context,
                       fila.ticketPendiente ? 'pend.' : '✓',

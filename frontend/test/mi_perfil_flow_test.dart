@@ -30,7 +30,10 @@ void main() {
     await tester.tap(find.text('Perfil'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Juan Pérez'), findsOneWidget);
+    // `findsWidgets` (no `findsOneWidget`): en viewports anchos aparece el
+    // sidebar de escritorio, que también muestra el nombre del chofer
+    // además del título de la propia pantalla de perfil.
+    expect(find.text('Juan Pérez'), findsWidgets);
 
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Contraseña actual'),

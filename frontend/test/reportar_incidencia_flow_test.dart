@@ -55,7 +55,9 @@ void main() {
         find.widgetWithText(FloatingActionButton, 'Solicitar carga'),
       );
       await tester.pumpAndSettle();
-      await _elegirVehiculo(tester, 'Vehículo · ABC-123');
+      await tester.tap(find.text('Vehículo Ligero'));
+      await tester.pumpAndSettle();
+      await _elegirVehiculo(tester, 'ABC-123-A');
       await tester.pumpAndSettle();
 
       // Sin historial todavía, el vehículo cae en "sin datos" — se ofrece
@@ -83,6 +85,10 @@ void main() {
 
       // Vuelve a /chofer y entra como admin en una sesión nueva.
       // "Cerrar sesión" del chofer está en la pestaña Perfil del bottom nav.
+      // Dos pantallas de por medio ahora (TipoOperacionScreen +
+      // SolicitarCargaScreen), así que hacen falta dos "back".
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.arrow_back));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Perfil'));

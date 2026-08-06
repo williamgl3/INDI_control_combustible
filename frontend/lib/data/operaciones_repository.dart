@@ -91,6 +91,9 @@ abstract class OperacionesRepository {
     required String choferId,
     required String vehiculoId,
     required String folioAutorizacion,
+    /// Folios extra de la misma visita — ej. la carga a granel de la
+    /// marimba, pagada con varios folios de una sola vez.
+    List<String>? foliosAdicionales,
     required double litrosCargados,
     required double kmAlCargar,
     required String gasolinera,

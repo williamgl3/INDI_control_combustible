@@ -6,8 +6,7 @@ import 'package:indi_combustible/models/vehiculo.dart';
 ///
 /// El vehículo ya NO es un dato fijo del chofer — se elige en cada
 /// solicitud/comprobación de carga, porque varios choferes pueden usar
-/// distintas unidades en días distintos. El tope semanal vive aquí, en
-/// el vehículo, no en el chofer.
+/// distintas unidades en días distintos.
 ///
 /// Útil para tests de widgets y como referencia de la interfaz que
 /// implementa `ApiVehiculosRepository`.
@@ -18,9 +17,9 @@ class MockVehiculosRepository implements VehiculosRepository {
         id: 'veh-1',
         tipoUnidad: 'Vehículo',
         modelo: 'Chevrolet NPR 2020',
-        identificador: 'ABC-123',
+        placas: 'ABC-123-A',
+        numeroEconomico: null,
         tipoCombustible: 'Diésel',
-        topeSemanal: 500,
         intervaloServicio: intervaloServicioPorDefecto('Vehículo'),
       ),
     );
@@ -47,9 +46,9 @@ class MockVehiculosRepository implements VehiculosRepository {
   @override
   Future<Vehiculo> crear({
     required String tipoUnidad,
-    required String identificador,
-    required String tipoCombustible,
-    required double topeSemanal,
+    String? placas,
+    String? numeroEconomico,
+    String? tipoCombustible,
     String? modelo,
     double? intervaloServicio,
   }) async {
@@ -57,9 +56,11 @@ class MockVehiculosRepository implements VehiculosRepository {
     final vehiculo = Vehiculo(
       id: 'veh-${_idSeq++}',
       tipoUnidad: tipoUnidad,
-      identificador: identificador,
+      placas: (placas == null || placas.isEmpty) ? null : placas,
+      numeroEconomico: (numeroEconomico == null || numeroEconomico.isEmpty)
+          ? null
+          : numeroEconomico,
       tipoCombustible: tipoCombustible,
-      topeSemanal: topeSemanal,
       modelo: modelo,
       intervaloServicio:
           intervaloServicio ?? intervaloServicioPorDefecto(tipoUnidad),
@@ -71,14 +72,17 @@ class MockVehiculosRepository implements VehiculosRepository {
   @override
   Future<Vehiculo> reportarNuevo({
     required String tipoUnidad,
-    required String identificador,
+    String? placas,
+    String? numeroEconomico,
     required String tipoCombustible,
+    required String modelo,
   }) async {
     return crear(
       tipoUnidad: tipoUnidad,
-      identificador: identificador,
+      placas: placas,
+      numeroEconomico: numeroEconomico,
       tipoCombustible: tipoCombustible,
-      topeSemanal: 0,
+      modelo: modelo,
     );
   }
 
@@ -86,19 +90,24 @@ class MockVehiculosRepository implements VehiculosRepository {
   Future<Vehiculo> actualizar({
     required String id,
     String? tipoUnidad,
-    String? identificador,
+    String? placas,
+    String? numeroEconomico,
     String? tipoCombustible,
-    double? topeSemanal,
     String? modelo,
     double? intervaloServicio,
   }) async {
     await Future.delayed(const Duration(milliseconds: 300));
     final indice = _vehiculos.indexWhere((v) => v.id == id);
-    final actualizado = _vehiculos[indice].copyWith(
+    final actual = _vehiculos[indice];
+    final actualizado = actual.copyWith(
       tipoUnidad: tipoUnidad,
-      identificador: identificador,
+      placas: placas == null
+          ? actual.placas
+          : (placas.isEmpty ? null : placas),
+      numeroEconomico: numeroEconomico == null
+          ? actual.numeroEconomico
+          : (numeroEconomico.isEmpty ? null : numeroEconomico),
       tipoCombustible: tipoCombustible,
-      topeSemanal: topeSemanal,
       modelo: modelo,
       intervaloServicio: intervaloServicio,
     );
@@ -120,5 +129,15 @@ class MockVehiculosRepository implements VehiculosRepository {
     );
     _vehiculos[indice] = actualizado;
     return actualizado;
+  }
+
+  @override
+  Future<void> cambiarEstado({
+    required String id,
+    required bool activo,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    final indice = _vehiculos.indexWhere((v) => v.id == id);
+    _vehiculos[indice] = _vehiculos[indice].copyWith(activo: activo);
   }
 }

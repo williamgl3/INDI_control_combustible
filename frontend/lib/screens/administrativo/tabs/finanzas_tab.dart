@@ -5,13 +5,15 @@ import '../../../core/providers.dart';
 import '../../../models/solicitud_autorizacion.dart';
 import '../../../theme/app_section_colors.dart';
 import '../../../theme/app_theme.dart';
+import '../../../theme/app_radii.dart';
 import '../../../widgets/barra_presupuesto.dart';
 import '../../../widgets/celda_editable.dart';
 import '../../../widgets/formato_numero.dart';
 import '../../../widgets/grouped_section.dart';
-import '../../../widgets/responsive_scroll_view.dart';
+import '../../../widgets/contenido_responsivo.dart';
 import '../../../widgets/stat_tile.dart';
 import '../../../widgets/stat_tile_row.dart';
+import '../editar_presupuesto_dialog.dart';
 
 /// Pestaña "Finanzas": presupuesto semanal y precios de combustible
 /// vigentes — ambos editables directo en la fila (estilo hoja de
@@ -24,6 +26,18 @@ class FinanzasTab extends ConsumerStatefulWidget {
 }
 
 class _FinanzasTabState extends ConsumerState<FinanzasTab> {
+  Future<void> _editarPresupuesto(double valorActual) async {
+    final guardado = await EditarPresupuestoDialog.show(
+      context,
+      valorActual: valorActual,
+    );
+    if (guardado == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Presupuesto actualizado correctamente.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -38,7 +52,7 @@ class _FinanzasTabState extends ConsumerState<FinanzasTab> {
       (suma, s) => suma + (s.litrosAutorizados ?? s.litrosSolicitados),
     );
 
-    return ResponsiveScrollView(
+    return ContenidoResponsivo(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -59,17 +73,32 @@ class _FinanzasTabState extends ConsumerState<FinanzasTab> {
                 subtitulo: 'Toca el monto para cambiarlo',
                 icono: Icons.account_balance_wallet_outlined,
                 iconoColor: AppSectionColors.finanzas,
-                trailing: CeldaEditable(
-                  valor: repo.presupuestoSemanalTotal,
-                  prefijo: '\$',
-                  decimales: 0,
-                  estilo: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(color: colors.primary),
-                  onGuardar: (nuevo) async {
-                    await repo.actualizarPresupuestoSemanalTotal(nuevo);
-                    ref.read(operacionesTickProvider.notifier).state++;
-                  },
+                trailing: InkWell(
+                  borderRadius: AppRadii.inputRadius,
+                  onTap: () =>
+                      _editarPresupuesto(repo.presupuestoSemanalTotal),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          formatearMoneda(repo.presupuestoSemanalTotal),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(color: colors.primary),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.edit_outlined,
+                          size: 16,
+                          color: colors.primary,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],

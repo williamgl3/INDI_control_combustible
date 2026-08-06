@@ -106,13 +106,14 @@ class _DetalleSolicitudDialogState
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-              EstadoSolicitudBadge(estado: s.estado),
+              EstadoSolicitudBadge(estadoVisual: s.estadoVisual),
             ],
           ),
           const SizedBox(height: 4),
           if (widget.vehiculo != null)
             Text(
-              '${widget.vehiculo!.tipoUnidad} · ${widget.vehiculo!.identificador}',
+              '${widget.vehiculo!.tipoUnidad} · '
+                  '${widget.vehiculo!.etiquetaCompleta ?? widget.vehiculo!.etiquetaUnidad}',
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),

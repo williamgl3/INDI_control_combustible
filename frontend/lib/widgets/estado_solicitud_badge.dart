@@ -5,19 +5,28 @@ import '../theme/app_radii.dart';
 import '../theme/app_theme.dart';
 
 /// Pill de estado reutilizado en las listas de solicitudes de chofer y
-/// del panel administrativo.
+/// del panel administrativo. Toma el estado ya derivado
+/// ([EstadoVisualSolicitud], ver `SolicitudAutorizacion.estadoVisual`) en
+/// vez del [EstadoSolicitud] crudo, para que "autorizado completo" y
+/// "autorizado con recorte" se vean distinguibles en un solo vistazo —
+/// antes ambos casos caían en el mismo badge verde "Autorizado".
 class EstadoSolicitudBadge extends StatelessWidget {
-  const EstadoSolicitudBadge({super.key, required this.estado});
+  const EstadoSolicitudBadge({super.key, required this.estadoVisual});
 
-  final EstadoSolicitud estado;
+  final EstadoVisualSolicitud estadoVisual;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final (color, texto) = switch (estado) {
-      EstadoSolicitud.pendiente => (colors.warning, 'En espera'),
-      EstadoSolicitud.aprobada => (colors.success, 'Autorizado'),
-      EstadoSolicitud.rechazada => (colors.error, 'Rechazado'),
+    final (color, texto) = switch (estadoVisual) {
+      EstadoVisualSolicitud.pendiente => (colors.warning, 'En espera'),
+      EstadoVisualSolicitud.autorizada => (colors.success, 'Autorizado'),
+      // Mismo tono que "En espera" (ámbar = advertencia en la paleta
+      // semántica de la app) — se distinguen por el texto, no por el
+      // color: "ajustado" no es un error, es información que el chofer
+      // debe notar antes de ir a cargar.
+      EstadoVisualSolicitud.ajustada => (colors.warning, 'Ajustado'),
+      EstadoVisualSolicitud.rechazada => (colors.error, 'Rechazado'),
     };
 
     return Semantics(

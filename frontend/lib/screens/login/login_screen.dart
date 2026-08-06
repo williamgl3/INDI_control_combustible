@@ -73,6 +73,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return AuthScreenShell(
       titulo: null,
       subtitulo: null,
+      centrarContenido: false,
       child: AutofillGroup(
         child: Form(
           key: _formKey,
@@ -151,9 +152,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
               ),
               const SizedBox(height: AppSpacing.xxl),
-              _BloqueAccesosAlternos(
-                onRegistroChofer: () => context.go(RoutePaths.registroChofer),
-                onAccesoAdministrador: () => AdminLoginDialog.show(context),
+              _AccesoAdministradorButton(
+                onTap: () => AdminLoginDialog.show(context),
               ),
               const SizedBox(height: AppSpacing.xxl),
               const _TextoLegal(),
@@ -166,9 +166,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 }
 
 /// "¿No tienes cuenta? Regístrate" — acceso rápido justo debajo del botón
-/// de login; el flujo completo de registro ya vive más abajo en
-/// [_BloqueAccesosAlternos] (la card "¿Eres chofer y no tienes cuenta?"),
-/// este es solo el atajo corto que ya se espera ver pegado al botón.
+/// de login, navega a la pantalla de registro de chofer.
 class _EnlaceRegistro extends StatelessWidget {
   const _EnlaceRegistro({required this.onTap});
 
@@ -281,46 +279,6 @@ class _TextoLegalState extends State<_TextoLegal> {
   }
 }
 
-class _BloqueAccesosAlternos extends StatelessWidget {
-  const _BloqueAccesosAlternos({
-    required this.onRegistroChofer,
-    required this.onAccesoAdministrador,
-  });
-
-  final VoidCallback onRegistroChofer;
-  final VoidCallback onAccesoAdministrador;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(child: Divider(color: colors.border)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              child: Text(
-                'Más opciones',
-                style: Theme.of(
-                  context,
-                ).textTheme.labelMedium?.copyWith(color: colors.textMuted),
-              ),
-            ),
-            Expanded(child: Divider(color: colors.border)),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        _RegistroChoferButton(onTap: onRegistroChofer),
-        const SizedBox(height: AppSpacing.sm),
-        _AccesoAdministradorButton(onTap: onAccesoAdministrador),
-      ],
-    );
-  }
-}
-
 class _AccesoAdministradorButton extends StatelessWidget {
   const _AccesoAdministradorButton({required this.onTap});
   final VoidCallback onTap;
@@ -344,67 +302,6 @@ class _AccesoAdministradorButton extends StatelessWidget {
         style: Theme.of(
           context,
         ).textTheme.labelLarge?.copyWith(color: colors.textSecondary),
-      ),
-    );
-  }
-}
-
-class _RegistroChoferButton extends StatelessWidget {
-  const _RegistroChoferButton({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    return Material(
-      color: Colors.transparent,
-      borderRadius: AppRadii.cardRadius,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadii.cardRadius,
-        hoverColor: colors.surfaceAlt,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.lg,
-            vertical: AppSpacing.md,
-          ),
-          decoration: BoxDecoration(
-            color: colors.surface,
-            borderRadius: AppRadii.cardRadius,
-            border: Border.all(color: colors.border),
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: colors.primary.withValues(alpha: 0.12),
-                child: Icon(Icons.person_add_alt_1, color: colors.primary),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '¿Eres chofer y no tienes cuenta?',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: colors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'Regístrate en un minuto para solicitar cargas.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.arrow_forward, color: colors.primary),
-            ],
-          ),
-        ),
       ),
     );
   }

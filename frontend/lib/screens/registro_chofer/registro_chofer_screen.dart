@@ -114,9 +114,7 @@ class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
           .registrarChofer(
             nombre: _nombreController.text.trim(),
             apellidoPaterno: _apellidoPaternoController.text.trim(),
-            apellidoMaterno: _apellidoMaternoController.text.trim().isEmpty
-                ? null
-                : _apellidoMaternoController.text.trim(),
+            apellidoMaterno: _apellidoMaternoController.text.trim(),
             correo: _correoController.text.trim(),
             usuario: _usuarioController.text.trim(),
             password: _passwordController.text,
@@ -189,16 +187,19 @@ class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
               labelText: 'Apellido paterno',
               prefixIcon: Icon(Icons.badge_outlined),
             ),
-            validator: Validators.nombre,
+            validator: (v) =>
+                Validators.apellido(v, etiqueta: 'El apellido paterno'),
             textInputAction: TextInputAction.next,
           ),
           const SizedBox(height: 16),
           TextFormField(
             controller: _apellidoMaternoController,
             decoration: const InputDecoration(
-              labelText: 'Apellido materno (opcional)',
+              labelText: 'Apellido materno',
               prefixIcon: Icon(Icons.badge_outlined),
             ),
+            validator: (v) =>
+                Validators.apellido(v, etiqueta: 'El apellido materno'),
             textInputAction: TextInputAction.next,
           ),
           const SizedBox(height: 16),

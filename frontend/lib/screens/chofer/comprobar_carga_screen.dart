@@ -12,14 +12,13 @@ import '../../core/ticket_ocr_service.dart';
 import '../../data/api_client.dart';
 import '../../models/vehiculo.dart';
 import '../../router/route_paths.dart';
-import '../../theme/app_breakpoints.dart';
-import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_card.dart';
 import '../../widgets/app_elevated_button.dart';
 import '../../widgets/aviso_error.dart';
 import '../../widgets/captura_foto_field.dart';
 import '../../widgets/confirmar_fotos_dialog.dart';
-import '../../widgets/responsive_scroll_view.dart';
+import '../../widgets/contenido_responsivo.dart';
 import '../../widgets/selector_vehiculo.dart';
 import '../../widgets/sin_conexion_dialog.dart';
 import '../../widgets/stepper_numerico.dart';
@@ -238,18 +237,14 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
         leading: BackButton(onPressed: () => context.go(RoutePaths.chofer)),
       ),
       body: SafeArea(
-        child: ResponsiveScrollView(
-          maxWidth: AppBreakpoints.contentMaxWidth,
+        child: ContenidoResponsivo(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
+              AppCard(
+                floating: true,
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: colors.surfaceAlt,
-                  borderRadius: AppRadii.cardRadius,
-                ),
                 child: Row(
                   children: [
                     Icon(
@@ -352,12 +347,10 @@ class _AvisoOcr extends StatelessWidget {
         (resultado.litros! - litrosEscritos).abs() <= 1.5;
     final color = coincide ? colors.success : colors.warning;
 
-    return Container(
+    return AppCard(
+      floating: true,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: AppRadii.cardRadius,
-      ),
+      color: color.withValues(alpha: 0.1),
       child: Row(
         children: [
           Icon(

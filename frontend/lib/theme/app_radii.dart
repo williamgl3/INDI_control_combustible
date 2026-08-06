@@ -10,6 +10,9 @@ class AppRadii {
   const AppRadii._();
 
   static const double card = 14;
+  // Cards flotantes en depth design — radio más amplio que [card] para
+  // que la elevación se note en las esquinas.
+  static const double floating = 18;
   static const double input = 10;
   static const double badge = 999; // pill/cápsula
   // Botones rellenos estilo iOS — radio moderado, no píldora completa.
@@ -19,6 +22,9 @@ class AppRadii {
 
   static const BorderRadius cardRadius = BorderRadius.all(
     Radius.circular(card),
+  );
+  static const BorderRadius floatingRadius = BorderRadius.all(
+    Radius.circular(floating),
   );
   static const BorderRadius inputRadius = BorderRadius.all(
     Radius.circular(input),

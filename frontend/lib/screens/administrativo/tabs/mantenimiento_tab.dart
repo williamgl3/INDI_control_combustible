@@ -6,17 +6,17 @@ import '../../../core/providers.dart';
 import '../../../models/incidencia_vehiculo.dart';
 import '../../../models/vehiculo.dart';
 import '../../../theme/app_motion.dart';
-import '../../../theme/app_radii.dart';
 import '../../../theme/app_section_colors.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_theme.dart';
+import '../../../widgets/app_card.dart';
 import '../../../widgets/estado_mantenimiento_badge.dart';
 import '../../../widgets/estado_vacio.dart';
 import '../../../widgets/fecha_formato.dart';
 import '../../../widgets/grouped_section.dart';
 import '../../../widgets/icon_badge.dart';
 import '../../../widgets/ios_segmented_control.dart';
-import '../../../widgets/responsive_scroll_view.dart';
+import '../../../widgets/contenido_responsivo.dart';
 import '../../../widgets/stat_tile_row.dart';
 import '../../../widgets/ver_foto_dialog.dart';
 import '../registrar_servicio_dialog.dart';
@@ -55,7 +55,12 @@ class _MantenimientoTabState extends ConsumerState<MantenimientoTab> {
       vehiculo: vehiculo,
       lecturaActualSugerida: lecturaActual,
     );
-    if (guardado == true && mounted) setState(() {});
+    if (guardado == true && mounted) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Servicio registrado correctamente.')),
+      );
+    }
   }
 
   Future<void> _resolverIncidencia(IncidenciaVehiculo incidencia) async {
@@ -92,7 +97,12 @@ class _MantenimientoTabState extends ConsumerState<MantenimientoTab> {
               ? null
               : comentarioController.text.trim(),
         );
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Incidencia marcada como resuelta.')),
+      );
+    }
   }
 
   Future<void> _exportar(List<DiagnosticoMantenimiento> diagnosticos) async {
@@ -149,7 +159,7 @@ class _MantenimientoTabState extends ConsumerState<MantenimientoTab> {
         ? diagnosticos
         : diagnosticos.where((d) => d.estado == _filtro).toList();
 
-    return ResponsiveScrollView(
+    return ContenidoResponsivo(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -280,46 +290,37 @@ class _EstadisticaMantenimiento extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Material(
-      color: colors.surface,
-      borderRadius: AppRadii.cardRadius,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadii.cardRadius,
-        hoverColor: color.withValues(alpha: 0.06),
-        splashColor: color.withValues(alpha: 0.1),
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            borderRadius: AppRadii.cardRadius,
-            boxShadow: context.shadows.card,
+    // Antes reimplementaba a mano el mismo Material+InkWell+Container que
+    // ya encapsula AppCard (con el token de sombra correcto, pero
+    // duplicando la estructura) — usa el widget compartido directamente.
+    return AppCard(
+      onTap: onTap,
+      rippleColor: color,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: color.withValues(alpha: 0.14),
+            child: Icon(Icons.build_outlined, color: color),
           ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: color.withValues(alpha: 0.14),
-                child: Icon(Icons.build_outlined, color: color),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(valor, style: Theme.of(context).textTheme.titleLarge),
-                    Text(
-                      etiqueta,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
-                    ),
-                  ],
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(valor, style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  etiqueta,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
                 ),
-              ),
-              if (onTap != null)
-                Icon(Icons.chevron_right, size: 16, color: colors.textMuted),
-            ],
+              ],
+            ),
           ),
-        ),
+          if (onTap != null)
+            Icon(Icons.chevron_right, size: 16, color: colors.textMuted),
+        ],
       ),
     );
   }
@@ -357,7 +358,7 @@ class _TarjetaMantenimiento extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        '${vehiculo.tipoUnidad} · ${vehiculo.identificador}',
+                        '${vehiculo.tipoUnidad} · ${vehiculo.etiquetaUnidad}',
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
                     ),
@@ -431,7 +432,7 @@ class _IncidenciaTile extends StatelessWidget {
                 Text(
                   vehiculo == null
                       ? 'Vehículo no encontrado'
-                      : '${vehiculo!.tipoUnidad} · ${vehiculo!.identificador}',
+                      : '${vehiculo!.tipoUnidad} · ${vehiculo!.etiquetaUnidad}',
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 const SizedBox(height: 2),

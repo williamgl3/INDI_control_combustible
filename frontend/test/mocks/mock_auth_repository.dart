@@ -37,6 +37,17 @@ class MockAuthRepository implements AuthRepository {
         rol: RolUsuario.administrativo,
       ),
     ),
+    'superadmin1': (
+      password: 'superadmin1234',
+      perfil: Perfil(
+        id: 'mock-superadmin-1',
+        usuario: 'superadmin1',
+        nombre: 'Sofía',
+        apellidoPaterno: 'Reyes',
+        correo: 'superadmin1@example.com',
+        rol: RolUsuario.superadmin,
+      ),
+    ),
   };
 
   /// Usuario de la última sesión iniciada — necesario porque este mock
@@ -162,6 +173,8 @@ class MockAuthRepository implements AuthRepository {
   @override
   Future<Perfil> crearAdministrativo({
     required String nombre,
+    required String apellidoPaterno,
+    required String apellidoMaterno,
     required String usuario,
     required String correo,
     required String password,
@@ -174,7 +187,8 @@ class MockAuthRepository implements AuthRepository {
       id: 'mock-admin-${_usuarios.length + 1}',
       usuario: usuario,
       nombre: nombre,
-      apellidoPaterno: '',
+      apellidoPaterno: apellidoPaterno,
+      apellidoMaterno: apellidoMaterno,
       correo: correo,
       fechaNacimiento: DateTime(1990, 1, 1),
       rol: RolUsuario.administrativo,

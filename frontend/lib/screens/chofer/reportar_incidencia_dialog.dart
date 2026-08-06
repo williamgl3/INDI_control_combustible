@@ -151,7 +151,7 @@ class _ReportarIncidenciaDialogState
             ),
             const SizedBox(height: 4),
             Text(
-              '${widget.vehiculo.tipoUnidad} · ${widget.vehiculo.identificador}',
+              '${widget.vehiculo.tipoUnidad} · ${widget.vehiculo.etiquetaUnidad}',
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),

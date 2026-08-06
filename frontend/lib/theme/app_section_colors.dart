@@ -30,4 +30,5 @@ class AppSectionColors {
   static const mantenimiento = Color(0xFFDC2626); // rojo — alertas/servicio
   static const choferes = Color(0xFFE11D48); // carmín — directorio de personas
   static const auditoria = Color(0xFF475569); // gris azulado — bitácora/control
+  static const marimba = Color(0xFF7C3AED); // violeta — recorridos de despacho
 }

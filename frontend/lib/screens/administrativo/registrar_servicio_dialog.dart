@@ -99,7 +99,7 @@ class _RegistrarServicioDialogState
             ),
             const SizedBox(height: 4),
             Text(
-              '${widget.vehiculo.tipoUnidad} · ${widget.vehiculo.identificador}',
+              '${widget.vehiculo.tipoUnidad} · ${widget.vehiculo.etiquetaUnidad}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: context.colors.textSecondary,
               ),

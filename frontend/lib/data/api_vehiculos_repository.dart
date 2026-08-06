@@ -46,9 +46,9 @@ class ApiVehiculosRepository implements VehiculosRepository {
   @override
   Future<Vehiculo> crear({
     required String tipoUnidad,
-    required String identificador,
-    required String tipoCombustible,
-    required double topeSemanal,
+    String? placas,
+    String? numeroEconomico,
+    String? tipoCombustible,
     String? modelo,
     double? intervaloServicio,
   }) async {
@@ -56,9 +56,9 @@ class ApiVehiculosRepository implements VehiculosRepository {
       '/vehiculos',
       body: {
         'tipoUnidad': tipoUnidad,
-        'identificador': identificador,
+        'placas': placas,
+        'numeroEconomico': numeroEconomico,
         'tipoCombustible': tipoCombustible,
-        'topeSemanal': topeSemanal,
         'modelo': modelo,
         'intervaloServicio': intervaloServicio,
       },
@@ -71,15 +71,19 @@ class ApiVehiculosRepository implements VehiculosRepository {
   @override
   Future<Vehiculo> reportarNuevo({
     required String tipoUnidad,
-    required String identificador,
+    String? placas,
+    String? numeroEconomico,
     required String tipoCombustible,
+    required String modelo,
   }) async {
     final data = await _client.post(
       '/vehiculos/reportar-nuevo',
       body: {
         'tipoUnidad': tipoUnidad,
-        'identificador': identificador,
+        'placas': placas,
+        'numeroEconomico': numeroEconomico,
         'tipoCombustible': tipoCombustible,
+        'modelo': modelo,
       },
     );
     final vehiculo = Vehiculo.fromJson(data as Map<String, dynamic>);
@@ -91,9 +95,9 @@ class ApiVehiculosRepository implements VehiculosRepository {
   Future<Vehiculo> actualizar({
     required String id,
     String? tipoUnidad,
-    String? identificador,
+    String? placas,
+    String? numeroEconomico,
     String? tipoCombustible,
-    double? topeSemanal,
     String? modelo,
     double? intervaloServicio,
   }) async {
@@ -101,9 +105,9 @@ class ApiVehiculosRepository implements VehiculosRepository {
       '/vehiculos/$id',
       body: {
         'tipoUnidad': ?tipoUnidad,
-        'identificador': ?identificador,
-        'tipoCombustible': ?tipoCombustible,
-        'topeSemanal': ?topeSemanal,
+        'placas': ?placas,
+        'numeroEconomico': ?numeroEconomico,
+        'tipoCombustible': tipoCombustible,
         'modelo': modelo,
         'intervaloServicio': ?intervaloServicio,
       },
@@ -126,5 +130,17 @@ class ApiVehiculosRepository implements VehiculosRepository {
     final vehiculo = Vehiculo.fromJson(data as Map<String, dynamic>);
     _upsert(vehiculo);
     return vehiculo;
+  }
+
+  @override
+  Future<void> cambiarEstado({
+    required String id,
+    required bool activo,
+  }) async {
+    final data = await _client.patch(
+      '/vehiculos/$id/estado',
+      body: {'activo': activo},
+    );
+    _upsert(Vehiculo.fromJson(data as Map<String, dynamic>));
   }
 }

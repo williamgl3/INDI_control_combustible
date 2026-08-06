@@ -74,11 +74,13 @@ void main() {
   );
 
   test(
-    'si el refresh también falla, limpia la sesión y propaga el 401 original',
+    'si el refresh también falla, limpia la sesión, notifica '
+    'onSesionExpirada y propaga el 401 original',
     () async {
       final storage = _FakeTokenStorage()
         ..token = 'token-viejo'
         ..refreshToken = 'refresh-vencido';
+      var notificaciones = 0;
 
       final mockHttp = MockClient((request) async {
         if (request.url.path == '/refresh') {
@@ -90,7 +92,11 @@ void main() {
         return http.Response(jsonEncode({'error': 'Token expirado'}), 401);
       });
 
-      final client = ApiClient(tokenStorage: storage, httpClient: mockHttp);
+      final client = ApiClient(
+        tokenStorage: storage,
+        httpClient: mockHttp,
+        onSesionExpirada: () => notificaciones++,
+      );
 
       await expectLater(
         client.get('/dato'),
@@ -98,6 +104,10 @@ void main() {
       );
       expect(storage.token, isNull);
       expect(storage.refreshToken, isNull);
+      // Antes no existía este callback — el guard de rutas nunca se
+      // enteraba de la sesión expirada hasta el siguiente arranque de la
+      // app (ver `ApiClient._limpiarSesionExpirada`).
+      expect(notificaciones, 1);
     },
   );
 

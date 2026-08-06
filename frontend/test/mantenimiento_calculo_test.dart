@@ -7,9 +7,9 @@ void main() {
   const vehiculoBase = Vehiculo(
     id: 'veh-1',
     tipoUnidad: 'Vehículo',
-    identificador: 'ABC-123',
+    placas: 'ABC-123',
+    numeroEconomico: null,
     tipoCombustible: 'Diésel',
-    topeSemanal: 500,
     intervaloServicio: 5000,
   );
 

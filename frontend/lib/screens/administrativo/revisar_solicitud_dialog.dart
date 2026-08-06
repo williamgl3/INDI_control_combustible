@@ -124,8 +124,9 @@ class _RevisarSolicitudDialogState
           Text(
             vehiculo == null
                 ? 'Vehículo no encontrado'
-                : '${vehiculo.tipoUnidad} · ${vehiculo.identificador} · '
-                      '${vehiculo.tipoCombustible}',
+                : '${vehiculo.modelo ?? vehiculo.tipoUnidad} · '
+                      '${vehiculo.etiquetaCompleta ?? vehiculo.etiquetaUnidad} · '
+                      '${vehiculo.tipoCombustible ?? 'Sin especificar'}',
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
@@ -179,14 +180,6 @@ class _RevisarSolicitudDialogState
                   etiqueta: 'Solicitado',
                   valor:
                       '${widget.solicitud.litrosSolicitados.toStringAsFixed(1)} L',
-                ),
-              ),
-              Expanded(
-                child: _DatoReferencia(
-                  etiqueta: 'Tope vehículo',
-                  valor: (vehiculo != null && vehiculo.topeSemanal > 0)
-                      ? '${vehiculo.topeSemanal.toStringAsFixed(0)} L'
-                      : 'Sin asignar',
                 ),
               ),
               Expanded(

@@ -20,19 +20,20 @@ flutter run -d windows  # o -d chrome, -d web-server, etc.
 
 ## Apuntar al backend
 
-`lib/config/api_config.dart` define `ApiConfig.baseUrl`:
+`lib/config/api_config.dart` define `ApiConfig.baseUrl` vía
+`String.fromEnvironment`, configurable en tiempo de compilación con
+`--dart-define` — sin editar código ni recompilar el valor a mano:
 
-```dart
-class ApiConfig {
-  static const String baseUrl = 'https://indi-backend.up.railway.app';
-  // static const String baseUrl = 'http://localhost:3000'; // desarrollo local
-}
+```bash
+flutter run --dart-define=API_BASE_URL=http://192.168.1.83:3000
+flutter build web --dart-define=API_BASE_URL=https://api.indicombustible.com
+flutter build apk --release --dart-define=API_BASE_URL=https://api.indicombustible.com
 ```
 
-Para desarrollo local con el backend corriendo en la misma máquina, comenta la
-URL de producción y descomenta la de `localhost:3000` (o el puerto que uses).
-Es un valor compilado, no una variable de entorno — hay que recompilar tras
-cambiarlo.
+Sin ese flag, cae al `defaultValue` del propio archivo (desarrollo local en la
+LAN de la PC) — así `flutter run`/`flutter test` sin argumentos siguen
+funcionando igual que siempre. Un pipeline de CI/CD real debe pasar la URL de
+producción por este flag, no hardcodearla en el código fuente.
 
 ## Pruebas y análisis estático
 

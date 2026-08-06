@@ -11,13 +11,12 @@ import '../../core/session_provider.dart';
 import '../../data/api_client.dart';
 import '../../models/carga.dart';
 import '../../models/cierre_dia.dart';
-import '../../theme/app_breakpoints.dart';
-import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_card.dart';
 import '../../widgets/app_elevated_button.dart';
 import '../../widgets/aviso_error.dart';
 import '../../widgets/captura_foto_field.dart';
-import '../../widgets/responsive_scroll_view.dart';
+import '../../widgets/contenido_responsivo.dart';
 import '../../widgets/sin_conexion_dialog.dart';
 import '../../widgets/stepper_numerico.dart';
 
@@ -160,8 +159,7 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
         leading: BackButton(onPressed: () => context.pop()),
       ),
       body: SafeArea(
-        child: ResponsiveScrollView(
-          maxWidth: AppBreakpoints.contentMaxWidth,
+        child: ContenidoResponsivo(
           child: _resultado != null
               ? _ResultadoCierre(
                   resultado: _resultado!,
@@ -171,12 +169,9 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
+                    AppCard(
+                      floating: true,
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: colors.surfaceAlt,
-                        borderRadius: AppRadii.cardRadius,
-                      ),
                       child: Row(
                         children: [
                           Icon(
@@ -265,13 +260,9 @@ class _ResultadoCierre extends StatelessWidget {
           ).textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
         ),
         const SizedBox(height: 20),
-        Container(
-          width: double.infinity,
+        AppCard(
+          floating: true,
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: colors.surfaceAlt,
-            borderRadius: AppRadii.cardRadius,
-          ),
           child: Column(
             children: [
               Text(

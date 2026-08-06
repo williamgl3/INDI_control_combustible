@@ -14,7 +14,7 @@ import '../../../theme/app_theme.dart';
 import '../../../widgets/confirmar_accion_dialog.dart';
 import '../../../widgets/estado_vacio.dart';
 import '../../../widgets/grouped_section.dart';
-import '../../../widgets/responsive_scroll_view.dart';
+import '../../../widgets/contenido_responsivo.dart';
 import '../../../widgets/stat_tile.dart';
 import '../crear_administrador_dialog.dart';
 import '../resetear_password_dialog.dart';
@@ -48,11 +48,23 @@ class _ChoferesTabState extends ConsumerState<ChoferesTab> {
 
   Future<void> _crearAdministrador() async {
     final creado = await CrearAdministradorDialog.show(context);
-    if (creado == true && mounted) setState(() {});
+    if (creado == true && mounted) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Administrador creado correctamente.')),
+      );
+    }
   }
 
   Future<void> _resetearPassword(Perfil usuario) async {
-    await ResetearPasswordDialog.show(context, usuario: usuario);
+    final actualizada = await ResetearPasswordDialog.show(context, usuario: usuario);
+    if (actualizada == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Contraseña de ${usuario.nombreCompleto} actualizada.'),
+        ),
+      );
+    }
   }
 
   Future<void> _cambiarEstado(Perfil usuario) async {
@@ -75,6 +87,17 @@ class _ChoferesTabState extends ConsumerState<ChoferesTab> {
           .read(authRepositoryProvider)
           .cambiarEstado(usuarioId: usuario.id, activo: activar);
       HapticFeedback.mediumImpact();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              activar
+                  ? '${usuario.nombreCompleto} reactivado correctamente.'
+                  : '${usuario.nombreCompleto} desactivado correctamente.',
+            ),
+          ),
+        );
+      }
     } on AuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -104,7 +127,7 @@ class _ChoferesTabState extends ConsumerState<ChoferesTab> {
               )
               .toList();
 
-    return ResponsiveScrollView(
+    return ContenidoResponsivo(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -129,11 +152,17 @@ class _ChoferesTabState extends ConsumerState<ChoferesTab> {
                   ],
                 ),
               ),
-              ElevatedButton.icon(
-                onPressed: _crearAdministrador,
-                icon: const Icon(Icons.admin_panel_settings_outlined),
-                label: const Text('Crear administrador'),
-              ),
+              // Exclusivo de superadmin — un administrativo normal no debe
+              // ver ni poder tocar este botón. El backend igual lo
+              // rechazaría con 403 (`requireRole('superadmin')` en
+              // `POST /usuarios/administrativos`), esto solo evita
+              // mostrarlo cuando ya sabemos que fallaría.
+              if (sesion?.esSuperAdmin ?? false)
+                ElevatedButton.icon(
+                  onPressed: _crearAdministrador,
+                  icon: const Icon(Icons.admin_panel_settings_outlined),
+                  label: const Text('Crear administrador'),
+                ),
             ],
           ),
           const SizedBox(height: 20),
@@ -198,7 +227,7 @@ class _ChoferesTabState extends ConsumerState<ChoferesTab> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (c.esAdministrativo) ...[
-                                const _BadgeRol(texto: 'ADMIN'),
+                                _BadgeRol(texto: c.esSuperAdmin ? 'SUPERADMIN' : 'ADMIN'),
                                 const SizedBox(width: 8),
                               ],
                               if (!c.activo) ...[
@@ -214,6 +243,13 @@ class _ChoferesTabState extends ConsumerState<ChoferesTab> {
                                 key: ValueKey('acciones-${c.id}'),
                                 usuario: c,
                                 esSesionActual: sesion?.id == c.id,
+                                // Cambiar el estado de una cuenta admin (o
+                                // superadmin) es exclusivo de superadmin —
+                                // el backend lo vuelve a validar
+                                // (`actualizarEstadoUsuario` en
+                                // `authService.ts`), esto solo oculta la
+                                // opción cuando ya sabemos que fallaría.
+                                puedeGestionarAdmins: sesion?.esSuperAdmin ?? false,
                                 onResetearPassword: () =>
                                     _resetearPassword(c),
                                 onCambiarEstado: () => _cambiarEstado(c),
@@ -286,25 +322,34 @@ enum _AccionUsuario { resetearPassword, cambiarEstado }
 
 /// Menú de acciones sobre un usuario (chofer o administrativo). Oculta
 /// "Desactivar" para la fila del propio usuario en sesión — un admin no
-/// debe poder desactivarse a sí mismo desde la UI.
+/// debe poder desactivarse a sí mismo desde la UI. También la oculta para
+/// cualquier cuenta admin/superadmin cuando quien mira el menú no es
+/// superadmin — ver [puedeGestionarAdmins].
 class _MenuAccionesUsuario extends StatelessWidget {
   const _MenuAccionesUsuario({
     super.key,
     required this.usuario,
     required this.esSesionActual,
+    required this.puedeGestionarAdmins,
     required this.onResetearPassword,
     required this.onCambiarEstado,
   });
 
   final Perfil usuario;
   final bool esSesionActual;
+
+  /// `true` si quien ve este menú es superadmin — solo entonces puede
+  /// cambiar el estado de una cuenta admin/superadmin (no aplica a
+  /// choferes, esos los gestiona cualquier admin).
+  final bool puedeGestionarAdmins;
   final VoidCallback onResetearPassword;
   final VoidCallback onCambiarEstado;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final puedeCambiarEstado = !esSesionActual;
+    final puedeCambiarEstado =
+        !esSesionActual && (!usuario.esAdministrativo || puedeGestionarAdmins);
 
     return PopupMenuButton<_AccionUsuario>(
       tooltip: 'Acciones',

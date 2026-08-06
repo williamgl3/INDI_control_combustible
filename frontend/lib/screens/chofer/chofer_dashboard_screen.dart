@@ -10,10 +10,11 @@ import '../../theme/app_motion.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_card.dart';
 import '../../widgets/brand_sub_header.dart';
 import '../../widgets/estado_vacio.dart';
 import '../../widgets/ios_segmented_control.dart';
-import '../../widgets/responsive_scroll_view.dart';
+import '../../widgets/contenido_responsivo.dart';
 import '../../widgets/stat_tile.dart';
 import '../../widgets/stat_tile_row.dart';
 import '../../router/route_paths.dart';
@@ -133,7 +134,7 @@ class _ChoferDashboardScreenState extends ConsumerState<ChoferDashboardScreen> {
               icono: Icons.speed_outlined,
               valor: rendimientoPromedio == null
                   ? '—'
-                  : rendimientoPromedio!.toStringAsFixed(1),
+                  : rendimientoPromedio.toStringAsFixed(1),
               etiqueta: 'Rendimiento promedio',
               color: colors.success,
             ),
@@ -161,7 +162,7 @@ class _ChoferDashboardScreenState extends ConsumerState<ChoferDashboardScreen> {
                   icono: Icons.bar_chart_outlined,
                   mensaje: 'Todavía no registras cargas en este periodo.',
                   textoAccion: 'Solicitar carga',
-                  onAccion: () => context.go(RoutePaths.choferSolicitar),
+                  onAccion: () => context.push(RoutePaths.choferTipoOperacion),
                 )
               else ...[
                 if (serie.isNotEmpty) ...[
@@ -187,8 +188,9 @@ class _ChoferDashboardScreenState extends ConsumerState<ChoferDashboardScreen> {
 
     if (widget.mostrarComoTab) {
       return SafeArea(
-        child: ResponsiveScrollView(
-          padding: EdgeInsets.zero,
+        child: ContenidoResponsivo(
+          paddingSuperior: 0,
+          paddingInferior: 0,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -210,7 +212,7 @@ class _ChoferDashboardScreenState extends ConsumerState<ChoferDashboardScreen> {
           Expanded(
             child: SafeArea(
               top: false,
-              child: ResponsiveScrollView(child: cuerpoDashboard),
+              child: ContenidoResponsivo(child: cuerpoDashboard),
             ),
           ),
         ],
@@ -241,6 +243,10 @@ class _HeroConsumo extends StatelessWidget {
           colors: [colors.primary, colors.primaryHover],
         ),
         borderRadius: AppRadii.cardRadius,
+        // Variante intencional de `AppShadows.floating`, no un olvido: es
+        // un glow de marca (color primary, no negro) sobre el degradado
+        // de la propia tarjeta, no una sombra neutra — migrarla al token
+        // le quitaría el efecto.
         boxShadow: [
           BoxShadow(
             color: colors.primary.withValues(alpha: 0.35),
@@ -305,13 +311,9 @@ class _TarjetaBarras extends StatelessWidget {
         .fold(0.0, (a, b) => a > b ? a : b);
     final techo = maxLitros <= 0 ? 10.0 : maxLitros * 1.2;
 
-    return Container(
+    return AppCard(
+      floating: true,
       padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: AppRadii.cardRadius,
-        boxShadow: context.shadows.card,
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -413,13 +415,9 @@ class _TarjetaRendimiento extends StatelessWidget {
     final minY = (puntos.fold(puntos.first, (a, b) => a < b ? a : b) * 0.8)
         .clamp(0, double.infinity);
 
-    return Container(
+    return AppCard(
+      floating: true,
       padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: AppRadii.cardRadius,
-        boxShadow: context.shadows.card,
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -502,13 +500,9 @@ class _TarjetaDona extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
 
-    return Container(
+    return AppCard(
+      floating: true,
       padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: AppRadii.cardRadius,
-        boxShadow: context.shadows.card,
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

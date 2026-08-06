@@ -15,27 +15,6 @@ import 'package:indi_combustible/theme/app_theme.dart';
 
 import 'test_helpers.dart';
 
-/// Abre el diálogo "toca para escribir" de un [StepperNumerico] (buscado
-/// por su etiqueta) y captura el valor exacto — mismo helper que en
-/// `comprobar_carga_flow_test.dart`.
-Future<void> _fijarStepper(
-  WidgetTester tester,
-  String etiqueta,
-  String valor,
-) async {
-  final campo = find.byKey(Key('stepper-valor-$etiqueta'));
-  await tester.ensureVisible(campo);
-  await tester.tap(campo);
-  await tester.pumpAndSettle();
-  final dialog = find.byType(Dialog);
-  await tester.enterText(
-    find.descendant(of: dialog, matching: find.byType(TextField)),
-    valor,
-  );
-  await tester.tap(find.descendant(of: dialog, matching: find.text('Listo')));
-  await tester.pumpAndSettle();
-}
-
 Future<void> _elegirVehiculo(
   WidgetTester tester,
   String etiquetaVehiculo,
@@ -122,7 +101,9 @@ void main() {
 
       await tester.tap(find.widgetWithText(FloatingActionButton, 'Solicitar carga'));
       await tester.pumpAndSettle();
-      await _elegirVehiculo(tester, 'Vehículo · ABC-123');
+      await tester.tap(find.text('Vehículo Ligero'));
+      await tester.pumpAndSettle();
+      await _elegirVehiculo(tester, 'ABC-123-A');
       await tester.ensureVisible(find.text('Tomar foto del tablero'));
       await tester.tap(find.text('Tomar foto del tablero'));
       await tester.pumpAndSettle();

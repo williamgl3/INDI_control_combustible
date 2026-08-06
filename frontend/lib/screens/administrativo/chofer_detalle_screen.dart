@@ -11,7 +11,7 @@ import '../../widgets/estado_solicitud_badge.dart';
 import '../../widgets/estado_vacio.dart';
 import '../../widgets/fecha_formato.dart';
 import '../../widgets/grouped_section.dart';
-import '../../widgets/responsive_scroll_view.dart';
+import '../../widgets/contenido_responsivo.dart';
 
 /// Historial completo (solicitudes + cargas) de un chofer, visto desde el
 /// panel administrativo. Llega vía `state.extra` (el [Perfil] del chofer)
@@ -51,7 +51,7 @@ class ChoferDetalleScreen extends ConsumerWidget {
         leading: BackButton(onPressed: () => context.pop()),
       ),
       body: SafeArea(
-        child: ResponsiveScrollView(
+        child: ContenidoResponsivo(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -69,21 +69,12 @@ class ChoferDetalleScreen extends ConsumerWidget {
                   children: [
                     for (final v in vehiculosUsados)
                       GroupedRow(
-                        titulo: '${v.tipoUnidad} · ${v.identificador}',
-                        subtitulo: v.tipoCombustible,
+                        titulo: v.modelo ?? v.tipoUnidad,
+                        subtitulo:
+                            '${v.etiquetaCompleta ?? v.etiquetaUnidad} · '
+                            '${v.tipoCombustible ?? 'Sin especificar'}',
                         icono: Icons.local_shipping_outlined,
                         iconoColor: context.colors.info,
-                        trailing: Text(
-                          v.topeSemanal <= 0
-                              ? 'Sin tope asignado'
-                              : '${v.topeSemanal.toStringAsFixed(0)} L/semana',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: v.topeSemanal <= 0
-                                    ? context.colors.warning
-                                    : context.colors.textSecondary,
-                              ),
-                        ),
                       ),
                   ],
                 ),
@@ -126,7 +117,7 @@ class ChoferDetalleScreen extends ConsumerWidget {
                               'Folio ${c.folioAutorizacion} · ${formatearFechaCorta(c.creadaEn)}';
                           return vehiculo == null
                               ? base
-                              : '$base · ${vehiculo.tipoUnidad} ${vehiculo.identificador}';
+                              : '$base · ${vehiculo.tipoUnidad} ${vehiculo.etiquetaUnidad}';
                         }(),
                         icono: Icons.local_gas_station_outlined,
                         iconoColor: context.colors.success,
@@ -167,7 +158,7 @@ class _SolicitudTile extends StatelessWidget {
                   vehiculo == null
                       ? formatearFechaCorta(solicitud.creadaEn)
                       : '${formatearFechaCorta(solicitud.creadaEn)} · ${vehiculo!.tipoUnidad} '
-                            '${vehiculo!.identificador}',
+                            '${vehiculo!.etiquetaUnidad}',
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
@@ -193,7 +184,7 @@ class _SolicitudTile extends StatelessWidget {
               ],
             ),
           ),
-          EstadoSolicitudBadge(estado: solicitud.estado),
+          EstadoSolicitudBadge(estadoVisual: solicitud.estadoVisual),
         ],
       ),
     );

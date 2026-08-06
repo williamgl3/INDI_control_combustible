@@ -11,8 +11,12 @@ import '../../theme/app_motion.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_section_colors.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/acerca_de_dialog.dart';
+import '../../widgets/ayuda_soporte_dialog.dart';
 import '../../widgets/brand_header.dart';
+import '../../widgets/confirmar_cerrar_sesion_dialog.dart';
 import '../../widgets/header_glass_button.dart';
+import '../../widgets/header_menu_button.dart';
 import '../../widgets/icon_badge.dart';
 import '../../widgets/notificaciones_bell.dart';
 import '../../widgets/selector_tema_dialog.dart';
@@ -23,6 +27,7 @@ import 'tabs/concentrado_tab.dart';
 import 'tabs/dashboard_tab.dart';
 import 'tabs/finanzas_tab.dart';
 import 'tabs/mantenimiento_tab.dart';
+import 'tabs/marimba_tab.dart';
 import 'tabs/vehiculos_tab.dart';
 
 enum _SeccionAdmin {
@@ -32,6 +37,7 @@ enum _SeccionAdmin {
   finanzas,
   vehiculos,
   mantenimiento,
+  marimba,
   choferes,
   auditoria,
 }
@@ -82,6 +88,12 @@ const _destinos = [
     AppSectionColors.mantenimiento,
   ),
   _Destino(
+    _SeccionAdmin.marimba,
+    Icons.local_shipping_outlined,
+    'Marimba',
+    AppSectionColors.marimba,
+  ),
+  _Destino(
     _SeccionAdmin.choferes,
     Icons.groups_outlined,
     'Choferes',
@@ -123,6 +135,16 @@ class _AdministrativoHomeScreenState
     extends ConsumerState<AdministrativoHomeScreen> {
   _SeccionAdmin _seccion = _SeccionAdmin.autorizaciones;
 
+  /// Mismo patrón que en el panel de chofer (`ChoferHomeScreen`,
+  /// `MiPerfilScreen`): confirma antes de cerrar sesión — antes este botón
+  /// llamaba `logout()` directo, sin aviso, a diferencia del resto de la app.
+  Future<void> _cerrarSesion() async {
+    final confirmado = await confirmarCerrarSesion(context);
+    if (confirmado && mounted) {
+      await ref.read(authControllerProvider).logout();
+    }
+  }
+
   Widget _cuerpoDe(_SeccionAdmin seccion) {
     switch (seccion) {
       case _SeccionAdmin.dashboard:
@@ -137,6 +159,8 @@ class _AdministrativoHomeScreenState
         return const VehiculosTab();
       case _SeccionAdmin.mantenimiento:
         return const MantenimientoTab();
+      case _SeccionAdmin.marimba:
+        return const MarimbaTab();
       case _SeccionAdmin.choferes:
         return const ChoferesTab();
       case _SeccionAdmin.auditoria:
@@ -207,8 +231,23 @@ class _AdministrativoHomeScreenState
               const SizedBox(width: 8),
               HeaderGlassButton(
                 tooltip: 'Cerrar sesión',
-                onPressed: () => ref.read(authControllerProvider).logout(),
+                onPressed: _cerrarSesion,
                 icon: const Icon(Icons.logout, color: BrandHeader.onColor),
+              ),
+              const SizedBox(width: 8),
+              HeaderMenuButton(
+                items: [
+                  HeaderMenuItem(
+                    icon: Icons.info_outline,
+                    label: 'Acerca de',
+                    onTap: () => AcercaDeDialog.show(context),
+                  ),
+                  HeaderMenuItem(
+                    icon: Icons.help_outline,
+                    label: 'Ayuda y soporte',
+                    onTap: () => AyudaSoporteDialog.show(context),
+                  ),
+                ],
               ),
             ],
           ),

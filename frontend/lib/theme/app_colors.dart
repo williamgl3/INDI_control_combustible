@@ -119,10 +119,15 @@ class AppColors extends ThemeExtension<AppColors> {
   /// sensiblemente más claro que el anterior para que la jerarquía se
   /// note sin depender solo del borde.
   static const dark = AppColors(
-    background: Color(0xFF121212),
-    surface: Color(0xFF1E1E1E),
-    surfaceAlt: Color(0xFF2A2A2A),
-    border: Color(0xFF3A3A3C),
+    // Fondo "profundo" — más oscuro que el Material #121212 para que las
+    // cards flotantes tengan contraste claro de elevación.
+    background: Color(0xFF0D0F12),
+    // Superficie de cards flotantes — tono azulado frío, no gris neutro.
+    surface: Color(0xFF1B202A),
+    // Elementos anidados dentro de una card (inputs, barras de progreso).
+    surfaceAlt: Color(0xFF232D3A),
+    // Borde sutil de cards flotantes — blanco al 6%, solo visible en oscuro.
+    border: Color(0x0FFFFFFF),
     textPrimary: Color(0xFFFFFFFF),
     // >= 4.5:1 contra surface/surfaceAlt (WCAG AA para texto normal).
     textSecondary: Color(0xFFB0B0B0),

@@ -8,6 +8,15 @@ import 'package:flutter/foundation.dart';
 /// `MockOperacionesRepository.enviarSolicitud`.
 enum EstadoSolicitud { pendiente, aprobada, rechazada }
 
+/// Estado que de verdad le importa al chofer — a diferencia de
+/// [EstadoSolicitud] (el enum de 3 valores que espeja la columna real de
+/// la base de datos, no se toca aquí para no romper el contrato con el
+/// backend), este distingue "me dieron todo lo que pedí" de "me dieron
+/// menos" dentro del mismo valor `aprobada`. Se deriva de los litros, no
+/// se guarda aparte — ver [SolicitudAutorizacion.estadoVisual] — así el
+/// estado nunca puede desincronizarse de las cantidades reales.
+enum EstadoVisualSolicitud { pendiente, autorizada, ajustada, rechazada }
+
 /// Solicitud de autorización de carga de combustible hecha por un chofer
 /// desde /chofer/solicitar, cuya respuesta se muestra en /chofer/respuesta.
 ///
@@ -23,7 +32,7 @@ class SolicitudAutorizacion {
     required this.litrosSolicitados,
     required this.estado,
     required this.creadaEn,
-    required this.costoEstimado,
+    this.costoEstimado,
     this.esUrgente = false,
     this.motivoChofer,
     required this.actividad,
@@ -47,10 +56,14 @@ class SolicitudAutorizacion {
   final EstadoSolicitud estado;
   final DateTime creadaEn;
 
-  /// Litros solicitados × precio vigente del combustible del vehículo al
-  /// momento de pedir — es la base contra la que se descuenta el
-  /// presupuesto semanal (ver `MockOperacionesRepository.presupuestoRestante`).
-  final double costoEstimado;
+  /// Litros solicitados × precio de referencia vigente del combustible
+  /// del vehículo al momento de pedir — es la base contra la que se
+  /// descuenta el presupuesto semanal (ver
+  /// `MockOperacionesRepository.presupuestoRestante`). `null` cuando el
+  /// vehículo no tenía `tipoCombustible` confirmado en ese momento
+  /// (unidad de maquinaria/pipa sin dato del catálogo todavía) — la
+  /// solicitud se crea igual, pero nunca se auto-aprueba.
+  final double? costoEstimado;
 
   /// `true` si se pidió para el mismo día (excepción), no "para mañana".
   final bool esUrgente;
@@ -93,6 +106,28 @@ class SolicitudAutorizacion {
   /// antes de ir a cargar combustible. `null` en solicitudes anteriores a
   /// este campo.
   final String? fotoTableroPath;
+
+  /// Ver [EstadoVisualSolicitud]. `aprobada` con 0 litros autorizados
+  /// cuenta como rechazo real (unidad inactiva/sin actividad) — el admin
+  /// puede llegar a ese resultado tanto pulsando "Rechazar" como
+  /// autorizando 0 L desde el flujo normal (`RevisarSolicitudDialog`
+  /// permite bajar el stepper hasta 0), así que se deriva del número, no
+  /// del botón que se haya usado.
+  EstadoVisualSolicitud get estadoVisual {
+    switch (estado) {
+      case EstadoSolicitud.pendiente:
+        return EstadoVisualSolicitud.pendiente;
+      case EstadoSolicitud.rechazada:
+        return EstadoVisualSolicitud.rechazada;
+      case EstadoSolicitud.aprobada:
+        final autorizados = litrosAutorizados ?? litrosSolicitados;
+        if (autorizados <= 0) return EstadoVisualSolicitud.rechazada;
+        if (autorizados < litrosSolicitados) {
+          return EstadoVisualSolicitud.ajustada;
+        }
+        return EstadoVisualSolicitud.autorizada;
+    }
+  }
 
   SolicitudAutorizacion copyWith({
     String? id,
@@ -143,7 +178,7 @@ class SolicitudAutorizacion {
       litrosSolicitados: (json['litrosSolicitados'] as num).toDouble(),
       estado: EstadoSolicitud.values.byName(json['estado'] as String),
       creadaEn: DateTime.parse(json['creadaEn'] as String),
-      costoEstimado: (json['costoEstimado'] as num).toDouble(),
+      costoEstimado: (json['costoEstimado'] as num?)?.toDouble(),
       esUrgente: json['esUrgente'] as bool? ?? false,
       motivoChofer: json['motivoChofer'] as String?,
       actividad: json['actividad'] as String,

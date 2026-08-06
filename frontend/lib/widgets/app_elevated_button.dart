@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 /// `ElevatedButton` primario con estado de carga incorporado — antes cada
 /// pantalla repetía a mano el mismo `onPressed: cargando ? null : accion` +
 /// `child: cargando ? SizedBox(spinner) : Text(...)` (login, registro,
@@ -28,6 +30,7 @@ class AppElevatedButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return ElevatedButton(
       // Altura mínima más grande que el default del tema: este botón es el
       // CTA principal de los flujos de chofer (solicitar/comprobar carga,
@@ -38,6 +41,14 @@ class AppElevatedButton extends StatelessWidget {
         minimumSize: const Size.fromHeight(56),
         alignment: Alignment.center,
         backgroundColor: backgroundColor,
+        // Mismo criterio "flotante" que `AppShadows.floating` (suave,
+        // difusa, opacidad baja) pero tintada con el color de marca — es
+        // el CTA principal, se justifica un glow sutil de más que el
+        // `elevatedButtonTheme` genérico. Antes era más marcada (elevation
+        // 10 + azul al 40%, sin relación con el resto del sistema de
+        // sombras).
+        elevation: 8,
+        shadowColor: (backgroundColor ?? colors.primary).withValues(alpha: 0.3),
       ),
       onPressed: cargando ? null : onPressed,
       child: cargando

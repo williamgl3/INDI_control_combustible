@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/auth_controller.dart';
 import '../../core/cola_solicitudes_offline.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
@@ -10,17 +11,22 @@ import '../../models/perfil.dart';
 import '../../models/solicitud_autorizacion.dart';
 import '../../models/vehiculo.dart';
 import '../../router/route_paths.dart';
+import '../../theme/app_breakpoints.dart';
 import '../../theme/app_motion.dart';
-import '../../theme/app_radii.dart';
 import '../../theme/app_sizes.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/acerca_de_dialog.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/ayuda_soporte_dialog.dart';
 import '../../widgets/brand_header.dart';
+import '../../widgets/confirmar_cerrar_sesion_dialog.dart';
+import '../../widgets/contenido_responsivo.dart';
 import '../../widgets/estado_vacio.dart';
 import '../../widgets/fecha_formato.dart';
+import '../../widgets/header_menu_button.dart';
 import '../../widgets/logo_glass.dart';
 import '../../widgets/section_label.dart';
 import '../../widgets/tarjeta_accion_sugerida.dart';
-import '../../widgets/tarjeta_tope_semanal.dart';
 import 'detalle_solicitud_dialog.dart';
 
 class ChoferHomeScreen extends ConsumerStatefulWidget {
@@ -36,6 +42,18 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
   Future<void> _refrescarAlVolver(Future<void> Function() accion) async {
     await accion();
     if (mounted) setState(() => _refreshKey++);
+  }
+
+  /// Mismo patrón que `MiPerfilScreen._cerrarSesion`: confirma, y si acepta
+  /// delega en `AuthController.logout()` — limpia tokens/perfil y notifica
+  /// `sessionProvider`, el mismo mecanismo que ya usa el guard de go_router
+  /// para redirigir a login cuando expira la sesión (401), sin duplicar
+  /// lógica aquí.
+  Future<void> _cerrarSesion() async {
+    final confirmado = await confirmarCerrarSesion(context);
+    if (confirmado && mounted) {
+      await ref.read(authControllerProvider).logout();
+    }
   }
 
   @override
@@ -64,20 +82,31 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
     final vehiculoDeHoy = cargaAbiertaDeHoy == null
         ? null
         : vehiculosRepo.porId(cargaAbiertaDeHoy.vehiculoId);
-    final usado = vehiculoDeHoy == null
-        ? 0.0
-        : repo.litrosAutorizadosAcumulados(vehiculoDeHoy.id);
-    final tope = vehiculoDeHoy?.topeSemanal ?? 0;
-    final disponible =
-        (tope - usado).clamp(0.0, tope == 0 ? 0.0 : double.infinity).toDouble();
-    final progreso =
-        tope > 0 ? (usado / tope).clamp(0, 1).toDouble() : 0.0;
 
     return Scaffold(
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: _FabSolicitar(
-        onPressed: () => _refrescarAlVolver(
-          () => context.push(RoutePaths.choferSolicitar),
+      // Mismo padding/maxWidth que `ContenidoResponsivo` (ver
+      // `_buildMovil`), calculado directo con `MediaQuery` en vez de
+      // `ContenidoResponsivo` en sí: el FAB vive fuera del `body` (via
+      // `Scaffold.floatingActionButton`), y ese slot necesita medir el
+      // tamaño intrínseco de su hijo para la animación de entrada del FAB
+      // — algo que el `LayoutBuilder` interno de `ContenidoResponsivo` no
+      // soporta bien (rompía el hit-test de tarjetas cercanas).
+      floatingActionButton: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: ContenidoResponsivo.paddingHorizontalPara(
+            MediaQuery.sizeOf(context).width,
+          ),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: AppBreakpoints.wideContentMaxWidth,
+          ),
+          child: _FabSolicitar(
+            onPressed: () => _refrescarAlVolver(
+              () => context.push(RoutePaths.choferTipoOperacion),
+            ),
+          ),
         ),
       ),
       body: SafeArea(
@@ -86,10 +115,6 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
           solicitudes: solicitudes,
           vehiculosRepo: vehiculosRepo,
           vehiculoDeHoy: vehiculoDeHoy,
-          tope: tope,
-          usado: usado,
-          disponible: disponible,
-          progreso: progreso,
           folioPendiente: folioPendiente,
           cargaAbiertaDeHoy: cargaAbiertaDeHoy,
         ),
@@ -124,6 +149,26 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
               ],
             ),
           ),
+          HeaderMenuButton(
+            items: [
+              HeaderMenuItem(
+                icon: Icons.info_outline,
+                label: 'Acerca de',
+                onTap: () => AcercaDeDialog.show(context),
+              ),
+              HeaderMenuItem(
+                icon: Icons.help_outline,
+                label: 'Ayuda y soporte',
+                onTap: () => AyudaSoporteDialog.show(context),
+              ),
+              HeaderMenuItem(
+                icon: Icons.logout,
+                label: 'Cerrar sesión',
+                destructive: true,
+                onTap: _cerrarSesion,
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -132,10 +177,6 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
   Widget _buildAlertas({
     required BuildContext context,
     required Vehiculo? vehiculoDeHoy,
-    required double tope,
-    required double usado,
-    required double disponible,
-    required double progreso,
     required String? folioPendiente,
     required dynamic cargaAbiertaDeHoy,
   }) {
@@ -149,17 +190,11 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
         children: [
           if (vehiculoDeHoy != null) ...[
             Text(
-              'Hoy usas: ${vehiculoDeHoy.tipoUnidad} · ${vehiculoDeHoy.identificador}',
+              'Hoy usas: ${vehiculoDeHoy.modelo ?? vehiculoDeHoy.tipoUnidad} · '
+              '${vehiculoDeHoy.etiquetaUnidad}',
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
-            ),
-            const SizedBox(height: 8),
-            TarjetaTopeSemanal(
-              tope: tope,
-              usado: usado,
-              disponible: disponible,
-              progreso: progreso,
             ),
             const SizedBox(height: 16),
           ],
@@ -223,11 +258,9 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
         ),
         const SizedBox(height: 12),
         if (solicitudes.isEmpty)
-          EstadoVacio(
+          const EstadoVacio(
             icono: Icons.receipt_long_outlined,
             mensaje: 'Aún no tienes solicitudes de carga.',
-            textoAccion: 'Solicitar carga',
-            onAccion: () => context.push(RoutePaths.choferSolicitar),
           )
         else
           for (final grupo in agruparPorFecha(
@@ -260,10 +293,6 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
     required List<SolicitudAutorizacion> solicitudes,
     required VehiculosRepository vehiculosRepo,
     required Vehiculo? vehiculoDeHoy,
-    required double tope,
-    required double usado,
-    required double disponible,
-    required double progreso,
     required String? folioPendiente,
     required dynamic cargaAbiertaDeHoy,
   }) {
@@ -271,18 +300,18 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
       children: [
         _buildHeader(context, perfil),
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 88),
+          // Mismo `ContenidoResponsivo` compartido por todo el panel de
+          // chofer — ver `ChoferHomeShell` (ya no envuelve las pestañas en
+          // un tope de 480px, cada una controla el suyo).
+          child: ContenidoResponsivo(
+            paddingSuperior: 16,
+            paddingInferior: 88,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildAlertas(
                   context: context,
                   vehiculoDeHoy: vehiculoDeHoy,
-                  tope: tope,
-                  usado: usado,
-                  disponible: disponible,
-                  progreso: progreso,
                   folioPendiente: folioPendiente,
                   cargaAbiertaDeHoy: cargaAbiertaDeHoy,
                 ),
@@ -308,27 +337,32 @@ class _FabSolicitar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
+    // Sin `Padding` horizontal propio: el ancho/margen lateral ya lo da
+    // `ContenidoResponsivo` en el `build()` de `ChoferHomeScreen`, igual
+    // que a las tarjetas de arriba — duplicarlo aquí las desalineaba.
     return SizedBox(
       width: double.infinity,
       height: 56,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: FloatingActionButton.extended(
-          onPressed: onPressed,
-          backgroundColor: const Color(0xFF1463FF),
-          foregroundColor: Colors.white,
-          elevation: 6,
-          focusElevation: 8,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          icon: const Icon(Icons.local_gas_station_rounded, size: 24),
-          label: const Text(
-            'Solicitar carga',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 16,
-            ),
+      child: FloatingActionButton.extended(
+        onPressed: onPressed,
+        backgroundColor: colors.primary,
+        foregroundColor: colors.primaryOn,
+        // Mismo nivel de elevación que `AppElevatedButton` (más suave que
+        // antes) — `FloatingActionButton` no expone `shadowColor` como
+        // `ElevatedButton`, así que aquí solo se pareja la elevación, no
+        // el tinte de color de la sombra.
+        elevation: 8,
+        focusElevation: 10,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        icon: const Icon(Icons.local_gas_station_rounded, size: 24),
+        label: const Text(
+          'Solicitar carga',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
           ),
         ),
       ),
@@ -347,93 +381,98 @@ class _SolicitudTile extends StatelessWidget {
     final colors = context.colors;
     final hora = formatearHora(solicitud.creadaEn);
 
-    return Card(
-      margin: EdgeInsets.zero,
-      child: InkWell(
-        onTap: () => DetalleSolicitudDialog.show(
-          context,
-          solicitud: solicitud,
-          vehiculo: vehiculo,
-        ),
-        borderRadius: AppRadii.cardRadius,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return AppCard(
+      floating: true,
+      onTap: () => DetalleSolicitudDialog.show(
+        context,
+        solicitud: solicitud,
+        vehiculo: vehiculo,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            '${solicitud.litrosSolicitados.toStringAsFixed(1)} L',
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              fontFamily: 'IBM Plex Mono',
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                    Flexible(
+                      child: Text(
+                        '${solicitud.litrosSolicitados.toStringAsFixed(1)} L',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontFamily: 'IBM Plex Mono',
+                          fontWeight: FontWeight.w700,
                         ),
-                        Text(
-                          ' solicitados',
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      [
-                        hora,
-                        if (vehiculo != null) vehiculo!.tipoUnidad,
-                        if (vehiculo != null) vehiculo!.identificador,
-                        if (vehiculo != null) '· ${vehiculo!.tipoCombustible}',
-                      ].join(' · '),
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
-                    ),
-                    if (solicitud.comentario != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        solicitud.comentario!,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(color: colors.error),
                       ),
-                    ],
+                    ),
+                    Text(
+                      ' solicitados',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
                   ],
                 ),
-              ),
-              _BadgeEstado(estado: solicitud.estado),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  [
+                    hora,
+                    if (vehiculo != null)
+                      vehiculo!.modelo ?? vehiculo!.tipoUnidad,
+                    if (vehiculo != null) vehiculo!.etiquetaUnidad,
+                    if (vehiculo != null)
+                      '· ${vehiculo!.tipoCombustible ?? 'Sin especificar'}',
+                  ].join(' · '),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
+                ),
+                if (solicitud.comentario != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    solicitud.comentario!,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: colors.error),
+                  ),
+                ],
+              ],
+            ),
           ),
-        ),
+          _BadgeEstado(estadoVisual: solicitud.estadoVisual),
+        ],
       ),
     );
   }
 }
 
 class _BadgeEstado extends StatelessWidget {
-  const _BadgeEstado({required this.estado});
+  const _BadgeEstado({required this.estadoVisual});
 
-  final EstadoSolicitud estado;
+  final EstadoVisualSolicitud estadoVisual;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final (color, texto, icono) = switch (estado) {
-      EstadoSolicitud.pendiente => (
+    final (color, texto, icono) = switch (estadoVisual) {
+      EstadoVisualSolicitud.pendiente => (
         colors.warning,
         'En espera',
         Icons.schedule_outlined,
       ),
-      EstadoSolicitud.aprobada => (
+      EstadoVisualSolicitud.autorizada => (
         colors.success,
         'Autorizado',
         Icons.check_circle_outline,
       ),
-      EstadoSolicitud.rechazada => (
+      // Mismo criterio que `EstadoSolicitudBadge`: ámbar (advertencia),
+      // no rojo — un ajuste no es un error, es algo que el chofer debe
+      // notar antes de ir a cargar.
+      EstadoVisualSolicitud.ajustada => (
+        colors.warning,
+        'Ajustado',
+        Icons.tune_outlined,
+      ),
+      EstadoVisualSolicitud.rechazada => (
         colors.error,
         'Rechazado',
         Icons.cancel_outlined,
@@ -565,12 +604,10 @@ class _BannerPendientesOffline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Container(
+    return AppCard(
+      floating: true,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: colors.warning.withValues(alpha: 0.1),
-        borderRadius: AppRadii.cardRadius,
-      ),
+      color: colors.warning.withValues(alpha: 0.1),
       child: Row(
         children: [
           Icon(Icons.cloud_off_outlined, size: 18, color: colors.warning),

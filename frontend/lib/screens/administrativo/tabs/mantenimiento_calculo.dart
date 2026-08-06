@@ -110,7 +110,7 @@ String construirCsvMantenimiento(List<DiagnosticoMantenimiento> diagnosticos) {
     ],
     for (final d in diagnosticos)
       [
-        d.vehiculo.identificador,
+        d.vehiculo.etiquetaUnidad,
         d.vehiculo.tipoUnidad,
         d.lecturaActual?.toStringAsFixed(0) ?? '',
         d.usoDesdeServicio?.toStringAsFixed(0) ?? '',

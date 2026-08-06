@@ -42,8 +42,12 @@ Future<void> _loginComoAdmin(WidgetTester tester) async {
 
 /// Cambia de sección en el shell del panel admin (sidebar o bottom nav,
 /// según el ancho de pantalla del test — la etiqueta es la misma en
-/// ambos).
+/// ambos). `ensureVisible` es necesario porque el sidebar tiene más
+/// secciones de las que caben sin scroll en el viewport del test (ver
+/// comentario en `_SidebarAdmin`).
 Future<void> _irASeccion(WidgetTester tester, String etiqueta) async {
+  await tester.ensureVisible(find.text(etiqueta));
+  await tester.pumpAndSettle();
   await tester.tap(find.text(etiqueta));
   await tester.pumpAndSettle();
 }
@@ -51,7 +55,7 @@ Future<void> _irASeccion(WidgetTester tester, String etiqueta) async {
 void main() {
   testWidgets(
       'admin ve el detalle de un chofer con su historial de vehículos usados, '
-      'y edita el tope de un vehículo desde el catálogo', (tester) async {
+      'y edita el combustible de un vehículo desde el catálogo', (tester) async {
     final container = makeTestContainer();
     addTearDown(container.dispose);
 
@@ -84,7 +88,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Vehículos usados'), findsOneWidget);
-    expect(find.textContaining(vehiculo1.identificador), findsWidgets);
+    expect(find.textContaining(vehiculo1.etiquetaUnidad), findsWidgets);
 
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
@@ -95,13 +99,21 @@ void main() {
     await tester.pumpAndSettle();
 
     final dialog = find.byType(Dialog);
-    final campoTope = find.descendant(
-        of: dialog, matching: find.widgetWithText(TextFormField, 'Tope semanal (déjalo vacío si aún no se asigna)'));
-    await tester.enterText(campoTope, '700');
+    // vehiculo1 (veh-1) trae combustible 'Diésel' de fábrica en el mock —
+    // lo cambia a 'Magna' para confirmar que la edición persiste.
+    await tester.tap(
+      find.descendant(
+        of: dialog,
+        matching: find.widgetWithText(DropdownButtonFormField<String?>, 'Diésel'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Magna').last);
+    await tester.pumpAndSettle();
     await tester.tap(find.descendant(of: dialog, matching: find.text('Guardar vehículo')));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Tope: 700 L/semana'), findsOneWidget);
+    expect(find.textContaining('Magna'), findsWidgets);
   });
 
   testWidgets('admin actualiza el precio de un combustible', (tester) async {
@@ -248,9 +260,9 @@ void main() {
       id: 'veh-1',
       tipoUnidad: 'Camión',
       modelo: 'Chevrolet NPR 2020',
-      identificador: 'ABC-123',
+      placas: 'ABC-123-A',
+      numeroEconomico: null,
       tipoCombustible: 'Diésel',
-      topeSemanal: 500,
       intervaloServicio: 5000,
     );
     final carga = Carga(
@@ -278,6 +290,8 @@ void main() {
       vehiculo: vehiculo,
       rendimiento: const RendimientoDia(kmRecorridos: 400, rendimiento: 10.0),
       precioPorLitro: 24.50,
+      importe: 980,
+      fuenteGasto: FuenteGasto.estimado,
     );
 
     final csv = construirCsvConcentrado([fila], totalLitros: 40, totalImporte: 980);

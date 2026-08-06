@@ -10,7 +10,7 @@ import '../../../widgets/chip_filtro.dart';
 import '../../../widgets/estado_vacio.dart';
 import '../../../widgets/fecha_formato.dart';
 import '../../../widgets/grouped_section.dart';
-import '../../../widgets/responsive_scroll_view.dart';
+import '../../../widgets/contenido_responsivo.dart';
 import '../../../widgets/skeleton_loader.dart';
 
 /// Traduce la clave de acción del backend (snake_case, ej. `'editar_carga'`)
@@ -150,7 +150,7 @@ class _AuditoriaTabState extends ConsumerState<AuditoriaTab> {
         ? repo.registros
         : repo.registros.where((r) => r.entidad == _filtroEntidad).toList();
 
-    return ResponsiveScrollView(
+    return ContenidoResponsivo(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../models/carga.dart';
 import '../models/cierre_dia.dart';
 import '../models/perfil.dart';
@@ -147,7 +149,7 @@ class ApiOperacionesRepository implements OperacionesRepository {
               s.estado == EstadoSolicitud.aprobada &&
               estaEnSemanaDe(s.creadaEn, hoy),
         )
-        .fold(0.0, (suma, s) => suma + s.costoEstimado);
+        .fold(0.0, (suma, s) => suma + (s.costoEstimado ?? 0));
   }
 
   @override
@@ -196,8 +198,8 @@ class ApiOperacionesRepository implements OperacionesRepository {
     final data = await _client.patch(
       '/cargas/$cargaId',
       body: {
-        if (litrosCargados != null) 'litrosCargados': litrosCargados,
-        if (kmAlCargar != null) 'kmAlCargar': kmAlCargar,
+        'litrosCargados': ?litrosCargados,
+        'kmAlCargar': ?kmAlCargar,
       },
     );
     final carga = Carga.fromJson(data as Map<String, dynamic>);
@@ -225,7 +227,7 @@ class ApiOperacionesRepository implements OperacionesRepository {
         'vehiculoId': vehiculo.id,
         'litrosSolicitados': '$litrosSolicitados',
         'esUrgente': '$esUrgente',
-        if (motivoChofer != null) 'motivoChofer': motivoChofer,
+        'motivoChofer': ?motivoChofer,
         'actividad': actividad,
         'fechaProgramada': fechaProgramada.toIso8601String(),
       },
@@ -291,6 +293,7 @@ class ApiOperacionesRepository implements OperacionesRepository {
     required String choferId,
     required String vehiculoId,
     required String folioAutorizacion,
+    List<String>? foliosAdicionales,
     required double litrosCargados,
     required double kmAlCargar,
     required String gasolinera,
@@ -303,6 +306,10 @@ class ApiOperacionesRepository implements OperacionesRepository {
       campos: {
         'vehiculoId': vehiculoId,
         'folioAutorizacion': folioAutorizacion,
+        // Multipart no soporta arrays anidados — se manda como string
+        // JSON, el backend lo parsea (ver `cargas.routes.ts`).
+        if (foliosAdicionales != null && foliosAdicionales.isNotEmpty)
+          'foliosAdicionales': jsonEncode(foliosAdicionales),
         'litrosCargados': '$litrosCargados',
         'kmAlCargar': '$kmAlCargar',
         'gasolinera': gasolinera,

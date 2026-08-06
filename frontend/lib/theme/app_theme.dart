@@ -121,6 +121,17 @@ class AppTheme {
         ),
         prefixIconColor: colors.textMuted,
         labelStyle: textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
+        // Sin esto, Flutter escala el mismo `labelStyle` (bodyMedium, 14px)
+        // hacia abajo un factor fijo al flotar — un tamaño "de compromiso",
+        // ni el de reposo ni uno pensado a propósito para flotar. Un
+        // estilo explícito, más chico y con un poco de tracking, hace que
+        // la etiqueta se lea como una etiqueta integrada al campo (no como
+        // el mismo texto solo encogido) sin necesidad de un borde visible
+        // en reposo (esa decisión de diseño no se toca aquí).
+        floatingLabelStyle: textTheme.labelSmall?.copyWith(
+          color: colors.textSecondary,
+          fontWeight: FontWeight.w600,
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style:
@@ -129,8 +140,15 @@ class AppTheme {
               foregroundColor: colors.primaryOn,
               disabledBackgroundColor: colors.border,
               disabledForegroundColor: colors.textMuted,
-              elevation: 3,
-              shadowColor: Colors.black.withValues(alpha: 0.35),
+              // Mismo lenguaje de sombra "flotante" que `AppShadows.floating`
+              // (suave, difusa, opacidad baja) — Material calcula la sombra
+              // de un botón a partir de `elevation`/`shadowColor`, no acepta
+              // una lista de `BoxShadow`, así que se traduce el mismo
+              // criterio en vez de reutilizar el token literal. Antes era
+              // negro al 35% con poca elevación (más dura/marcada que el
+              // resto de la app).
+              elevation: 6,
+              shadowColor: Colors.black.withValues(alpha: 0.2),
               shape: RoundedRectangleBorder(
                 borderRadius: AppRadii.buttonRadius,
               ),

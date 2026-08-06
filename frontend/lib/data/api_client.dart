@@ -23,12 +23,24 @@ class ApiException implements Exception {
 /// token JWT (si hay uno guardado) a cada petición y traduce las
 /// respuestas de error del backend a [ApiException].
 class ApiClient {
-  ApiClient({required TokenStorage tokenStorage, http.Client? httpClient})
-    : _tokenStorage = tokenStorage,
-      _http = httpClient ?? http.Client();
+  ApiClient({
+    required this._tokenStorage,
+    http.Client? httpClient,
+    this.onSesionExpirada,
+  }) : _http = httpClient ?? http.Client();
 
   final TokenStorage _tokenStorage;
   final http.Client _http;
+
+  /// Se llama cuando un 401 no se pudo resolver ni con refresh token —
+  /// además de borrar el storage (ver `_limpiarSesionExpirada`), esto es
+  /// lo que de verdad saca al usuario a la pantalla de login EN VIVO
+  /// (mientras sigue usando la app), no solo en el próximo arranque.
+  /// `ApiClient` es una clase de capa de datos sin acceso a `ref`/
+  /// providers — quien lo construye (`apiClientProvider`) inyecta aquí la
+  /// notificación a `sessionProvider`, en vez de que este archivo dependa
+  /// de Riverpod directamente.
+  final void Function()? onSesionExpirada;
 
   Uri _uri(String path) => Uri.parse('${ApiConfig.baseUrl}$path');
 
@@ -67,23 +79,26 @@ class ApiClient {
     }
   }
 
-  /// Borra ambos tokens — el guard de rutas existente (`app_router.dart`)
-  /// reacciona solo a `sessionProvider`, así que además hay que borrar el
-  /// perfil guardado para que una sesión "colgada" (tokens borrados pero
-  /// perfil todavía en memoria/`SessionStorage`) no confunda al arrancar
-  /// la app de nuevo. Ver `AuthController` para el resto de la limpieza.
+  /// Borra ambos tokens y notifica [onSesionExpirada]. El guard de rutas
+  /// (`app_router.dart`) reacciona solo a `sessionProvider`, no a
+  /// `TokenStorage` directamente — sin el callback, la sesión quedaba
+  /// "colgada" en memoria (tokens borrados pero `sessionProvider` seguía
+  /// con el perfil viejo) hasta el siguiente arranque de la app, que sí
+  /// revisa el token en `AuthController.restaurarSesionAlIniciar` antes
+  /// de confiar en el perfil persistido.
   Future<void> _limpiarSesionExpirada() async {
     await _tokenStorage.borrarToken();
     await _tokenStorage.borrarRefreshToken();
+    onSesionExpirada?.call();
   }
 
   /// Envía una petición ya armada por [enviar] y, si responde 401 (access
   /// token expirado — dura solo 15 min, así que va a pasar seguido),
   /// intenta refrescar el token UNA vez y reintenta la petición original
-  /// también una sola vez. Si el refresh falla, limpia la sesión y deja
-  /// que la respuesta 401 original se propague como [ApiException] (el
-  /// guard de rutas existente redirige a `/login` al ver que no hay
-  /// sesión — no hace falta manejo especial de navegación aquí).
+  /// también una sola vez. Si el refresh falla, limpia la sesión (incluido
+  /// [onSesionExpirada], que saca al usuario a `/login` DE INMEDIATO, no
+  /// solo en el próximo arranque de la app) y deja que la respuesta 401
+  /// original se propague como [ApiException].
   Future<dynamic> _conReintentoDeToken(
     Future<http.Response> Function() enviar,
   ) async {
@@ -126,7 +141,10 @@ class ApiClient {
   /// porque el propio cliente `http` truena antes de tener una respuesta
   /// — y las traduce a un mensaje claro para el usuario en vez de dejar
   /// pasar la excepción cruda de `dart:io`/`http`.
-  Future<T> _conManejoDeErrores<T>(String contexto, Future<T> Function() fn) async {
+  Future<T> _conManejoDeErrores<T>(
+    String contexto,
+    Future<T> Function() fn,
+  ) async {
     try {
       return await fn();
     } on ApiException {
@@ -184,6 +202,10 @@ class ApiClient {
     String path, {
     required Map<String, String> campos,
     Map<String, String?> archivos = const {},
+    // Igual que `archivos`, pero para campos que aceptan varios archivos
+    // bajo el mismo nombre (ej. `fotos`, hasta 5) — multer/el backend los
+    // lee como una lista por ese campo.
+    Map<String, List<String>> archivosMultiples = const {},
   }) {
     return _conManejoDeErrores('ApiClient.postMultipart $path', () async {
       Future<http.Response> enviar() async {
@@ -194,6 +216,11 @@ class ApiClient {
           final ruta = entry.value;
           if (ruta == null) continue;
           req.files.add(await http.MultipartFile.fromPath(entry.key, ruta));
+        }
+        for (final entry in archivosMultiples.entries) {
+          for (final ruta in entry.value) {
+            req.files.add(await http.MultipartFile.fromPath(entry.key, ruta));
+          }
         }
         final streamed = await _http.send(req);
         return http.Response.fromStream(streamed);

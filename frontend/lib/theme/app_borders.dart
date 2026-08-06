@@ -7,6 +7,10 @@ class AppBorders {
   /// Bordes finos de tiles de lista (`Border.all(color: colors.border)`).
   static const double hairline = 1.0;
 
+  /// Borde de cards flotantes en depth design — misma finura que hairline,
+  /// pero el color viene de `colors.border` (blanco al 6% en oscuro).
+  static const double floating = 1.0;
+
   /// Inputs en reposo/error, y el borde de `OutlinedButton`.
   static const double standard = 1.5;
 

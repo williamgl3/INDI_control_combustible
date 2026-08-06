@@ -11,7 +11,7 @@ import '../../../theme/app_theme.dart';
 import '../../../widgets/estado_vacio.dart';
 import '../../../widgets/formato_numero.dart';
 import '../../../widgets/ios_segmented_control.dart';
-import '../../../widgets/responsive_scroll_view.dart';
+import '../../../widgets/contenido_responsivo.dart';
 import '../../../widgets/stat_tile.dart';
 import '../../../widgets/stat_tile_row.dart';
 import 'dashboard_calculo.dart';
@@ -65,7 +65,7 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
     );
     final serie = agruparLitrosPorSubperiodo(cargas, _periodo, ahora);
 
-    return ResponsiveScrollView(
+    return ContenidoResponsivo(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

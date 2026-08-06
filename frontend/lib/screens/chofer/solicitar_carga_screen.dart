@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/cola_solicitudes_offline.dart';
 import '../../core/connectivity_provider.dart';
@@ -17,9 +19,11 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_card.dart';
 import '../../widgets/app_elevated_button.dart';
 import '../../widgets/aviso_error.dart';
 import '../../widgets/brand_sub_header.dart';
+import '../../widgets/contenido_responsivo.dart';
 import '../../widgets/estado_mantenimiento_badge.dart';
 import '../../widgets/fecha_formato.dart';
 import '../../widgets/grouped_section.dart';
@@ -29,7 +33,13 @@ import '../administrativo/tabs/mantenimiento_calculo.dart';
 import 'reportar_incidencia_dialog.dart';
 
 class SolicitarCargaScreen extends ConsumerStatefulWidget {
-  const SolicitarCargaScreen({super.key});
+  const SolicitarCargaScreen({super.key, this.categoriaFiltro});
+
+  /// Categoría elegida en `TipoOperacionScreen` (ej. "Maquinaria") — filtra
+  /// el catálogo de `SelectorVehiculo` a esa categoría. `null` muestra el
+  /// catálogo completo (llegando a esta pantalla por una ruta que no pasó
+  /// por la selección de tipo de operación).
+  final String? categoriaFiltro;
 
   @override
   ConsumerState<SolicitarCargaScreen> createState() =>
@@ -37,6 +47,8 @@ class SolicitarCargaScreen extends ConsumerStatefulWidget {
 }
 
 class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
+  static const _kUltimaCantidadKey = 'ultima_cantidad_litros_solicitados';
+
   final _formKey = GlobalKey<FormState>();
   final _motivoController = TextEditingController();
   final _actividadController = TextEditingController();
@@ -44,10 +56,21 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
 
   Vehiculo? _vehiculo;
   double _litros = 0;
+  double? _ultimaCantidad;
   bool _esUrgente = false;
   bool _cargando = false;
   String? _errorGeneral;
   DiagnosticoMantenimiento? _diagnosticoMantenimiento;
+
+  // TODO-SPEC: no existe todavía un catálogo real de supervisores — lista
+  // placeholder hasta que haya una decisión de negocio/backend al respecto.
+  static const _supervisoresPlaceholder = [
+    'Ing. Ponce',
+    'Ing. Ramírez',
+    'Ing. Torres',
+  ];
+  final _serviciosAdicionales = <String>{};
+  String? _supervisor;
 
   String? _fotoTableroPath;
   bool _cargandoFotoTablero = false;
@@ -58,11 +81,30 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
   }();
 
   @override
+  void initState() {
+    super.initState();
+    _cargarUltimaCantidad();
+  }
+
+  @override
   void dispose() {
     _motivoController.dispose();
     _actividadController.dispose();
     _motivoFocus.dispose();
     super.dispose();
+  }
+
+  Future<void> _cargarUltimaCantidad() async {
+    final prefs = await SharedPreferences.getInstance();
+    final guardada = prefs.getDouble(_kUltimaCantidadKey);
+    if (mounted && guardada != null && guardada > 0) {
+      setState(() => _ultimaCantidad = guardada);
+    }
+  }
+
+  Future<void> _guardarUltimaCantidad() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_kUltimaCantidadKey, _litros);
   }
 
   Future<void> _elegirVehiculo(Vehiculo vehiculo) async {
@@ -109,6 +151,21 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
         context,
       ).showSnackBar(const SnackBar(content: Text('Incidencia reportada.')));
     }
+  }
+
+  /// Agrega el supervisor/servicios adicionales elegidos (solo relevantes
+  /// para maquinaria) al motivo, ya que no existe todavía un campo propio
+  /// en el contrato del backend para esto — ver nota en la clase.
+  String? _motivoConDetalleMaquinaria(String? motivoBase) {
+    if (_vehiculo?.tipoUnidad != 'Maquinaria') return motivoBase;
+    final detalles = <String>[
+      if (_supervisor != null) 'Supervisor: $_supervisor',
+      if (_serviciosAdicionales.isNotEmpty)
+        'Servicios adicionales: ${_serviciosAdicionales.join(', ')}',
+    ];
+    if (detalles.isEmpty) return motivoBase;
+    final detalleTexto = detalles.join(' · ');
+    return motivoBase == null ? detalleTexto : '$motivoBase\n$detalleTexto';
   }
 
   Future<void> _elegirFechaProgramada() async {
@@ -167,9 +224,11 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
       _errorGeneral = null;
     });
 
-    final motivo = _motivoController.text.trim().isEmpty
-        ? null
-        : _motivoController.text.trim();
+    final motivo = _motivoConDetalleMaquinaria(
+      _motivoController.text.trim().isEmpty
+          ? null
+          : _motivoController.text.trim(),
+    );
     final actividad = _actividadController.text.trim();
 
     if (ref.read(conectividadProvider).valueOrNull == false) {
@@ -193,6 +252,7 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
           );
       HapticFeedback.mediumImpact();
       ref.read(operacionesTickProvider.notifier).state++;
+      unawaited(_guardarUltimaCantidad());
       if (mounted) {
         context.replace(RoutePaths.choferRespuesta, extra: solicitud);
       }
@@ -233,6 +293,7 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
           ),
         );
     ref.read(operacionesTickProvider.notifier).state++;
+    unawaited(_guardarUltimaCantidad());
     if (!mounted) return;
     setState(() => _cargando = false);
     await SinConexionDialog.show(
@@ -241,7 +302,11 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
           'Guardamos tu solicitud en este dispositivo. Se enviará sola en '
           'cuanto vuelvas a tener señal — no hace falta que la repitas.',
     );
-    if (mounted) context.pop();
+    // `go` en vez de `pop`: ahora esta pantalla se alcanza vía
+    // TipoOperacionScreen (push), así que un solo `pop` regresaría ahí en
+    // vez de a Inicio. `ChoferHomeScreen` lee el estado de la cola
+    // directo del provider al reconstruirse, no depende de este pop.
+    if (mounted) context.go(RoutePaths.chofer);
   }
 
   @override
@@ -259,14 +324,10 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
           Expanded(
             child: SafeArea(
               top: false,
-              child: SingleChildScrollView(
+              child: ContenidoResponsivo(
                 physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.lg,
-                  AppSpacing.lg,
-                  AppSpacing.xxl,
-                ),
+                paddingSuperior: AppSpacing.lg,
+                paddingInferior: AppSpacing.xxl,
                 child: Form(
                   key: _formKey,
                   autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -276,13 +337,16 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
                       SelectorVehiculo(
                         vehiculoSeleccionado: _vehiculo,
                         onSeleccionar: _elegirVehiculo,
+                        filtroTipoUnidad: widget.categoriaFiltro,
                       ),
                       if (_vehiculo != null) ...[
                         const SizedBox(height: AppSpacing.md),
                         GroupedSection(
                           children: [
                             GroupedRow(
-                              titulo: _vehiculo!.tipoCombustible,
+                              titulo:
+                                  _vehiculo!.tipoCombustible ??
+                                  'Sin especificar',
                               subtitulo: 'Tipo de combustible',
                               icono: Icons.local_gas_station_outlined,
                             ),
@@ -319,6 +383,62 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
                           ],
                         ),
                       ],
+                      if (_vehiculo?.tipoUnidad == 'Maquinaria') ...[
+                        const SizedBox(height: AppSpacing.md),
+                        GroupedSection(
+                          header: 'Maquinaria',
+                          children: [
+                            GroupedRow(
+                              titulo: 'Grasa',
+                              subtitulo: 'Servicio de engrasado en esta salida',
+                              icono: Icons.opacity_outlined,
+                              trailing: CupertinoSwitch(
+                                value: _serviciosAdicionales.contains('Grasa'),
+                                activeTrackColor: colors.primary,
+                                inactiveTrackColor: colors.border,
+                                onChanged: (v) => setState(() {
+                                  if (v) {
+                                    _serviciosAdicionales.add('Grasa');
+                                  } else {
+                                    _serviciosAdicionales.remove('Grasa');
+                                  }
+                                }),
+                              ),
+                            ),
+                            GroupedRow(
+                              titulo: 'Aceite',
+                              subtitulo: 'Cambio o relleno de aceite en esta salida',
+                              icono: Icons.water_drop_outlined,
+                              trailing: CupertinoSwitch(
+                                value: _serviciosAdicionales.contains('Aceite'),
+                                activeTrackColor: colors.primary,
+                                inactiveTrackColor: colors.border,
+                                onChanged: (v) => setState(() {
+                                  if (v) {
+                                    _serviciosAdicionales.add('Aceite');
+                                  } else {
+                                    _serviciosAdicionales.remove('Aceite');
+                                  }
+                                }),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.lg),
+                        DropdownButtonFormField<String>(
+                          initialValue: _supervisor,
+                          decoration: const InputDecoration(
+                            labelText: 'Supervisor (opcional)',
+                            prefixIcon: Icon(Icons.engineering_outlined),
+                          ),
+                          items: _supervisoresPlaceholder
+                              .map(
+                                (s) => DropdownMenuItem(value: s, child: Text(s)),
+                              )
+                              .toList(),
+                          onChanged: (v) => setState(() => _supervisor = v),
+                        ),
+                      ],
                       const SizedBox(height: AppSpacing.xl),
                       _FotoTableroCard(
                         rutaFoto: _fotoTableroPath,
@@ -334,16 +454,7 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
                       _SelectorLitros(
                         valor: _litros,
                         onChanged: (v) => setState(() => _litros = v),
-                        referenciaMaxima:
-                            _vehiculo != null &&
-                                !_vehiculo!.esNuevaSinFormalizar
-                            ? _vehiculo!.topeSemanal
-                            : null,
-                        referenciaEtiqueta:
-                            _vehiculo != null &&
-                                !_vehiculo!.esNuevaSinFormalizar
-                            ? 'de tu tope semanal: ${_vehiculo!.topeSemanal.toStringAsFixed(0)} L'
-                            : null,
+                        ultimaCantidad: _ultimaCantidad,
                       ),
                       const SizedBox(height: AppSpacing.xl),
                       GroupedSection(
@@ -542,12 +653,10 @@ class _FotoTableroCard extends StatelessWidget {
   }
 
   Widget _buildConFoto(BuildContext context, AppColors colors) {
-    return Container(
+    return AppCard(
+      floating: true,
       padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        borderRadius: AppRadii.cardRadius,
-        border: Border.all(color: colors.success.withValues(alpha: 0.4)),
-      ),
+      border: Border.all(color: colors.success.withValues(alpha: 0.4)),
       child: Row(
         children: [
           Stack(
@@ -649,20 +758,19 @@ class _FotoTableroCard extends StatelessWidget {
   }
 }
 
-/// Selector de litros interactivo: display monoespaciado grande, botones
-/// +/- de 48px y chips de atajos rápidos (+10, +20, +50, Tanque Lleno).
+/// Selector de litros interactivo: display grande editable (con animación al
+/// cambiar), chips de atajos rápidos (+10, +20, +50) como acción principal,
+/// atajo de "repetir última cantidad" y botón de reinicio.
 class _SelectorLitros extends StatelessWidget {
   const _SelectorLitros({
     required this.valor,
     required this.onChanged,
-    this.referenciaMaxima,
-    this.referenciaEtiqueta,
+    this.ultimaCantidad,
   });
 
   final double valor;
   final ValueChanged<double> onChanged;
-  final double? referenciaMaxima;
-  final String? referenciaEtiqueta;
+  final double? ultimaCantidad;
 
   static const _atajos = [
     (10.0, '+10 L'),
@@ -673,116 +781,96 @@ class _SelectorLitros extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final maxRef = referenciaMaxima;
-    final mostrarReferencia = maxRef != null && maxRef > 0;
-    final progreso = mostrarReferencia
-        ? (valor / maxRef).clamp(0, 1).toDouble()
-        : 0.0;
+    final ultima = ultimaCantidad;
+    final mostrarRepetir = ultima != null && ultima > 0;
 
-    return Container(
+    return AppCard(
+      floating: true,
       padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: AppRadii.cardRadius,
-        border: Border.all(color: colors.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'LITROS SOLICITADOS',
-            style: Theme.of(context).textTheme.labelMedium,
-          ),
-          const SizedBox(height: AppSpacing.lg),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _BotonPasoGrande(
-                icono: Icons.remove,
-                onTap: () =>
-                    onChanged((valor - 10).clamp(0, double.infinity)),
-              ),
-              const SizedBox(width: AppSpacing.lg),
               Expanded(
-                child: GestureDetector(
-                  onTap: () => _editarManualmente(context),
-                  child: Column(
-                    children: [
-                      Text(
-                        valor.toStringAsFixed(1),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontFamily: 'IBM Plex Mono',
-                          fontSize: 40,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1463FF),
-                        ),
-                      ),
-                      Text(
-                        'L · toca para escribir',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colors.textMuted,
-                        ),
-                      ),
-                    ],
+                child: Text(
+                  'LITROS SOLICITADOS',
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ),
+              if (valor > 0)
+                TextButton.icon(
+                  onPressed: () => onChanged(0),
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Reiniciar'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: colors.textMuted,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.lg),
-              _BotonPasoGrande(
-                icono: Icons.add,
-                onTap: () => onChanged(valor + 10),
-              ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              for (final (cantidad, label) in _atajos)
-                _ChipAtajo(
-                  label: label,
-                  onTap: () => onChanged(valor + cantidad),
-                ),
-              if (mostrarReferencia)
-                _ChipAtajo(
-                  label: 'Tanque lleno',
-                  onTap: () => onChanged(maxRef),
-                  esLleno: true,
-                ),
-            ],
-          ),
-          if (mostrarReferencia) ...[
-            const SizedBox(height: AppSpacing.lg),
-            ClipRRect(
-              borderRadius: AppRadii.badgeRadius,
-              child: SizedBox(
-                height: 6,
-                child: Stack(
-                  children: [
-                    Container(color: colors.surfaceAlt),
-                    AnimatedFractionallySizedBox(
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeInOut,
-                      widthFactor: progreso,
-                      child: Container(
-                        color: progreso >= 1 ? colors.warning : colors.primary,
+          const SizedBox(height: AppSpacing.sm),
+          Center(
+            child: GestureDetector(
+              onTap: () => _editarManualmente(context),
+              child: Column(
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    transitionBuilder: (child, animation) => ScaleTransition(
+                      scale: animation,
+                      child: FadeTransition(opacity: animation, child: child),
+                    ),
+                    child: Text(
+                      valor.toStringAsFixed(1),
+                      key: ValueKey(valor),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontFamily: 'IBM Plex Mono',
+                        fontSize: 40,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1463FF),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  Text(
+                    'L · toca para escribir',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
+                  ),
+                ],
               ),
             ),
-            if (referenciaEtiqueta != null) ...[
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                referenciaEtiqueta!,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
-              ),
-            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          if (mostrarRepetir) ...[
+            _ChipAtajo(
+              label: 'Repetir: ${ultima.toStringAsFixed(0)} L',
+              icono: Icons.replay,
+              onTap: () => onChanged(ultima),
+              destacado: true,
+              anchoCompleto: true,
+            ),
+            const SizedBox(height: AppSpacing.sm),
           ],
+          Row(
+            children: [
+              for (final (cantidad, label) in _atajos) ...[
+                if (cantidad != _atajos.first.$1) const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _ChipAtajo(
+                    label: label,
+                    onTap: () => onChanged(valor + cantidad),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ],
       ),
     );
@@ -823,62 +911,74 @@ class _SelectorLitros extends StatelessWidget {
   }
 }
 
-/// Botón +/- grande con mínimo 48x48 de touch target.
-class _BotonPasoGrande extends StatelessWidget {
-  const _BotonPasoGrande({required this.icono, required this.onTap});
-
-  final IconData icono;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return SizedBox(
-      width: 52,
-      height: 52,
-      child: Material(
-        color: colors.surfaceAlt,
-        shape: const CircleBorder(),
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: Icon(icono, color: colors.primary, size: 24),
-        ),
-      ),
-    );
-  }
-}
-
-/// Chip pill para atajos de litros.
+/// Chip pill para atajos de litros — tamaño ampliado para ser la forma
+/// principal de construir la cantidad (ver [_SelectorLitros]).
 class _ChipAtajo extends StatelessWidget {
   const _ChipAtajo({
     required this.label,
     required this.onTap,
-    this.esLleno = false,
+    this.icono,
+    this.destacado = false,
+    this.anchoCompleto = false,
   });
 
   final String label;
   final VoidCallback onTap;
-  final bool esLleno;
+  final IconData? icono;
+  final bool destacado;
+  final bool anchoCompleto;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Material(
-      color: esLleno
-          ? colors.primary.withValues(alpha: 0.15)
-          : colors.surfaceAlt,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: onTap,
+    return Container(
+      width: anchoCompleto ? double.infinity : null,
+      decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: esLleno ? colors.primary : colors.textSecondary,
-              fontWeight: FontWeight.w600,
+        // Variante intencional de `AppShadows.card` (mismo blur/offset),
+        // no un olvido: el tinte de color de marca es la señal visual de
+        // "chip seleccionado/destacado", se perdería con el token neutro.
+        boxShadow: [
+          BoxShadow(
+            color: colors.primary.withValues(alpha: destacado ? 0.2 : 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: destacado
+            ? colors.primary.withValues(alpha: 0.15)
+            : colors.surfaceAlt,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(999),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: 14,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icono != null) ...[
+                  Icon(
+                    icono,
+                    size: 18,
+                    color: destacado ? colors.primary : colors.textSecondary,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                ],
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: destacado ? colors.primary : colors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -907,6 +1007,7 @@ class _BarraEnviar extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
+        boxShadow: context.shadows.floating,
         border: Border(
           top: BorderSide(
             color: Theme.of(context).dividerColor.withValues(alpha: 0.15),

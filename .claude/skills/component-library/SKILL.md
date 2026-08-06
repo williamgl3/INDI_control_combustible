@@ -40,8 +40,40 @@ Antes de escribir un nuevo widget visual, revisa si ya existe uno de estos:
   `TweenAnimationBuilder` de revelado.
 - `StepperNumerico` (`stepper_numerico.dart`) — input numérico grande con
   botones +/- y edición manual por toque, para capturar litros/km/horas en campo.
-- `fecha_formato.dart` — `formatearFechaCorta`/`formatearDiaMes`, funciones (no
-  widgets) para formatear fechas sin depender de `intl`.
+- `fecha_formato.dart` — `formatearFechaCorta`/`formatearDiaMes`/`formatearFecha`/
+  `formatearHora`/`etiquetaGrupoFecha`/`agruparPorFecha`, funciones (no widgets)
+  para formatear y agrupar por fecha sin depender de `intl`.
+- `TarjetaAccionSugerida` (`tarjeta_accion_sugerida.dart`) — tarjeta de "hay algo
+  que te conviene hacer ahora" (ícono + color + título + subtítulo + chevron,
+  tappable). Úsala para cualquier CTA contextual tipo "carga aprobada por
+  comprobar"/"día por cerrar" en vez de una card ad hoc por caso.
+- `SinConexionDialog` (`sin_conexion_dialog.dart`) — diálogo de "se guardó
+  localmente, se enviará solo al reconectar" para las colas offline. Llama
+  `SinConexionDialog.show(context, mensaje: '...')` en vez de armar un
+  `AlertDialog` a mano.
+- `AvisoError` (`aviso_error.dart`) — mensaje de error de validación/envío con
+  ícono + contenedor de color (mismo tratamiento que los avisos de éxito/OCR),
+  en vez del texto rojo plano sin ícono que se repetía por pantalla.
+- `CeldaEditable` (`celda_editable.dart`) — celda numérica editable "en el
+  lugar" estilo hoja de cálculo: texto con pista visual sutil de que es
+  editable, al tocarla se vuelve `TextField`, confirma con Enter/blur y
+  llama `onGuardar`. Úsala para cualquier valor editable inline (precio,
+  presupuesto, litros, km) en vez de abrir un diálogo modal para un solo
+  campo.
+- `FiltroColumnaBoton<T>` (`filtro_columna_boton.dart`) — ícono de filtro
+  por columna (como el de un encabezado de Excel) que abre una hoja con
+  casillas + buscador; el ícono se rellena de color cuando el filtro está
+  activo. Úsalo en encabezados de tabla en vez de un dropdown nativo.
+- `formato_numero.dart` — `formatearMoneda`/`formatearMonedaDecimal`/
+  `formatearNumero`/`formatearNumeroConDecimales`, funciones (no widgets)
+  con separador de miles (`es_MX`, vía `intl`) para dinero/cantidades — no
+  volver a armar `'\$${valor.toStringAsFixed(0)}'` a mano.
+- `AppElevatedButton` (`app_elevated_button.dart`) — `ElevatedButton` primario
+  con estado de carga incorporado (spinner + deshabilitado mientras
+  `cargando: true`). Pasa `onPressed` SIN el null-guard manual (`cargando ?
+  null : accion`) — el widget ya lo hace. Úsalo para cualquier botón primario
+  de envío de formulario en vez de repetir el `SizedBox`+`CircularProgressIndicator`
+  a mano.
 
 ## Regla al crear un widget nuevo
 Si necesitas un componente que no está en esta lista: créalo en `lib/widgets/`

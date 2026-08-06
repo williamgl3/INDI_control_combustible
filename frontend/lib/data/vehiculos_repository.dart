@@ -15,25 +15,27 @@ abstract class VehiculosRepository {
 
   Future<Vehiculo> crear({
     required String tipoUnidad,
-    required String identificador,
-    required String tipoCombustible,
-    required double topeSemanal,
+    String? placas,
+    String? numeroEconomico,
+    String? tipoCombustible,
     String? modelo,
     double? intervaloServicio,
   });
 
   Future<Vehiculo> reportarNuevo({
     required String tipoUnidad,
-    required String identificador,
+    String? placas,
+    String? numeroEconomico,
     required String tipoCombustible,
+    required String modelo,
   });
 
   Future<Vehiculo> actualizar({
     required String id,
     String? tipoUnidad,
-    String? identificador,
+    String? placas,
+    String? numeroEconomico,
     String? tipoCombustible,
-    double? topeSemanal,
     String? modelo,
     double? intervaloServicio,
   });
@@ -43,4 +45,8 @@ abstract class VehiculosRepository {
     required double lectura,
     required DateTime fecha,
   });
+
+  /// Activa/desactiva un vehículo del catálogo (soft-delete) — ver
+  /// [Vehiculo.activo].
+  Future<void> cambiarEstado({required String id, required bool activo});
 }

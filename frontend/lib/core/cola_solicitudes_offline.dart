@@ -356,8 +356,328 @@ class ColaIncidenciasOffline {
   }
 }
 
-/// Un aviso de que una pendiente offline (de cualquiera de las cuatro
-/// colas) falló al reintentarse por una razón real del servidor (ej.
+/// Recorrido (jornada) de despacho de marimba pendiente de sincronizar —
+/// a diferencia de las 4 colas anteriores (operaciones planas e
+/// independientes), este es el ENCABEZADO de una operación compuesta:
+/// sus despachos ([DespachoMarimbaPendienteOffline]) y su cierre
+/// ([CierreRecorridoMarimbaPendienteOffline]) lo referencian por
+/// [idLocal] y solo pueden sincronizarse después de que este recorrido ya
+/// tenga [idServidor] — ver [_sincronizarRecorridosMarimba].
+///
+/// Se queda en la cola incluso después de sincronizarse (con
+/// [idServidor] ya asignado) hasta que TODOS sus despachos y su cierre
+/// (si existe) también se sincronizaron — recién ahí se considera
+/// "terminado" y se quita.
+class RecorridoMarimbaPendienteOffline {
+  const RecorridoMarimbaPendienteOffline({
+    required this.idLocal,
+    required this.marimbaId,
+    required this.frente,
+    this.cargaId,
+    required this.litrosIniciales,
+    this.kmInicio,
+    this.horasEquipoMenorInicio,
+    required this.creadaEn,
+    this.idServidor,
+  });
+
+  final String idLocal;
+  final String marimbaId;
+  final String frente;
+  final String? cargaId;
+  final double litrosIniciales;
+  final double? kmInicio;
+  final double? horasEquipoMenorInicio;
+  final DateTime creadaEn;
+
+  /// `null` hasta que `POST /recorridos-marimba` responde con éxito.
+  final String? idServidor;
+
+  factory RecorridoMarimbaPendienteOffline.fromJson(Map<String, dynamic> json) {
+    return RecorridoMarimbaPendienteOffline(
+      idLocal: json['idLocal'] as String,
+      marimbaId: json['marimbaId'] as String,
+      frente: json['frente'] as String,
+      cargaId: json['cargaId'] as String?,
+      litrosIniciales: (json['litrosIniciales'] as num).toDouble(),
+      kmInicio: (json['kmInicio'] as num?)?.toDouble(),
+      horasEquipoMenorInicio: (json['horasEquipoMenorInicio'] as num?)
+          ?.toDouble(),
+      creadaEn: DateTime.parse(json['creadaEn'] as String),
+      idServidor: json['idServidor'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'idLocal': idLocal,
+    'marimbaId': marimbaId,
+    'frente': frente,
+    'cargaId': cargaId,
+    'litrosIniciales': litrosIniciales,
+    'kmInicio': kmInicio,
+    'horasEquipoMenorInicio': horasEquipoMenorInicio,
+    'creadaEn': creadaEn.toIso8601String(),
+    'idServidor': idServidor,
+  };
+
+  RecorridoMarimbaPendienteOffline conIdServidor(String idServidor) {
+    return RecorridoMarimbaPendienteOffline(
+      idLocal: idLocal,
+      marimbaId: marimbaId,
+      frente: frente,
+      cargaId: cargaId,
+      litrosIniciales: litrosIniciales,
+      kmInicio: kmInicio,
+      horasEquipoMenorInicio: horasEquipoMenorInicio,
+      creadaEn: creadaEn,
+      idServidor: idServidor,
+    );
+  }
+}
+
+class ColaRecorridosMarimbaOffline {
+  static const _key = 'cola_recorridos_marimba_offline';
+
+  Future<List<RecorridoMarimbaPendienteOffline>> leer() async {
+    final prefs = await SharedPreferences.getInstance();
+    final crudo = prefs.getStringList(_key) ?? const [];
+    return crudo
+        .map(
+          (s) => RecorridoMarimbaPendienteOffline.fromJson(
+            jsonDecode(s) as Map<String, dynamic>,
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> agregar(RecorridoMarimbaPendienteOffline pendiente) async {
+    final prefs = await SharedPreferences.getInstance();
+    final actuales = prefs.getStringList(_key) ?? const [];
+    await prefs.setStringList(_key, [
+      ...actuales,
+      jsonEncode(pendiente.toJson()),
+    ]);
+  }
+
+  /// Reescribe el registro ya existente con el [idServidor] recién
+  /// obtenido — el recorrido sigue en la cola (sus despachos/cierre aún
+  /// pueden estar pendientes), solo deja de estar "sin resolver".
+  Future<void> actualizarIdServidor(String idLocal, String idServidor) async {
+    final prefs = await SharedPreferences.getInstance();
+    final actuales = await leer();
+    await prefs.setStringList(
+      _key,
+      actuales
+          .map(
+            (p) => jsonEncode(
+              (p.idLocal == idLocal ? p.conIdServidor(idServidor) : p).toJson(),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Future<void> quitar(String idLocal) async {
+    final prefs = await SharedPreferences.getInstance();
+    final actuales = await leer();
+    await prefs.setStringList(
+      _key,
+      actuales
+          .where((p) => p.idLocal != idLocal)
+          .map((p) => jsonEncode(p.toJson()))
+          .toList(),
+    );
+  }
+}
+
+/// Un despacho dentro de un recorrido de marimba pendiente de
+/// sincronizar. Referencia a su recorrido por [recorridoIdLocal] — nunca
+/// por el id del servidor, precisamente porque puede no existir todavía
+/// (ver [RecorridoMarimbaPendienteOffline]).
+class DespachoMarimbaPendienteOffline {
+  const DespachoMarimbaPendienteOffline({
+    required this.idLocal,
+    required this.recorridoIdLocal,
+    this.vehiculoDestinoId,
+    this.destinoTexto,
+    required this.operadorTexto,
+    this.residenteTexto,
+    this.litrosSolicitados,
+    required this.litrosSuministrados,
+    this.lecturaMedidor,
+    this.fotoEvidenciaPath,
+    required this.creadaEn,
+  });
+
+  final String idLocal;
+  final String recorridoIdLocal;
+  final String? vehiculoDestinoId;
+  final String? destinoTexto;
+  final String operadorTexto;
+  final String? residenteTexto;
+  final double? litrosSolicitados;
+  final double litrosSuministrados;
+  final double? lecturaMedidor;
+
+  /// Opcional — a diferencia de las otras colas con foto, un despacho
+  /// dentro de un recorrido no la exige (ver PASO 3e del diseño: la
+  /// evidencia obligatoria es la foto de cierre del recorrido completo).
+  final String? fotoEvidenciaPath;
+  final DateTime creadaEn;
+
+  factory DespachoMarimbaPendienteOffline.fromJson(Map<String, dynamic> json) {
+    return DespachoMarimbaPendienteOffline(
+      idLocal: json['idLocal'] as String,
+      recorridoIdLocal: json['recorridoIdLocal'] as String,
+      vehiculoDestinoId: json['vehiculoDestinoId'] as String?,
+      destinoTexto: json['destinoTexto'] as String?,
+      operadorTexto: json['operadorTexto'] as String,
+      residenteTexto: json['residenteTexto'] as String?,
+      litrosSolicitados: (json['litrosSolicitados'] as num?)?.toDouble(),
+      litrosSuministrados: (json['litrosSuministrados'] as num).toDouble(),
+      lecturaMedidor: (json['lecturaMedidor'] as num?)?.toDouble(),
+      fotoEvidenciaPath: json['fotoEvidenciaPath'] as String?,
+      creadaEn: DateTime.parse(json['creadaEn'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'idLocal': idLocal,
+    'recorridoIdLocal': recorridoIdLocal,
+    'vehiculoDestinoId': vehiculoDestinoId,
+    'destinoTexto': destinoTexto,
+    'operadorTexto': operadorTexto,
+    'residenteTexto': residenteTexto,
+    'litrosSolicitados': litrosSolicitados,
+    'litrosSuministrados': litrosSuministrados,
+    'lecturaMedidor': lecturaMedidor,
+    'fotoEvidenciaPath': fotoEvidenciaPath,
+    'creadaEn': creadaEn.toIso8601String(),
+  };
+}
+
+class ColaDespachosMarimbaOffline {
+  static const _key = 'cola_despachos_marimba_offline';
+
+  Future<List<DespachoMarimbaPendienteOffline>> leer() async {
+    final prefs = await SharedPreferences.getInstance();
+    final crudo = prefs.getStringList(_key) ?? const [];
+    return crudo
+        .map(
+          (s) => DespachoMarimbaPendienteOffline.fromJson(
+            jsonDecode(s) as Map<String, dynamic>,
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> agregar(DespachoMarimbaPendienteOffline pendiente) async {
+    final prefs = await SharedPreferences.getInstance();
+    final actuales = prefs.getStringList(_key) ?? const [];
+    await prefs.setStringList(_key, [
+      ...actuales,
+      jsonEncode(pendiente.toJson()),
+    ]);
+  }
+
+  Future<void> quitar(String idLocal) async {
+    final prefs = await SharedPreferences.getInstance();
+    final actuales = await leer();
+    await prefs.setStringList(
+      _key,
+      actuales
+          .where((p) => p.idLocal != idLocal)
+          .map((p) => jsonEncode(p.toJson()))
+          .toList(),
+    );
+  }
+}
+
+/// Cierre de un recorrido de marimba pendiente de sincronizar — espera a
+/// que ya no queden [DespachoMarimbaPendienteOffline] de su
+/// [recorridoIdLocal] antes de enviarse (ver
+/// [_sincronizarRecorridosMarimba]), para que el backend calcule la
+/// conciliación con TODOS los despachos ya aplicados.
+class CierreRecorridoMarimbaPendienteOffline {
+  const CierreRecorridoMarimbaPendienteOffline({
+    required this.idLocal,
+    required this.recorridoIdLocal,
+    this.kmCierre,
+    this.horasEquipoMenorCierre,
+    required this.fotoCierrePath,
+    required this.creadaEn,
+  });
+
+  final String idLocal;
+  final String recorridoIdLocal;
+  final double? kmCierre;
+  final double? horasEquipoMenorCierre;
+  final String fotoCierrePath;
+  final DateTime creadaEn;
+
+  factory CierreRecorridoMarimbaPendienteOffline.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return CierreRecorridoMarimbaPendienteOffline(
+      idLocal: json['idLocal'] as String,
+      recorridoIdLocal: json['recorridoIdLocal'] as String,
+      kmCierre: (json['kmCierre'] as num?)?.toDouble(),
+      horasEquipoMenorCierre: (json['horasEquipoMenorCierre'] as num?)
+          ?.toDouble(),
+      fotoCierrePath: json['fotoCierrePath'] as String,
+      creadaEn: DateTime.parse(json['creadaEn'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'idLocal': idLocal,
+    'recorridoIdLocal': recorridoIdLocal,
+    'kmCierre': kmCierre,
+    'horasEquipoMenorCierre': horasEquipoMenorCierre,
+    'fotoCierrePath': fotoCierrePath,
+    'creadaEn': creadaEn.toIso8601String(),
+  };
+}
+
+class ColaCierresRecorridoMarimbaOffline {
+  static const _key = 'cola_cierres_recorrido_marimba_offline';
+
+  Future<List<CierreRecorridoMarimbaPendienteOffline>> leer() async {
+    final prefs = await SharedPreferences.getInstance();
+    final crudo = prefs.getStringList(_key) ?? const [];
+    return crudo
+        .map(
+          (s) => CierreRecorridoMarimbaPendienteOffline.fromJson(
+            jsonDecode(s) as Map<String, dynamic>,
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> agregar(CierreRecorridoMarimbaPendienteOffline pendiente) async {
+    final prefs = await SharedPreferences.getInstance();
+    final actuales = prefs.getStringList(_key) ?? const [];
+    await prefs.setStringList(_key, [
+      ...actuales,
+      jsonEncode(pendiente.toJson()),
+    ]);
+  }
+
+  Future<void> quitar(String idLocal) async {
+    final prefs = await SharedPreferences.getInstance();
+    final actuales = await leer();
+    await prefs.setStringList(
+      _key,
+      actuales
+          .where((p) => p.idLocal != idLocal)
+          .map((p) => jsonEncode(p.toJson()))
+          .toList(),
+    );
+  }
+}
+
+/// Un aviso de que una pendiente offline (de cualquiera de las colas)
+/// falló al reintentarse por una razón real del servidor (ej.
 /// 400/422/500) — no solo "seguía sin haber señal". Se muestra al chofer
 /// en el centro de notificaciones (ver `notificaciones_provider.dart`)
 /// para que sepa que ESA solicitud no se sincronizó y por qué, en vez de
@@ -450,6 +770,21 @@ final colaIncidenciasOfflineProvider = Provider<ColaIncidenciasOffline>(
   (ref) => ColaIncidenciasOffline(),
 );
 
+final colaRecorridosMarimbaOfflineProvider =
+    Provider<ColaRecorridosMarimbaOffline>(
+      (ref) => ColaRecorridosMarimbaOffline(),
+    );
+
+final colaDespachosMarimbaOfflineProvider =
+    Provider<ColaDespachosMarimbaOffline>(
+      (ref) => ColaDespachosMarimbaOffline(),
+    );
+
+final colaCierresRecorridoMarimbaOfflineProvider =
+    Provider<ColaCierresRecorridoMarimbaOffline>(
+      (ref) => ColaCierresRecorridoMarimbaOffline(),
+    );
+
 final avisosSincronizacionOfflineProvider =
     Provider<AvisosSincronizacionOfflineStorage>(
       (ref) => AvisosSincronizacionOfflineStorage(),
@@ -464,8 +799,12 @@ final solicitudesPendientesOfflineProvider =
       return ref.read(colaSolicitudesOfflineProvider).leer();
     });
 
-/// Suma de pendientes en las cuatro colas offline — útil para un badge
-/// genérico de "tienes envíos pendientes de conexión".
+/// Suma de pendientes en todas las colas offline — útil para un badge
+/// genérico de "tienes envíos pendientes de conexión". Los recorridos de
+/// marimba se cuentan aparte de sus despachos/cierre (cada uno es una
+/// operación de red distinta que falta por enviar), no como "1 recorrido
+/// = 1 pendiente" — eso subestimaría cuánto falta en una jornada con
+/// varios despachos sin sincronizar.
 final totalPendientesOfflineProvider = FutureProvider<int>((ref) async {
   ref.watch(operacionesTickProvider);
   final resultados = await Future.wait([
@@ -473,6 +812,9 @@ final totalPendientesOfflineProvider = FutureProvider<int>((ref) async {
     ref.read(colaComprobarCargaOfflineProvider).leer(),
     ref.read(colaCerrarDiaOfflineProvider).leer(),
     ref.read(colaIncidenciasOfflineProvider).leer(),
+    ref.read(colaRecorridosMarimbaOfflineProvider).leer(),
+    ref.read(colaDespachosMarimbaOfflineProvider).leer(),
+    ref.read(colaCierresRecorridoMarimbaOfflineProvider).leer(),
   ]);
   return resultados.fold<int>(0, (suma, lista) => suma + lista.length);
 });
@@ -693,15 +1035,201 @@ Future<void> _sincronizarIncidencias(WidgetRef ref) async {
   }
 }
 
-/// Reintenta enviar todas las pendientes de las cuatro colas offline del
-/// chofer (solicitar carga, comprobar carga, cerrar día, reportar
-/// incidencia). Cada cola se procesa de forma independiente — que una se
-/// detenga por falta de red no impide que las demás lo intenten.
+/// Descarta un recorrido completo (él mismo + todos sus despachos y su
+/// cierre, si existen) de sus 3 colas — se usa cuando el recorrido en sí
+/// falla por una razón de negocio real (ej. la marimba ya tenía otro
+/// recorrido abierto): sin el recorrido, sus despachos/cierre nunca
+/// podrían sincronizarse (quedarían huérfanos para siempre), así que se
+/// descartan junto con él en vez de dejarlos atorados en la cola.
+Future<void> _descartarRecorridoMarimbaCompleto(
+  WidgetRef ref,
+  String recorridoIdLocal,
+) async {
+  final colaDespachos = ref.read(colaDespachosMarimbaOfflineProvider);
+  final colaCierres = ref.read(colaCierresRecorridoMarimbaOfflineProvider);
+  final colaRecorridos = ref.read(colaRecorridosMarimbaOfflineProvider);
+
+  for (final despacho in await colaDespachos.leer()) {
+    if (despacho.recorridoIdLocal == recorridoIdLocal) {
+      await colaDespachos.quitar(despacho.idLocal);
+    }
+  }
+  for (final cierre in await colaCierres.leer()) {
+    if (cierre.recorridoIdLocal == recorridoIdLocal) {
+      await colaCierres.quitar(cierre.idLocal);
+    }
+  }
+  await colaRecorridos.quitar(recorridoIdLocal);
+}
+
+/// Sincroniza recorridos de marimba — a diferencia de las 4 colas
+/// anteriores (operaciones planas e independientes), esta es una
+/// operación COMPUESTA con dependencias de orden: el recorrido debe
+/// existir en el servidor (tener un id real) antes de que sus despachos
+/// puedan enviarse, y el cierre debe esperar a que TODOS sus despachos ya
+/// se hayan sincronizado (para que el backend concilie con datos
+/// completos). Por recorrido, en este orden:
+///   1. Si aún no tiene `idServidor`, se abre en el servidor y se guarda
+///      el id devuelto — el recorrido sigue en su cola aunque esto tenga
+///      éxito, porque puede seguir teniendo despachos/cierre pendientes.
+///   2. Se envían los despachos de ESE recorrido cuyo padre ya está
+///      resuelto (tiene `idServidor`). Los de un recorrido aún sin
+///      resolver se dejan intactos para el siguiente ciclo.
+///   3. Si existe un cierre pendiente Y ya no quedan despachos pendientes
+///      de este recorrido, se envía el cierre y, recién ahí, se quita
+///      también el recorrido de su cola (ciclo completo).
+Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
+  final colaRecorridos = ref.read(colaRecorridosMarimbaOfflineProvider);
+  final colaDespachos = ref.read(colaDespachosMarimbaOfflineProvider);
+  final colaCierres = ref.read(colaCierresRecorridoMarimbaOfflineProvider);
+  final recorridos = await colaRecorridos.leer();
+  if (recorridos.isEmpty) return;
+
+  final repo = ref.read(recorridosMarimbaRepositoryProvider);
+
+  for (final recorrido in recorridos) {
+    var idServidor = recorrido.idServidor;
+    if (idServidor == null) {
+      try {
+        final creado = await repo.abrirRecorrido(
+          marimbaId: recorrido.marimbaId,
+          frente: recorrido.frente,
+          cargaId: recorrido.cargaId,
+          litrosIniciales: recorrido.litrosIniciales,
+          kmInicio: recorrido.kmInicio,
+          horasEquipoMenorInicio: recorrido.horasEquipoMenorInicio,
+        );
+        idServidor = creado.id;
+        await colaRecorridos.actualizarIdServidor(recorrido.idLocal, idServidor);
+      } on ApiException catch (e) {
+        // Sin señal de verdad — probablemente todos los recorridos
+        // pendientes fallarían igual ahora mismo, se reintenta en el
+        // próximo evento de reconexión.
+        if (e.status == null) return;
+        // Razón de negocio real (ej. "ya hay un recorrido abierto de esta
+        // marimba") — reintentarlo para siempre no lo arreglaría.
+        await _descartarRecorridoMarimbaCompleto(ref, recorrido.idLocal);
+        await _registrarAviso(
+          ref,
+          idLocal: recorrido.idLocal,
+          descripcion: 'Recorrido de marimba',
+          motivo: e.mensaje,
+        );
+        ref.read(operacionesTickProvider.notifier).state++;
+        continue;
+      }
+    }
+
+    final despachosDelRecorrido = (await colaDespachos.leer())
+        .where((d) => d.recorridoIdLocal == recorrido.idLocal)
+        .toList();
+    var detenidoPorRed = false;
+    for (final despacho in despachosDelRecorrido) {
+      if (despacho.fotoEvidenciaPath != null &&
+          !File(despacho.fotoEvidenciaPath!).existsSync()) {
+        await colaDespachos.quitar(despacho.idLocal);
+        AppLogger.error(
+          'sincronizarRecorridosMarimba',
+          'La foto del despacho ${despacho.idLocal} ya no existe en el '
+              'dispositivo — se descarta (la foto era opcional, el '
+              'despacho no puede reenviarse con ese dato perdido).',
+        );
+        continue;
+      }
+      try {
+        await repo.agregarDespacho(
+          recorridoId: idServidor,
+          vehiculoDestinoId: despacho.vehiculoDestinoId,
+          destinoTexto: despacho.destinoTexto,
+          operadorTexto: despacho.operadorTexto,
+          residenteTexto: despacho.residenteTexto,
+          litrosSolicitados: despacho.litrosSolicitados,
+          litrosSuministrados: despacho.litrosSuministrados,
+          lecturaMedidor: despacho.lecturaMedidor,
+          fotoEvidenciaPath: despacho.fotoEvidenciaPath,
+        );
+        await colaDespachos.quitar(despacho.idLocal);
+      } on ApiException catch (e) {
+        if (e.status == null) {
+          detenidoPorRed = true;
+          break;
+        }
+        await colaDespachos.quitar(despacho.idLocal);
+        await _registrarAviso(
+          ref,
+          idLocal: despacho.idLocal,
+          descripcion: 'Despacho de marimba',
+          motivo: e.mensaje,
+        );
+      }
+      ref.read(operacionesTickProvider.notifier).state++;
+    }
+    if (detenidoPorRed) return;
+
+    final quedanDespachosPendientes = (await colaDespachos.leer()).any(
+      (d) => d.recorridoIdLocal == recorrido.idLocal,
+    );
+    if (quedanDespachosPendientes) continue;
+
+    final cierre = (await colaCierres.leer())
+        .where((c) => c.recorridoIdLocal == recorrido.idLocal)
+        .toList();
+    if (cierre.isEmpty) continue;
+    final pendienteCierre = cierre.first;
+
+    if (!File(pendienteCierre.fotoCierrePath).existsSync()) {
+      await colaCierres.quitar(pendienteCierre.idLocal);
+      await colaRecorridos.quitar(recorrido.idLocal);
+      AppLogger.error(
+        'sincronizarRecorridosMarimba',
+        'La foto de cierre del recorrido ${recorrido.idLocal} ya no existe '
+            'en el dispositivo — se descarta (la foto de cierre es '
+            'obligatoria, no se puede cerrar sin ella).',
+      );
+      continue;
+    }
+    try {
+      await repo.cerrarRecorrido(
+        recorridoId: idServidor,
+        kmCierre: pendienteCierre.kmCierre,
+        horasEquipoMenorCierre: pendienteCierre.horasEquipoMenorCierre,
+        fotoCierrePath: pendienteCierre.fotoCierrePath,
+      );
+      await colaCierres.quitar(pendienteCierre.idLocal);
+      await colaRecorridos.quitar(recorrido.idLocal);
+    } on ApiException catch (e) {
+      if (e.status == null) return;
+      await colaCierres.quitar(pendienteCierre.idLocal);
+      await colaRecorridos.quitar(recorrido.idLocal);
+      await _registrarAviso(
+        ref,
+        idLocal: pendienteCierre.idLocal,
+        descripcion: 'Cierre de recorrido de marimba',
+        motivo: e.mensaje,
+      );
+    }
+    ref.read(operacionesTickProvider.notifier).state++;
+  }
+}
+
+/// Wrapper público de [_sincronizarRecorridosMarimba] — las pantallas del
+/// flujo de recorrido lo llaman directo tras cada acción (abrir/agregar
+/// despacho/cerrar) para intentar resolverla de inmediato si hay señal,
+/// en vez de esperar al próximo evento de reconexión general.
+Future<void> sincronizarRecorridosMarimba(WidgetRef ref) =>
+    _sincronizarRecorridosMarimba(ref);
+
+/// Reintenta enviar todas las pendientes de las colas offline del chofer
+/// (solicitar carga, comprobar carga, cerrar día, reportar incidencia,
+/// recorridos de marimba). Cada cola se procesa de forma independiente —
+/// que una se detenga por falta de red no impide que las demás lo
+/// intenten.
 Future<void> sincronizarSolicitudesOffline(WidgetRef ref) async {
   await _sincronizarSolicitudes(ref);
   await _sincronizarComprobarCarga(ref);
   await _sincronizarCerrarDia(ref);
   await _sincronizarIncidencias(ref);
+  await _sincronizarRecorridosMarimba(ref);
 }
 
 /// Se suscribe a `conectividadProvider` y sincroniza automáticamente en

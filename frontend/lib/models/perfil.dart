@@ -1,7 +1,11 @@
 import 'package:flutter/foundation.dart';
 
-/// Rol del usuario autenticado. Solo existen estos dos roles.
-enum RolUsuario { chofer, administrativo }
+/// Rol del usuario autenticado. `superadmin` puede todo lo que
+/// `administrativo` más crear cuentas `administrativo` (ver
+/// `AuthRepository.crearAdministrativo`) — la restricción real vive en el
+/// backend (`requireRole('superadmin')`), esto solo controla qué ve/puede
+/// tocar la UI.
+enum RolUsuario { chofer, administrativo, superadmin, supervisor }
 
 /// Perfil de un usuario autenticado.
 ///
@@ -50,7 +54,21 @@ class Perfil {
   final bool activo;
 
   bool get esChofer => rol == RolUsuario.chofer;
-  bool get esAdministrativo => rol == RolUsuario.administrativo;
+
+  /// `true` para `administrativo` Y para `superadmin` — un superadmin
+  /// tiene todos los permisos operativos de un administrativo, así que
+  /// cualquier chequeo de "¿es del área administrativa?" (ej. el guard de
+  /// rutas) debe incluirlo. Para la acción exclusiva de superadmin (crear/
+  /// gestionar cuentas admin), usa [esSuperAdmin] en vez de este getter.
+  bool get esAdministrativo =>
+      rol == RolUsuario.administrativo || rol == RolUsuario.superadmin;
+
+  bool get esSuperAdmin => rol == RolUsuario.superadmin;
+
+  /// Opera la marimba en campo: carga a granel + despachos hacia maquinaria.
+  /// Usa las mismas pantallas de solicitar/comprobar carga que un chofer
+  /// (ver guard de rutas), más su propia pantalla de despacho.
+  bool get esSupervisor => rol == RolUsuario.supervisor;
 
   String get nombreCompleto => [
     nombre,
