@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      # Sin valor literal aquí — Docker Compose sustituye `${VAR}` leyendo
+      # el archivo `.env` de esta misma carpeta (`backend/.env`, ya
+      # ignorado por git) antes de levantar el contenedor. Si esa
+      # variable no está definida, Compose falla al arrancar en vez de
+      # usar un default silencioso — mejor eso que arrancar con una
+      # contraseña vacía o de ejemplo sin darte cuenta.
+      POSTGRES_USER: ${POSTGRES_USER:?Falta POSTGRES_USER en backend/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en backend/.env}
+      POSTGRES_DB: ${POSTGRES_DB:?Falta POSTGRES_DB en backend/.env}
+    ports:
+      # Solo al localhost del HOST (ej. para `npm run migrate` corriendo
+      # fuera de Docker) — Postgres no necesita ser alcanzable desde la
+      # red externa del servidor, solo el backend le habla por la red
+      # interna de Docker (hostname `db`, no este puerto publicado).
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - indi_pgdata:/var/lib/postgresql
+
+  # Solo se usa si despliegas con Docker Compose directo (VPS propio, sin
+  # PaaS). Si usas Railway/Render/Fly/etc., ese hosting ya reinicia
+  # contenedores caídos por su cuenta — no hace falta este servicio, solo
+  # el `Dockerfile`. `restart: unless-stopped` es lo que cubre el punto de
+  # la auditoría "reinicio automático si el proceso se cae" para este caso.
+  backend:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - db
+    env_file:
+      - .env
+    environment:
+      # Sobrescribe la `DATABASE_URL` de `.env` (pensada para conectarse
+      # desde el HOST, ej. `npm run migrate` corriendo fuera de Docker,
+      # por eso usa `localhost`) — dentro de este contenedor "localhost"
+      # es el contenedor mismo, no el servicio `db`. Debe usar el nombre
+      # del servicio como hostname, que Docker resuelve por su red
+      # interna. Mismas credenciales que `db.environment` arriba, leídas
+      # de las mismas variables — no se duplica la contraseña.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    ports:
+      - "3000:3000"
+    volumes:
+      - indi_uploads:/app/uploads
+
+volumes:
+  indi_pgdata:
+  indi_uploads:
