@@ -63,3 +63,36 @@ la app y poder autenticarse contra el backend.
   adaptar el compose para que Caddy/Traefik los administre directamente.
 - `backend/docker-compose.yml` sigue existiendo aparte para desarrollo local
   (solo Postgres + backend, sin frontend) — no se modificó.
+
+## Migraciones futuras
+
+El backend debe ejecutarse normalmente con un rol de PostgreSQL de privilegios
+mínimos. Ese rol de ejecución no tiene permisos DDL y no debe utilizarse para
+crear o alterar tablas, esquemas, funciones o migraciones.
+
+Las migraciones futuras deben ejecutarse de forma explícita con el propietario
+de la base o con un rol migrador separado. La creación de ese rol requiere una
+autorización independiente y no forma parte del arranque normal de la
+aplicación. Nunca se deben incorporar credenciales ni cadenas de conexión en
+esta guía, en imágenes Docker o en el repositorio.
+
+## Backend en Docker
+
+Desde la raíz del repositorio, la construcción reproducible del servicio es:
+
+```powershell
+docker compose build backend
+```
+
+La imagen instala dependencias desde `package-lock.json`, compila TypeScript en
+una etapa de construcción y conserva solamente dependencias de producción en
+la imagen final. El archivo `backend/.env` se suministra en tiempo de ejecución;
+no se copia dentro de la imagen.
+
+Si `npm ci` falla dentro de BuildKit con
+`UNABLE_TO_VERIFY_LEAF_SIGNATURE`, el contenedor no está confiando en la
+autoridad certificadora del proxy o de la red local. La corrección debe hacerse
+en la configuración de certificados de Docker Desktop o inyectando la CA
+corporativa mediante el mecanismo seguro del entorno de despliegue. No se debe
+desactivar `strict-ssl`, usar `--force` ni almacenar certificados privados en el
+repositorio.
