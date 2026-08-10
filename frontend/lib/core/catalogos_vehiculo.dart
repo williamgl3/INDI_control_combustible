@@ -1,16 +1,21 @@
-/// Opciones compartidas por el formulario de "vehículo nuevo" (chofer) y
-/// el catálogo de vehículos (admin).
-/// 'Equipo menor' se agrega al final (índice 4) para no romper ninguna
-/// referencia por índice existente (`tiposUnidadVehiculo[1]` sigue siendo
-/// 'Marimba', usado en `tipo_operacion_screen.dart`) — es la categoría de
-/// accesorios/sub-unidades (ver `Vehiculo.unidadPadreId`, migración
-/// 0025), como el equipo menor de gasolina de una marimba.
+import '../models/vehiculo.dart';
+
+const tipoUnidadVehiculo = 'Vehículo';
+const tipoUnidadMarimba = 'Marimba';
+const tipoUnidadMaquinaria = 'Maquinaria';
+const tipoUnidadPipa = 'Pipa';
+const tipoUnidadEquipoMenor = 'Equipo menor';
+
+/// Opciones compartidas por el formulario de "vehículo nuevo" y el catálogo
+/// administrativo. Las decisiones operativas usan las constantes y
+/// predicados semánticos de este archivo, nunca la posición de esta lista.
+/// `Equipo menor` representa accesorios/sub-unidades (migración 0025).
 const tiposUnidadVehiculo = [
-  'Vehículo',
-  'Marimba',
-  'Maquinaria',
-  'Pipa',
-  'Equipo menor',
+  tipoUnidadVehiculo,
+  tipoUnidadMarimba,
+  tipoUnidadMaquinaria,
+  tipoUnidadPipa,
+  tipoUnidadEquipoMenor,
 ];
 
 const tiposCombustibleVehiculo = ['Diésel', 'Magna', 'Premium'];
@@ -20,7 +25,52 @@ const tiposCombustibleVehiculo = ['Diésel', 'Magna', 'Premium'];
 /// marimba). Rige la etiqueta que ve el chofer al capturar la lectura del
 /// medidor y el reporte de mantenimiento.
 bool esUnidadPorHorometro(String tipoUnidad) =>
-    tipoUnidad == 'Maquinaria' || tipoUnidad == 'Equipo menor';
+    esMaquinaria(tipoUnidad) || tipoUnidad == tipoUnidadEquipoMenor;
+
+bool esVehiculoLigero(String tipoUnidad) => tipoUnidad == tipoUnidadVehiculo;
+bool esMaquinaria(String tipoUnidad) => tipoUnidad == tipoUnidadMaquinaria;
+bool esMarimba(String tipoUnidad) => tipoUnidad == tipoUnidadMarimba;
+bool esPipa(String tipoUnidad) => tipoUnidad == tipoUnidadPipa;
+bool esUnidadGranel(String tipoUnidad) =>
+    esMarimba(tipoUnidad) || esPipa(tipoUnidad);
+bool estaActiva(Vehiculo unidad) => unidad.activo;
+
+enum CategoriaSolicitud {
+  vehiculo('vehiculo'),
+  maquinaria('maquinaria'),
+  granel('granel');
+
+  const CategoriaSolicitud(this.segmentoRuta);
+  final String segmentoRuta;
+
+  bool acepta(Vehiculo unidad) => switch (this) {
+    CategoriaSolicitud.vehiculo => esVehiculoLigero(unidad.tipoUnidad),
+    CategoriaSolicitud.maquinaria => esMaquinaria(unidad.tipoUnidad),
+    CategoriaSolicitud.granel => esUnidadGranel(unidad.tipoUnidad),
+  };
+
+  String get tipoInicialReporte => switch (this) {
+    CategoriaSolicitud.vehiculo => tipoUnidadVehiculo,
+    CategoriaSolicitud.maquinaria => tipoUnidadMaquinaria,
+    CategoriaSolicitud.granel => tipoUnidadMarimba,
+  };
+}
+
+CategoriaSolicitud? categoriaSolicitudDesdeRuta(String? segmento) {
+  for (final categoria in CategoriaSolicitud.values) {
+    if (categoria.segmentoRuta == segmento) return categoria;
+  }
+  return null;
+}
+
+String etiquetaCategoria(String tipoUnidad) => switch (tipoUnidad) {
+  tipoUnidadVehiculo => 'Vehículo',
+  tipoUnidadMaquinaria => 'Maquinaria',
+  tipoUnidadMarimba => 'Marimba',
+  tipoUnidadPipa => 'Pipa',
+  tipoUnidadEquipoMenor => 'Equipo menor',
+  _ => tipoUnidad,
+};
 
 /// Intervalo de servicio general por defecto según el tipo de unidad —
 /// editable por unidad individual en el catálogo de vehículos.

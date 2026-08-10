@@ -58,8 +58,9 @@ class Vehiculo {
   /// Para pantallas de detalle de la marimba (la única unidad con AMBOS
   /// datos): "económico · placa" en vez de solo el principal. `null` si
   /// la unidad solo tiene uno de los dos (nada que combinar).
-  String? get etiquetaCompleta =>
-      (placas != null && numeroEconomico != null) ? '$numeroEconomico · $placas' : null;
+  String? get etiquetaCompleta => (placas != null && numeroEconomico != null)
+      ? '$numeroEconomico · $placas'
+      : null;
 
   /// Ej. "Diésel", "Magna", "Premium". `null` si aún no se confirma con
   /// el cliente (ej. maquinaria pesada recién importada).
@@ -147,11 +148,24 @@ class Vehiculo {
   }
 
   factory Vehiculo.fromJson(Map<String, dynamic> json) {
+    final placas = json['placas'] as String?;
+    final numeroEconomico = json['numeroEconomico'] as String?;
+    if ((placas == null || placas.trim().isEmpty) &&
+        (numeroEconomico == null || numeroEconomico.trim().isEmpty)) {
+      throw const FormatException(
+        'Contrato de unidad inválido: falta un identificador.',
+      );
+    }
+    if (!json.containsKey('activo') || json['activo'] is! bool) {
+      throw const FormatException(
+        'Contrato de unidad inválido: el estado activo es obligatorio.',
+      );
+    }
     return Vehiculo(
       id: json['id'] as String,
       tipoUnidad: json['tipoUnidad'] as String,
-      placas: json['placas'] as String?,
-      numeroEconomico: json['numeroEconomico'] as String?,
+      placas: placas,
+      numeroEconomico: numeroEconomico,
       tipoCombustible: json['tipoCombustible'] as String?,
       modelo: json['modelo'] as String?,
       intervaloServicio: (json['intervaloServicio'] as num).toDouble(),
@@ -160,7 +174,7 @@ class Vehiculo {
       fechaUltimoServicio: json['fechaUltimoServicio'] == null
           ? null
           : DateTime.parse(json['fechaUltimoServicio'] as String),
-      activo: json['activo'] as bool? ?? true,
+      activo: json['activo'] as bool,
       unidadPadreId: json['unidadPadreId'] as String?,
       ubicacion: json['ubicacion'] as String?,
     );

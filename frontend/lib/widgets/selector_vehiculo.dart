@@ -23,6 +23,8 @@ class SelectorVehiculo extends ConsumerStatefulWidget {
     required this.vehiculoSeleccionado,
     required this.onSeleccionar,
     this.filtroTipoUnidad,
+    this.filtroUnidad,
+    this.tipoUnidadInicialReporte,
     this.filtroUbicacion,
   });
 
@@ -33,6 +35,8 @@ class SelectorVehiculo extends ConsumerStatefulWidget {
   /// "Maquinaria") — usado cuando el chofer ya eligió una categoría en
   /// `TipoOperacionScreen`. `null` (default) muestra el catálogo completo.
   final String? filtroTipoUnidad;
+  final bool Function(Vehiculo unidad)? filtroUnidad;
+  final String? tipoUnidadInicialReporte;
 
   /// Restringe el catálogo a `vehiculo.ubicacion == filtroUbicacion` (ej.
   /// el frente de un recorrido de marimba) — con "ver todas" disponible
@@ -88,7 +92,8 @@ class _SelectorVehiculoState extends ConsumerState<SelectorVehiculo> {
     if (valor == _valorVehiculoNuevo) {
       final nuevo = await ReportarVehiculoNuevoDialog.show(
         context,
-        tipoUnidadInicial: widget.filtroTipoUnidad,
+        tipoUnidadInicial:
+            widget.tipoUnidadInicialReporte ?? widget.filtroTipoUnidad,
       );
       if (nuevo != null) widget.onSeleccionar(nuevo);
       return;
@@ -101,15 +106,42 @@ class _SelectorVehiculoState extends ConsumerState<SelectorVehiculo> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    ref.watch(
-      operacionesTickProvider,
-    ); // el catálogo puede crecer (vehículo nuevo)
+    final catalogo = ref.watch(catalogoUnidadesProvider);
+    if (catalogo.isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+    if (catalogo.hasError) {
+      return Semantics(
+        liveRegion: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('No fue posible cargar las unidades.'),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => ref.invalidate(catalogoUnidadesProvider),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      );
+    }
     final filtro = widget.filtroTipoUnidad;
+    final filtroSemantico = widget.filtroUnidad;
     final filtroUbicacion = widget.filtroUbicacion;
-    final vehiculosSinUbicacion = ref
-        .watch(vehiculosRepositoryProvider)
-        .todos
-        .where((v) => v.activo && (filtro == null || v.tipoUnidad == filtro))
+    final vehiculosSinUbicacion = catalogo.requireValue
+        .where(
+          (v) =>
+              v.activo &&
+              (filtro == null || v.tipoUnidad == filtro) &&
+              (filtroSemantico == null || filtroSemantico(v)),
+        )
         .toList();
     final vehiculosDeLaUbicacion = filtroUbicacion == null
         ? vehiculosSinUbicacion
@@ -224,9 +256,28 @@ class _SelectorVehiculoState extends ConsumerState<SelectorVehiculo> {
               ),
               DropdownMenuItem(
                 value: _valorVehiculoNuevo,
-                child: Text(
-                  '🆕 Vehículo nuevo, no está en la lista',
-                  style: TextStyle(color: colors.primary),
+                child: Semantics(
+                  button: true,
+                  label: 'Agregar vehículo que no está en la lista',
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 48),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.add_circle_outline_rounded,
+                          size: 24,
+                          color: colors.primary,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Agregar vehículo que no está en la lista',
+                            style: TextStyle(color: colors.primary),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],

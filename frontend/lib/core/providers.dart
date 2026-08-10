@@ -17,6 +17,7 @@ import '../data/incidencias_repository.dart';
 import '../data/operaciones_repository.dart';
 import '../data/recorridos_marimba_repository.dart';
 import '../data/vehiculos_repository.dart';
+import '../models/vehiculo.dart';
 import 'auth_controller.dart';
 import 'exportador_service.dart';
 import 'foto_picker.dart';
@@ -67,9 +68,19 @@ final vehiculosRepositoryProvider = Provider<VehiculosRepository>((ref) {
   return ApiVehiculosRepository(ref.watch(apiClientProvider));
 });
 
-final despachosMarimbaRepositoryProvider = Provider<DespachosMarimbaRepository>((ref) {
-  return ApiDespachosMarimbaRepository(ref.watch(apiClientProvider));
+/// Estado compartido del catálogo. Reutiliza el caché precargado al iniciar
+/// sesión y representa explícitamente carga/error para catálogo y selectores.
+final catalogoUnidadesProvider = FutureProvider<List<Vehiculo>>((ref) async {
+  final repository = ref.watch(vehiculosRepositoryProvider);
+  if (repository.todos.isEmpty) await repository.cargarVehiculos();
+  return repository.todos;
 });
+
+final despachosMarimbaRepositoryProvider = Provider<DespachosMarimbaRepository>(
+  (ref) {
+    return ApiDespachosMarimbaRepository(ref.watch(apiClientProvider));
+  },
+);
 
 final recorridosMarimbaRepositoryProvider =
     Provider<RecorridosMarimbaRepository>((ref) {

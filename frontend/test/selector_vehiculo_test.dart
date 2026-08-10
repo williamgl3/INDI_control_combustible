@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:indi_combustible/core/providers.dart';
+import 'package:indi_combustible/core/catalogos_vehiculo.dart';
+import 'package:indi_combustible/models/vehiculo.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
 import 'package:indi_combustible/widgets/selector_vehiculo.dart';
 
@@ -67,6 +69,13 @@ void main() {
       modelo: 'NISSAN FRONTIER',
     );
     await repo.crear(
+      tipoUnidad: 'Pipa',
+      placas: 'PIP-001',
+      numeroEconomico: 'P-1',
+      tipoCombustible: 'Diésel',
+      modelo: 'Pipa operativa',
+    );
+    await repo.crear(
       tipoUnidad: 'Vehículo',
       placas: 'MNC-002-A',
       tipoCombustible: 'Magna',
@@ -79,7 +88,10 @@ void main() {
 
   tearDown(() => container.dispose());
 
-  Future<void> montar(WidgetTester tester) async {
+  Future<void> montar(
+    WidgetTester tester, {
+    bool Function(Vehiculo)? filtroUnidad,
+  }) async {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -89,6 +101,7 @@ void main() {
             body: SelectorVehiculo(
               vehiculoSeleccionado: null,
               onSeleccionar: (_) {},
+              filtroUnidad: filtroUnidad,
             ),
           ),
         ),
@@ -96,6 +109,20 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('granel incluye una Pipa activa y excluye otras categorías', (
+    tester,
+  ) async {
+    await montar(
+      tester,
+      filtroUnidad: (unidad) => esUnidadGranel(unidad.tipoUnidad),
+    );
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('P-1'), findsOneWidget);
+    expect(find.textContaining('ABC-123-A'), findsNothing);
+    expect(find.textContaining('EHO-336'), findsNothing);
+  });
 
   testWidgets('buscar "336" encuentra las excavadoras por económico', (
     tester,
@@ -127,20 +154,19 @@ void main() {
     expect(find.textContaining('EHO-336'), findsNothing);
   });
 
-  testWidgets(
-    'buscar sin guiones ("PL0762") igual encuentra "PL-0762-C"',
-    (tester) async {
-      await montar(tester);
-      await tester.enterText(find.byType(TextField), 'PL0762');
-      await tester.pumpAndSettle();
+  testWidgets('buscar sin guiones ("PL0762") igual encuentra "PL-0762-C"', (
+    tester,
+  ) async {
+    await montar(tester);
+    await tester.enterText(find.byType(TextField), 'PL0762');
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byType(DropdownButtonFormField<String>));
-      await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
 
-      expect(find.textContaining('PL-0762-C'), findsOneWidget);
-      expect(find.textContaining('PL-0760-C'), findsNothing);
-    },
-  );
+    expect(find.textContaining('PL-0762-C'), findsOneWidget);
+    expect(find.textContaining('PL-0760-C'), findsNothing);
+  });
 
   testWidgets('buscar por modelo ("hilux") encuentra ambas Hilux', (
     tester,
@@ -186,7 +212,17 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('EHO-336'), findsNothing);
-      expect(find.textContaining('Vehículo nuevo'), findsOneWidget);
+      expect(
+        find.text('Agregar vehículo que no está en la lista'),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.add_circle_outline_rounded), findsOneWidget);
+      expect(find.textContaining('NEW'), findsNothing);
+      expect(find.textContaining('🆕'), findsNothing);
+
+      await tester.tap(find.text('Agregar vehículo que no está en la lista'));
+      await tester.pumpAndSettle();
+      expect(find.text('Vehículo nuevo'), findsOneWidget);
     },
   );
 }
