@@ -54,6 +54,27 @@ const destinosChofer = [
   ),
 ];
 
+/// Devuelve el único destino activo para una ruta del módulo del chofer.
+int indiceDestinoChoferParaRuta(String ruta) {
+  if (ruta == RoutePaths.chofer || ruta == RoutePaths.choferDashboard) return 0;
+  if (ruta == RoutePaths.choferTipoOperacion ||
+      ruta == RoutePaths.choferRespuesta ||
+      ruta.startsWith('${RoutePaths.choferSolicitar}/')) {
+    return 1;
+  }
+  if (ruta == RoutePaths.choferSolicitudes ||
+      ruta.startsWith('${RoutePaths.choferSolicitudes}/')) {
+    return 2;
+  }
+  if (ruta == RoutePaths.choferSubirEvidencias ||
+      ruta == RoutePaths.choferComprobar ||
+      ruta == RoutePaths.choferCerrarDia) {
+    return 3;
+  }
+  if (ruta == RoutePaths.choferPerfil) return 4;
+  return 0;
+}
+
 /// Sidebar de escritorio/tablet para el flujo de chofer — mismo
 /// tratamiento visual que `_SidebarAdmin` (panel administrativo), para que
 /// la app se sienta como una sola aplicación de escritorio en vez de una
@@ -174,19 +195,18 @@ class _ItemSidebarChofer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       child: Material(
-        color: seleccionado
-            ? colors.primary.withValues(alpha: 0.12)
-            : Colors.transparent,
+        color: seleccionado ? colorScheme.primary : Colors.transparent,
         borderRadius: AppRadii.navButtonRadius,
         child: InkWell(
           onTap: onTap,
           borderRadius: AppRadii.navButtonRadius,
-          hoverColor: colors.sidebarSurfaceAlt.withValues(alpha: 0.6),
+          hoverColor: colorScheme.primary.withValues(alpha: 0.08),
+          focusColor: colorScheme.primary.withValues(alpha: 0.12),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
@@ -195,7 +215,9 @@ class _ItemSidebarChofer extends StatelessWidget {
                   icono: seleccionado
                       ? destino.iconoSeleccionado
                       : destino.icono,
-                  color: seleccionado ? colors.primary : colors.sidebarSurfaceAlt,
+                  color: seleccionado
+                      ? colorScheme.onPrimary
+                      : colorScheme.onSurfaceVariant,
                   size: 30,
                   iconSize: 16,
                 ),
@@ -206,8 +228,8 @@ class _ItemSidebarChofer extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: seleccionado
-                          ? colors.primary
-                          : colors.sidebarTextMuted,
+                          ? colorScheme.primary
+                          : colorScheme.onSurface,
                       fontWeight: seleccionado
                           ? FontWeight.w700
                           : FontWeight.w500,

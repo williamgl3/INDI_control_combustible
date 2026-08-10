@@ -2,51 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../router/route_paths.dart';
 import '../../theme/app_breakpoints.dart';
-import '../../theme/app_theme.dart';
 import '../../widgets/chofer_mobile_wrapper.dart';
 import '../../widgets/sidebar_chofer.dart';
 import 'chofer_home_screen.dart';
-import 'mi_perfil_screen.dart';
-import 'mis_solicitudes_screen.dart';
-import 'subir_evidencias_screen.dart';
 
-class ChoferHomeShell extends ConsumerStatefulWidget {
+class ChoferHomeShell extends ConsumerWidget {
   const ChoferHomeShell({super.key});
 
   @override
-  ConsumerState<ChoferHomeShell> createState() => _ChoferHomeShellState();
-}
-
-class _ChoferHomeShellState extends ConsumerState<ChoferHomeShell> {
-  int _indice = 0;
-
-  /// Las 4 páginas del IndexedStack — "Solicitar" no es una página,
-  /// navega directamente a la ruta.
-  static const _paginas = [
-    ChoferHomeScreen(),
-    SizedBox.shrink(), // Placeholder para índice 1 (Solicitar, nunca visible)
-    MisSolicitudesScreen(mostrarComoTab: true),
-    SubirEvidenciasScreen(mostrarComoTab: true),
-    MiPerfilScreen(mostrarComoTab: true),
-  ];
-
-  void _onDestinationSelected(int index) {
-    if (index == 1) {
-      // "Solicitar" es navegación directa, no cambia el tab seleccionado.
-      context.push(RoutePaths.choferTipoOperacion);
-      return;
-    }
-    setState(() => _indice = index);
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final ancho = MediaQuery.sizeOf(context).width;
     final esAncho = AppBreakpoints.isTabletOrDesktop(ancho);
-
-    final paginas = IndexedStack(index: _indice, children: _paginas);
+    final ruta = GoRouterState.of(context).uri.path;
+    final indice = indiceDestinoChoferParaRuta(ruta);
+    void seleccionar(int destino) =>
+        navegarDesdeSidebarChofer(context, indice, destino);
 
     if (esAncho) {
       // Sin `ChoferMobileWrapper` aquí: con el sidebar ya dando la
@@ -61,10 +32,10 @@ class _ChoferHomeShellState extends ConsumerState<ChoferHomeShell> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SidebarChofer(
-                indiceSeleccionado: _indice,
-                onSeleccionar: _onDestinationSelected,
+                indiceSeleccionado: indice,
+                onSeleccionar: seleccionar,
               ),
-              Expanded(child: paginas),
+              const Expanded(child: ChoferHomeScreen()),
             ],
           ),
         ),
@@ -72,17 +43,20 @@ class _ChoferHomeShellState extends ConsumerState<ChoferHomeShell> {
     }
 
     return Scaffold(
-      body: SafeArea(child: ChoferMobileWrapper(child: paginas)),
-      bottomNavigationBar: _BottomNavChofer(
-        indiceSeleccionado: _indice,
-        onSeleccionar: _onDestinationSelected,
+      body: const SafeArea(
+        child: ChoferMobileWrapper(child: ChoferHomeScreen()),
+      ),
+      bottomNavigationBar: NavegacionInferiorChofer(
+        indiceSeleccionado: indice,
+        onSeleccionar: seleccionar,
       ),
     );
   }
 }
 
-class _BottomNavChofer extends StatelessWidget {
-  const _BottomNavChofer({
+class NavegacionInferiorChofer extends StatelessWidget {
+  const NavegacionInferiorChofer({
+    super.key,
     required this.indiceSeleccionado,
     required this.onSeleccionar,
   });
@@ -92,23 +66,49 @@ class _BottomNavChofer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final colorScheme = Theme.of(context).colorScheme;
 
-    return NavigationBar(
-      selectedIndex: indiceSeleccionado,
-      onDestinationSelected: onSeleccionar,
-      backgroundColor: colors.surface,
-      indicatorColor: colors.primary.withValues(alpha: 0.12),
-      height: 64,
-      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-      destinations: [
-        for (final d in destinosChofer)
-          NavigationDestination(
-            icon: Icon(d.icono),
-            selectedIcon: Icon(d.iconoSeleccionado),
-            label: d.etiqueta,
-          ),
-      ],
+    return NavigationBarTheme(
+      data: NavigationBarThemeData(
+        indicatorColor: colorScheme.primary,
+        indicatorShape: const StadiumBorder(),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          return IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? colorScheme.onPrimary
+                : colorScheme.onSurfaceVariant,
+          );
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final seleccionada = states.contains(WidgetState.selected);
+          return Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: seleccionada ? colorScheme.primary : colorScheme.onSurface,
+            fontWeight: seleccionada ? FontWeight.w700 : FontWeight.w500,
+          );
+        }),
+        overlayColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.hovered) ||
+              states.contains(WidgetState.focused)) {
+            return colorScheme.primary.withValues(alpha: 0.08);
+          }
+          return Colors.transparent;
+        }),
+      ),
+      child: NavigationBar(
+        selectedIndex: indiceSeleccionado,
+        onDestinationSelected: onSeleccionar,
+        backgroundColor: colorScheme.surface,
+        height: 64,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        destinations: [
+          for (final d in destinosChofer)
+            NavigationDestination(
+              icon: Icon(d.icono),
+              selectedIcon: Icon(d.iconoSeleccionado),
+              label: d.etiqueta,
+            ),
+        ],
+      ),
     );
   }
 }

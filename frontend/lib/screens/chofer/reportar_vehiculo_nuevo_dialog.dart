@@ -33,9 +33,8 @@ class ReportarVehiculoNuevoDialog extends ConsumerStatefulWidget {
   }) {
     return mostrarDialogoApp<Vehiculo>(
       context,
-      builder: (_) => ReportarVehiculoNuevoDialog(
-        tipoUnidadInicial: tipoUnidadInicial,
-      ),
+      builder: (_) =>
+          ReportarVehiculoNuevoDialog(tipoUnidadInicial: tipoUnidadInicial),
     );
   }
 
@@ -96,6 +95,7 @@ class _ReportarVehiculoNuevoDialogState
             modelo: _modeloController.text.trim(),
           );
       ref.read(operacionesTickProvider.notifier).state++;
+      ref.invalidate(catalogoUnidadesProvider);
       if (mounted) Navigator.of(context).pop(vehiculo);
     } on ApiException catch (e) {
       if (mounted) setState(() => _errorGeneral = e.mensaje);
@@ -179,10 +179,8 @@ class _ReportarVehiculoNuevoDialogState
                   prefixIcon: Icon(Icons.tag_outlined),
                 ),
                 textCapitalization: TextCapitalization.characters,
-                validator: (v) => Validators.requerido(
-                  v,
-                  etiqueta: 'El número económico',
-                ),
+                validator: (v) =>
+                    Validators.requerido(v, etiqueta: 'El número económico'),
               ),
             ],
             const SizedBox(height: 16),
