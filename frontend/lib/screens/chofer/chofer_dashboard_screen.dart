@@ -489,15 +489,14 @@ class _TarjetaDona extends StatelessWidget {
 
   final List<DesgloseCombustible> desglose;
 
-  static const _colores = [
-    Color(0xFF0165F9),
-    Color(0xFF4C7EE0),
-    Color(0xFF146C3C),
-    Color(0xFF92610C),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final colores = [
+      context.colors.primary,
+      context.colors.info,
+      context.colors.success,
+      context.colors.warning,
+    ];
     final colors = context.colors;
 
     return AppCard(
@@ -525,7 +524,7 @@ class _TarjetaDona extends StatelessWidget {
                       for (var i = 0; i < desglose.length; i++)
                         PieChartSectionData(
                           value: desglose[i].litros,
-                          color: _colores[i % _colores.length],
+                          color: colores[i % colores.length],
                           radius: 28,
                           showTitle: false,
                         ),
@@ -547,7 +546,7 @@ class _TarjetaDona extends StatelessWidget {
                               width: 10,
                               height: 10,
                               decoration: BoxDecoration(
-                                color: _colores[i % _colores.length],
+                                color: colores[i % colores.length],
                                 shape: BoxShape.circle,
                               ),
                             ),

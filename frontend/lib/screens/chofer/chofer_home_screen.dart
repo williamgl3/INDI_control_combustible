@@ -228,10 +228,7 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
           Consumer(
             builder: (context, ref, _) {
               final total =
-                  ref
-                      .watch(totalPendientesOfflineProvider)
-                      .valueOrNull ??
-                  0;
+                  ref.watch(totalPendientesOfflineProvider).valueOrNull ?? 0;
               if (total == 0) return const SizedBox.shrink();
               return Padding(
                 padding: const EdgeInsets.only(top: 12),
@@ -354,16 +351,11 @@ class _FabSolicitar extends StatelessWidget {
         // el tinte de color de la sombra.
         elevation: 8,
         focusElevation: 10,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         icon: const Icon(Icons.local_gas_station_rounded, size: 24),
         label: const Text(
           'Solicitar carga',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 16,
-          ),
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
         ),
       ),
     );
@@ -513,8 +505,9 @@ class _BannerCargaAprobada extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Material(
-      color: const Color(0xFF0D2818),
+      color: colors.success.withValues(alpha: 0.14),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -523,21 +516,19 @@ class _BannerCargaAprobada extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: const Color(0xFF2E7D32).withValues(alpha: 0.5),
-            ),
+            border: Border.all(color: colors.success.withValues(alpha: 0.5)),
           ),
           child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2E7D32).withValues(alpha: 0.25),
+                  color: colors.success.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.local_gas_station,
-                  color: Color(0xFF66BB6A),
+                  color: colors.success,
                   size: 22,
                 ),
               ),
@@ -549,7 +540,7 @@ class _BannerCargaAprobada extends StatelessWidget {
                     Text(
                       'Carga aprobada',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.white,
+                        color: colors.textPrimary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -557,7 +548,7 @@ class _BannerCargaAprobada extends StatelessWidget {
                     Text(
                       'Folio $folio',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFFA5D6A7),
+                        color: colors.textSecondary,
                       ),
                     ),
                   ],
@@ -569,18 +560,18 @@ class _BannerCargaAprobada extends StatelessWidget {
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2E7D32),
+                  color: colors.success,
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.bolt, size: 14, color: Colors.white),
+                    Icon(Icons.bolt, size: 14, color: colors.primaryOn),
                     const SizedBox(width: 4),
                     Text(
                       'COMPROBAR AHORA',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Colors.white,
+                        color: colors.primaryOn,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 0.4,
                       ),

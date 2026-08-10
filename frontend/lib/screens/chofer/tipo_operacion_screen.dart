@@ -3,16 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/catalogos_vehiculo.dart';
+import '../../core/capacidades_rol.dart';
 import '../../core/flujo_diario_provider.dart';
 import '../../core/session_provider.dart';
-import '../../models/perfil.dart';
 import '../../router/route_paths.dart';
-import '../../theme/app_breakpoints.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
-import '../../widgets/brand_sub_header.dart';
-import '../../widgets/contenido_responsivo.dart';
+import '../../widgets/chofer_operation_scaffold.dart';
 import '../../widgets/paso_diario_stepper.dart';
 import '../../widgets/sidebar_chofer.dart';
 
@@ -38,13 +36,13 @@ class TipoOperacionScreen extends ConsumerWidget {
     final perfil = ref.watch(sessionProvider);
     final nombre = perfil?.nombreCompleto.split(' ').first ?? '';
     final paso = ref.watch(pasoDiarioProvider);
-    final ancho = MediaQuery.sizeOf(context).width;
-    final esAncho = AppBreakpoints.isTabletOrDesktop(ancho);
 
     // Header de marca fijo (full-bleed, no se capa), y el contenido debajo
     // va en `ContenidoResponsivo` — el patrón de referencia compartido por
     // todas las pantallas del panel de chofer (ver widget para detalles).
-    final esSupervisor = perfil?.rol == RolUsuario.supervisor;
+    final puedeOperarGranel =
+        perfil != null &&
+        tieneCapacidad(perfil.rol, CapacidadOperativa.solicitarUnidadGranel);
     final tarjetas = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -56,16 +54,14 @@ class TipoOperacionScreen extends ConsumerWidget {
           pasoActivo: PasoDiarioTipo.unidad,
         ),
         const SizedBox(height: AppSpacing.lg),
-        if (esSupervisor) ...[
+        if (puedeOperarGranel) ...[
           _TarjetaTipoOperacion(
             icono: Icons.local_shipping_rounded,
             color: context.colors.success,
             titulo: 'Cargar la marimba',
             subtitulo: 'Solicitud y comprobación de la carga a granel',
-            onTap: () => context.push(
-              RoutePaths.choferSolicitar,
-              extra: tiposUnidadVehiculo[1], // 'Marimba'
-            ),
+            onTap: () =>
+                context.push(RoutePaths.solicitud(CategoriaSolicitud.granel)),
           ),
           const SizedBox(height: AppSpacing.lg),
           _TarjetaTipoOperacion(
@@ -81,10 +77,8 @@ class TipoOperacionScreen extends ConsumerWidget {
             color: context.colors.primary,
             titulo: 'Vehículo Ligero',
             subtitulo: 'Camionetas, pickups y autos (registro por km)',
-            onTap: () => context.push(
-              RoutePaths.choferSolicitar,
-              extra: tiposUnidadVehiculo[0], // 'Vehículo'
-            ),
+            onTap: () =>
+                context.push(RoutePaths.solicitud(CategoriaSolicitud.vehiculo)),
           ),
           const SizedBox(height: AppSpacing.lg),
           _TarjetaTipoOperacion(
@@ -95,48 +89,22 @@ class TipoOperacionScreen extends ConsumerWidget {
                 'Excavadoras, retro y camiones (horómetro y '
                 'mantenimiento)',
             onTap: () => context.push(
-              RoutePaths.choferSolicitar,
-              extra: tiposUnidadVehiculo[2], // 'Maquinaria'
+              RoutePaths.solicitud(CategoriaSolicitud.maquinaria),
             ),
           ),
         ],
       ],
     );
 
-    final contenido = Column(
-      children: [
-        BrandSubHeader(
-          titulo: '¡Hola, $nombre! ¿Qué unidad vas a operar hoy?',
-          onBack: () => context.pop(),
-        ),
-        Expanded(
-          child: SafeArea(
-            top: false,
-            child: ContenidoResponsivo(child: tarjetas),
-          ),
-        ),
-      ],
+    return ChoferOperationScaffold(
+      titulo: '¡Hola, $nombre! ¿Qué unidad vas a operar hoy?',
+      lateral: SidebarChofer(
+        indiceSeleccionado: _indiceSidebar,
+        onSeleccionar: (i) =>
+            navegarDesdeSidebarChofer(context, _indiceSidebar, i),
+      ),
+      child: tarjetas,
     );
-
-    if (esAncho) {
-      return Scaffold(
-        body: SafeArea(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SidebarChofer(
-                indiceSeleccionado: _indiceSidebar,
-                onSeleccionar: (i) =>
-                    navegarDesdeSidebarChofer(context, _indiceSidebar, i),
-              ),
-              Expanded(child: contenido),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Scaffold(body: contenido);
   }
 }
 

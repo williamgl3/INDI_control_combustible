@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/catalogos_vehiculo.dart';
 import '../../core/providers.dart';
 import '../../models/despacho_marimba.dart';
 import '../../models/vehiculo.dart';
-import '../../router/route_paths.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_elevated_button.dart';
 import '../../widgets/aviso_error.dart';
 import '../../widgets/captura_foto_field.dart';
-import '../../widgets/contenido_responsivo.dart';
+import '../../widgets/chofer_operation_scaffold.dart';
 import '../../widgets/selector_vehiculo.dart';
 import '../../widgets/stepper_numerico.dart';
 
@@ -166,148 +166,134 @@ class _RegistrarDespachoScreenState
     final marimbas = ref
         .watch(vehiculosRepositoryProvider)
         .todos
-        .where(
-          (v) =>
-              (v.tipoUnidad == 'Marimba' || v.tipoUnidad == 'Pipa') &&
-              v.activo,
-        )
+        .where((v) => esUnidadGranel(v.tipoUnidad) && estaActiva(v))
         .toList();
     final maquinaria = ref
         .watch(vehiculosRepositoryProvider)
         .todos
-        .where((v) => v.tipoUnidad == 'Maquinaria' && v.activo)
+        .where((v) => esMaquinaria(v.tipoUnidad) && estaActiva(v))
         .toList();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Registrar despacho'),
-        leading: BackButton(onPressed: () => context.go(RoutePaths.chofer)),
-      ),
-      body: SafeArea(
-        child: ContenidoResponsivo(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _SelectorMarimba(
-                marimbas: marimbas,
-                seleccionada: _marimba,
-                onSeleccionar: _elegirMarimba,
-              ),
-              if (_marimba != null) ...[
-                const SizedBox(height: 12),
-                _TarjetaSaldo(
-                  cargando: _cargandoSaldo,
-                  saldo: _saldoActual,
-                ),
-              ],
-              const SizedBox(height: 20),
-              if (maquinaria.isNotEmpty && !_destinoLibre)
-                SelectorVehiculo(
-                  vehiculoSeleccionado: _destino,
-                  filtroTipoUnidad: 'Maquinaria',
-                  onSeleccionar: (v) => setState(() => _destino = v),
-                ),
-              if (maquinaria.isEmpty || _destinoLibre)
-                TextFormField(
-                  controller: _destinoTextoController,
-                  decoration: const InputDecoration(
-                    labelText: 'Unidad destino',
-                    hintText: 'Ej. Tractor D8R, Excavadora 330 EHO-330-056',
-                    prefixIcon: Icon(Icons.precision_manufacturing_outlined),
-                  ),
-                ),
-              if (maquinaria.isNotEmpty)
-                TextButton(
-                  onPressed: () => setState(() => _destinoLibre = !_destinoLibre),
-                  child: Text(
-                    _destinoLibre
-                        ? 'Elegir del catálogo'
-                        : 'La unidad no está en el catálogo',
-                  ),
-                ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _operadorController,
-                decoration: const InputDecoration(
-                  labelText: 'Operador que recibe el combustible',
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _residenteController,
-                decoration: const InputDecoration(
-                  labelText: 'Residente a cargo (opcional)',
-                  prefixIcon: Icon(Icons.badge_outlined),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _sitioController,
-                decoration: const InputDecoration(
-                  labelText: 'Sitio / frente de trabajo',
-                  prefixIcon: Icon(Icons.location_on_outlined),
-                ),
-              ),
-              const SizedBox(height: 20),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Unidad inactiva hoy (sin despacho)'),
-                subtitle: const Text(
-                  'Se registra que se consideró, sin mover el saldo de la marimba.',
-                ),
-                value: _unidadInactivaHoy,
-                onChanged: (v) => setState(() => _unidadInactivaHoy = v),
-              ),
-              if (!_unidadInactivaHoy) ...[
-                const SizedBox(height: 8),
-                StepperNumerico(
-                  etiqueta: 'Litros solicitados (opcional)',
-                  valor: _litrosSolicitados,
-                  sufijo: 'L',
-                  paso: 10,
-                  onChanged: (v) => setState(() => _litrosSolicitados = v),
-                ),
-                const SizedBox(height: 16),
-                StepperNumerico(
-                  etiqueta: 'Litros suministrados',
-                  valor: _litrosSuministrados,
-                  sufijo: 'L',
-                  paso: 10,
-                  onChanged: (v) => setState(() => _litrosSuministrados = v),
-                ),
-                const SizedBox(height: 16),
-                StepperNumerico(
-                  etiqueta: 'Horómetro / km de la unidad (opcional)',
-                  valor: _lecturaMedidor,
-                  sufijo: '',
-                  paso: 1,
-                  decimales: 1,
-                  onChanged: (v) => setState(() => _lecturaMedidor = v),
-                ),
-                const SizedBox(height: 16),
-                CapturaFotoField(
-                  etiqueta: 'Foto de evidencia del despacho',
-                  icono: Icons.photo_camera_outlined,
-                  rutaFoto: _fotoEvidenciaPath,
-                  cargando: _cargandoFoto,
-                  onTomarFoto: _tomarFoto,
-                ),
-              ],
-              if (_errorGeneral != null) ...[
-                const SizedBox(height: 12),
-                AvisoError(mensaje: _errorGeneral!),
-              ],
-              const SizedBox(height: 24),
-              AppElevatedButton(
-                onPressed: _enviar,
-                cargando: _enviando,
-                child: const Text('Registrar despacho'),
-              ),
-            ],
+    return ChoferOperationScaffold(
+      titulo: 'Registrar despacho',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _SelectorMarimba(
+            marimbas: marimbas,
+            seleccionada: _marimba,
+            onSeleccionar: _elegirMarimba,
           ),
-        ),
+          if (_marimba != null) ...[
+            const SizedBox(height: 12),
+            _TarjetaSaldo(cargando: _cargandoSaldo, saldo: _saldoActual),
+          ],
+          const SizedBox(height: 20),
+          if (maquinaria.isNotEmpty && !_destinoLibre)
+            SelectorVehiculo(
+              vehiculoSeleccionado: _destino,
+              filtroTipoUnidad: 'Maquinaria',
+              onSeleccionar: (v) => setState(() => _destino = v),
+            ),
+          if (maquinaria.isEmpty || _destinoLibre)
+            TextFormField(
+              controller: _destinoTextoController,
+              decoration: const InputDecoration(
+                labelText: 'Unidad destino',
+                hintText: 'Ej. Tractor D8R, Excavadora 330 EHO-330-056',
+                prefixIcon: Icon(Icons.precision_manufacturing_outlined),
+              ),
+            ),
+          if (maquinaria.isNotEmpty)
+            TextButton(
+              onPressed: () => setState(() => _destinoLibre = !_destinoLibre),
+              child: Text(
+                _destinoLibre
+                    ? 'Elegir del catálogo'
+                    : 'La unidad no está en el catálogo',
+              ),
+            ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _operadorController,
+            decoration: const InputDecoration(
+              labelText: 'Operador que recibe el combustible',
+              prefixIcon: Icon(Icons.person_outline),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _residenteController,
+            decoration: const InputDecoration(
+              labelText: 'Residente a cargo (opcional)',
+              prefixIcon: Icon(Icons.badge_outlined),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _sitioController,
+            decoration: const InputDecoration(
+              labelText: 'Sitio / frente de trabajo',
+              prefixIcon: Icon(Icons.location_on_outlined),
+            ),
+          ),
+          const SizedBox(height: 20),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Unidad inactiva hoy (sin despacho)'),
+            subtitle: const Text(
+              'Se registra que se consideró, sin mover el saldo de la marimba.',
+            ),
+            value: _unidadInactivaHoy,
+            onChanged: (v) => setState(() => _unidadInactivaHoy = v),
+          ),
+          if (!_unidadInactivaHoy) ...[
+            const SizedBox(height: 8),
+            StepperNumerico(
+              etiqueta: 'Litros solicitados (opcional)',
+              valor: _litrosSolicitados,
+              sufijo: 'L',
+              paso: 10,
+              onChanged: (v) => setState(() => _litrosSolicitados = v),
+            ),
+            const SizedBox(height: 16),
+            StepperNumerico(
+              etiqueta: 'Litros suministrados',
+              valor: _litrosSuministrados,
+              sufijo: 'L',
+              paso: 10,
+              onChanged: (v) => setState(() => _litrosSuministrados = v),
+            ),
+            const SizedBox(height: 16),
+            StepperNumerico(
+              etiqueta: 'Horómetro / km de la unidad (opcional)',
+              valor: _lecturaMedidor,
+              sufijo: '',
+              paso: 1,
+              decimales: 1,
+              onChanged: (v) => setState(() => _lecturaMedidor = v),
+            ),
+            const SizedBox(height: 16),
+            CapturaFotoField(
+              etiqueta: 'Foto de evidencia del despacho',
+              icono: Icons.photo_camera_outlined,
+              rutaFoto: _fotoEvidenciaPath,
+              cargando: _cargandoFoto,
+              onTomarFoto: _tomarFoto,
+            ),
+          ],
+          if (_errorGeneral != null) ...[
+            const SizedBox(height: 12),
+            AvisoError(mensaje: _errorGeneral!),
+          ],
+          const SizedBox(height: 24),
+          AppElevatedButton(
+            onPressed: _enviar,
+            cargando: _enviando,
+            child: const Text('Registrar despacho'),
+          ),
+        ],
       ),
     );
   }

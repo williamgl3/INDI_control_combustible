@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/cola_solicitudes_offline.dart';
+import '../../core/catalogos_vehiculo.dart';
 import '../../core/connectivity_provider.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
@@ -20,10 +21,8 @@ import '../../theme/app_radii.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
-import '../../widgets/app_elevated_button.dart';
 import '../../widgets/aviso_error.dart';
-import '../../widgets/brand_sub_header.dart';
-import '../../widgets/contenido_responsivo.dart';
+import '../../widgets/chofer_operation_scaffold.dart';
 import '../../widgets/estado_mantenimiento_badge.dart';
 import '../../widgets/fecha_formato.dart';
 import '../../widgets/grouped_section.dart';
@@ -33,13 +32,10 @@ import '../administrativo/tabs/mantenimiento_calculo.dart';
 import 'reportar_incidencia_dialog.dart';
 
 class SolicitarCargaScreen extends ConsumerStatefulWidget {
-  const SolicitarCargaScreen({super.key, this.categoriaFiltro});
+  const SolicitarCargaScreen({super.key, required this.categoria});
 
-  /// Categoría elegida en `TipoOperacionScreen` (ej. "Maquinaria") — filtra
-  /// el catálogo de `SelectorVehiculo` a esa categoría. `null` muestra el
-  /// catálogo completo (llegando a esta pantalla por una ruta que no pasó
-  /// por la selección de tipo de operación).
-  final String? categoriaFiltro;
+  /// Categoría persistente obtenida del segmento semántico de la ruta.
+  final CategoriaSolicitud categoria;
 
   @override
   ConsumerState<SolicitarCargaScreen> createState() =>
@@ -188,6 +184,7 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
   }
 
   Future<void> _enviar() async {
+    if (_cargando) return;
     if (!_formKey.currentState!.validate()) return;
     if (_vehiculo == null) {
       setState(() => _errorGeneral = 'Elige qué vehículo vas a usar.');
@@ -231,12 +228,11 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
     );
     final actividad = _actividadController.text.trim();
 
-    if (ref.read(conectividadProvider).valueOrNull == false) {
-      await _encolarSinConexion(motivo: motivo, actividad: actividad);
-      return;
-    }
-
     try {
+      if (ref.read(conectividadProvider).valueOrNull == false) {
+        await _encolarSinConexion(motivo: motivo, actividad: actividad);
+        return;
+      }
       final perfil = ref.read(sessionProvider)!;
       final solicitud = await ref
           .read(operacionesRepositoryProvider)
@@ -261,12 +257,14 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
         await _encolarSinConexion(motivo: motivo, actividad: actividad);
         return;
       }
-      setState(() => _errorGeneral = e.mensaje);
+      if (mounted) setState(() => _errorGeneral = e.mensaje);
     } catch (e) {
-      setState(
-        () =>
-            _errorGeneral = 'No pudimos enviar tu solicitud. Intenta de nuevo.',
-      );
+      if (mounted) {
+        setState(
+          () => _errorGeneral =
+              'No pudimos enviar tu solicitud. Intenta de nuevo.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -313,235 +311,214 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
   Widget build(BuildContext context) {
     final colors = context.colors;
 
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      body: Column(
-        children: [
-          BrandSubHeader(
-            titulo: 'Solicitar carga',
-            onBack: () => context.pop(),
-          ),
-          Expanded(
-            child: SafeArea(
-              top: false,
-              child: ContenidoResponsivo(
-                physics: const BouncingScrollPhysics(),
-                paddingSuperior: AppSpacing.lg,
-                paddingInferior: AppSpacing.xxl,
-                child: Form(
-                  key: _formKey,
-                  autovalidateMode: AutovalidateMode.onUserInteraction,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SelectorVehiculo(
-                        vehiculoSeleccionado: _vehiculo,
-                        onSeleccionar: _elegirVehiculo,
-                        filtroTipoUnidad: widget.categoriaFiltro,
-                      ),
-                      if (_vehiculo != null) ...[
-                        const SizedBox(height: AppSpacing.md),
-                        GroupedSection(
-                          children: [
-                            GroupedRow(
-                              titulo:
-                                  _vehiculo!.tipoCombustible ??
-                                  'Sin especificar',
-                              subtitulo: 'Tipo de combustible',
-                              icono: Icons.local_gas_station_outlined,
-                            ),
-                            if (_diagnosticoMantenimiento != null &&
-                                _diagnosticoMantenimiento!.estado !=
-                                    EstadoMantenimiento.alDia &&
-                                _diagnosticoMantenimiento!.estado !=
-                                    EstadoMantenimiento.sinDatos)
-                              GroupedRow(
-                                titulo:
-                                    _diagnosticoMantenimiento!.estado ==
-                                        EstadoMantenimiento.vencido
-                                    ? 'Mantenimiento vencido'
-                                    : 'Mantenimiento por vencer',
-                                subtitulo: 'Toca para reportar un problema',
-                                icono: Icons.build_outlined,
-                                iconoColor:
-                                    _diagnosticoMantenimiento!.estado ==
-                                        EstadoMantenimiento.vencido
-                                    ? colors.error
-                                    : colors.warning,
-                                trailing: EstadoMantenimientoBadge(
-                                  estado: _diagnosticoMantenimiento!.estado,
-                                ),
-                                onTap: _reportarIncidencia,
-                              )
-                            else
-                              GroupedRow(
-                                titulo: '¿Problema con esta unidad?',
-                                subtitulo: 'Repórtalo aquí',
-                                icono: Icons.build_outlined,
-                                onTap: _reportarIncidencia,
-                              ),
-                          ],
-                        ),
-                      ],
-                      if (_vehiculo?.tipoUnidad == 'Maquinaria') ...[
-                        const SizedBox(height: AppSpacing.md),
-                        GroupedSection(
-                          header: 'Maquinaria',
-                          children: [
-                            GroupedRow(
-                              titulo: 'Grasa',
-                              subtitulo: 'Servicio de engrasado en esta salida',
-                              icono: Icons.opacity_outlined,
-                              trailing: CupertinoSwitch(
-                                value: _serviciosAdicionales.contains('Grasa'),
-                                activeTrackColor: colors.primary,
-                                inactiveTrackColor: colors.border,
-                                onChanged: (v) => setState(() {
-                                  if (v) {
-                                    _serviciosAdicionales.add('Grasa');
-                                  } else {
-                                    _serviciosAdicionales.remove('Grasa');
-                                  }
-                                }),
-                              ),
-                            ),
-                            GroupedRow(
-                              titulo: 'Aceite',
-                              subtitulo: 'Cambio o relleno de aceite en esta salida',
-                              icono: Icons.water_drop_outlined,
-                              trailing: CupertinoSwitch(
-                                value: _serviciosAdicionales.contains('Aceite'),
-                                activeTrackColor: colors.primary,
-                                inactiveTrackColor: colors.border,
-                                onChanged: (v) => setState(() {
-                                  if (v) {
-                                    _serviciosAdicionales.add('Aceite');
-                                  } else {
-                                    _serviciosAdicionales.remove('Aceite');
-                                  }
-                                }),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        DropdownButtonFormField<String>(
-                          initialValue: _supervisor,
-                          decoration: const InputDecoration(
-                            labelText: 'Supervisor (opcional)',
-                            prefixIcon: Icon(Icons.engineering_outlined),
-                          ),
-                          items: _supervisoresPlaceholder
-                              .map(
-                                (s) => DropdownMenuItem(value: s, child: Text(s)),
-                              )
-                              .toList(),
-                          onChanged: (v) => setState(() => _supervisor = v),
-                        ),
-                      ],
-                      const SizedBox(height: AppSpacing.xl),
-                      _FotoTableroCard(
-                        rutaFoto: _fotoTableroPath,
-                        cargando: _cargandoFotoTablero,
-                        onTap: _tomarFotoTablero,
-                      ),
-                      const SizedBox(height: AppSpacing.xxl),
-                      Text(
-                        '¿Cuántos litros necesitas?',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      _SelectorLitros(
-                        valor: _litros,
-                        onChanged: (v) => setState(() => _litros = v),
-                        ultimaCantidad: _ultimaCantidad,
-                      ),
-                      const SizedBox(height: AppSpacing.xl),
-                      GroupedSection(
-                        children: [
-                          GroupedRow(
-                            titulo: 'Es urgente (lo necesito hoy)',
-                            subtitulo: 'Si no, se planea para mañana',
-                            trailing: CupertinoSwitch(
-                              value: _esUrgente,
-                              activeTrackColor: colors.primary,
-                              inactiveTrackColor: colors.border,
-                              onChanged: (v) {
-                                setState(() => _esUrgente = v);
-                                if (v) {
-                                  WidgetsBinding.instance
-                                      .addPostFrameCallback((_) {
-                                    if (mounted) _motivoFocus.requestFocus();
-                                  });
-                                }
-                              },
-                            ),
-                          ),
-                          Semantics(
-                            button: true,
-                            label:
-                                'Elegir fecha en que se necesita el '
-                                'combustible',
-                            child: GroupedRow(
-                              titulo: 'Fecha en que se necesita',
-                              subtitulo: formatearFecha(_fechaProgramada),
-                              icono: Icons.event_outlined,
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: _elegirFechaProgramada,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      TextFormField(
-                        controller: _motivoController,
-                        focusNode: _motivoFocus,
-                        decoration: InputDecoration(
-                          labelText: _esUrgente
-                              ? 'Motivo (obligatorio)'
-                              : 'Motivo (opcional)',
-                          hintText: 'Ej. se acabó antes de tiempo',
-                        ),
-                        minLines: 1,
-                        maxLines: null,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.newline,
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      TextFormField(
-                        controller: _actividadController,
-                        decoration: const InputDecoration(
-                          labelText: 'Actividad',
-                          hintText:
-                              'Ej. Tramo 340+000 al 349+420, Realizar Trazos y '
-                              'Niveles traslado al área de trabajo…',
-                        ),
-                        maxLines: 3,
-                        minLines: 2,
-                        keyboardType: TextInputType.multiline,
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Describe la actividad para la que necesitas el '
-                                  'combustible.'
-                            : null,
-                      ),
-                      if (_errorGeneral != null) ...[
-                        const SizedBox(height: AppSpacing.md),
-                        AvisoError(mensaje: _errorGeneral!),
-                      ],
-                      // Padding inferior extra para que el último campo
-                      // de texto no quede tapado por el botón fijo.
-                      const SizedBox(height: 80),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: _BarraEnviar(
+    return ChoferOperationScaffold(
+      titulo: 'Solicitar carga',
+      onBack: () => volverEnFlujoChofer(context),
+      bottomNavigationBar: BarraEnviarSolicitud(
         cargando: _cargando,
         onEnviar: _enviar,
+      ),
+      child: Form(
+        key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SelectorVehiculo(
+              vehiculoSeleccionado: _vehiculo,
+              onSeleccionar: _elegirVehiculo,
+              filtroUnidad: widget.categoria.acepta,
+              tipoUnidadInicialReporte: widget.categoria.tipoInicialReporte,
+            ),
+            if (_vehiculo != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              GroupedSection(
+                children: [
+                  GroupedRow(
+                    titulo: _vehiculo!.tipoCombustible ?? 'Sin especificar',
+                    subtitulo: 'Tipo de combustible',
+                    icono: Icons.local_gas_station_outlined,
+                  ),
+                  if (_diagnosticoMantenimiento != null &&
+                      _diagnosticoMantenimiento!.estado !=
+                          EstadoMantenimiento.alDia &&
+                      _diagnosticoMantenimiento!.estado !=
+                          EstadoMantenimiento.sinDatos)
+                    GroupedRow(
+                      titulo:
+                          _diagnosticoMantenimiento!.estado ==
+                              EstadoMantenimiento.vencido
+                          ? 'Mantenimiento vencido'
+                          : 'Mantenimiento por vencer',
+                      subtitulo: 'Toca para reportar un problema',
+                      icono: Icons.build_outlined,
+                      iconoColor:
+                          _diagnosticoMantenimiento!.estado ==
+                              EstadoMantenimiento.vencido
+                          ? colors.error
+                          : colors.warning,
+                      trailing: EstadoMantenimientoBadge(
+                        estado: _diagnosticoMantenimiento!.estado,
+                      ),
+                      onTap: _reportarIncidencia,
+                    )
+                  else
+                    GroupedRow(
+                      titulo: '¿Problema con esta unidad?',
+                      subtitulo: 'Repórtalo aquí',
+                      icono: Icons.build_outlined,
+                      onTap: _reportarIncidencia,
+                    ),
+                ],
+              ),
+            ],
+            if (_vehiculo?.tipoUnidad == 'Maquinaria') ...[
+              const SizedBox(height: AppSpacing.md),
+              GroupedSection(
+                header: 'Maquinaria',
+                children: [
+                  GroupedRow(
+                    titulo: 'Grasa',
+                    subtitulo: 'Servicio de engrasado en esta salida',
+                    icono: Icons.opacity_outlined,
+                    trailing: CupertinoSwitch(
+                      value: _serviciosAdicionales.contains('Grasa'),
+                      activeTrackColor: colors.primary,
+                      inactiveTrackColor: colors.border,
+                      onChanged: (v) => setState(() {
+                        if (v) {
+                          _serviciosAdicionales.add('Grasa');
+                        } else {
+                          _serviciosAdicionales.remove('Grasa');
+                        }
+                      }),
+                    ),
+                  ),
+                  GroupedRow(
+                    titulo: 'Aceite',
+                    subtitulo: 'Cambio o relleno de aceite en esta salida',
+                    icono: Icons.water_drop_outlined,
+                    trailing: CupertinoSwitch(
+                      value: _serviciosAdicionales.contains('Aceite'),
+                      activeTrackColor: colors.primary,
+                      inactiveTrackColor: colors.border,
+                      onChanged: (v) => setState(() {
+                        if (v) {
+                          _serviciosAdicionales.add('Aceite');
+                        } else {
+                          _serviciosAdicionales.remove('Aceite');
+                        }
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              DropdownButtonFormField<String>(
+                initialValue: _supervisor,
+                decoration: const InputDecoration(
+                  labelText: 'Supervisor (opcional)',
+                  prefixIcon: Icon(Icons.engineering_outlined),
+                ),
+                items: _supervisoresPlaceholder
+                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                    .toList(),
+                onChanged: (v) => setState(() => _supervisor = v),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.xl),
+            _FotoTableroCard(
+              rutaFoto: _fotoTableroPath,
+              cargando: _cargandoFotoTablero,
+              onTap: _tomarFotoTablero,
+            ),
+            const SizedBox(height: AppSpacing.xxl),
+            Text(
+              '¿Cuántos litros necesitas?',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            _SelectorLitros(
+              valor: _litros,
+              onChanged: (v) => setState(() => _litros = v),
+              ultimaCantidad: _ultimaCantidad,
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            GroupedSection(
+              children: [
+                GroupedRow(
+                  titulo: 'Es urgente (lo necesito hoy)',
+                  subtitulo: 'Si no, se planea para mañana',
+                  trailing: CupertinoSwitch(
+                    value: _esUrgente,
+                    activeTrackColor: colors.primary,
+                    inactiveTrackColor: colors.border,
+                    onChanged: (v) {
+                      setState(() => _esUrgente = v);
+                      if (v) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) _motivoFocus.requestFocus();
+                        });
+                      }
+                    },
+                  ),
+                ),
+                Semantics(
+                  button: true,
+                  label:
+                      'Elegir fecha en que se necesita el '
+                      'combustible',
+                  child: GroupedRow(
+                    titulo: 'Fecha en que se necesita',
+                    subtitulo: formatearFecha(_fechaProgramada),
+                    icono: Icons.event_outlined,
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _elegirFechaProgramada,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            TextFormField(
+              controller: _motivoController,
+              focusNode: _motivoFocus,
+              decoration: InputDecoration(
+                labelText: _esUrgente
+                    ? 'Motivo (obligatorio)'
+                    : 'Motivo (opcional)',
+                hintText: 'Ej. se acabó antes de tiempo',
+              ),
+              minLines: 1,
+              maxLines: null,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            TextFormField(
+              controller: _actividadController,
+              decoration: const InputDecoration(
+                labelText: 'Actividad',
+                hintText:
+                    'Ej. Tramo 340+000 al 349+420, Realizar Trazos y '
+                    'Niveles traslado al área de trabajo…',
+              ),
+              maxLines: 3,
+              minLines: 2,
+              keyboardType: TextInputType.multiline,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Describe la actividad para la que necesitas el '
+                        'combustible.'
+                  : null,
+            ),
+            if (_errorGeneral != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              AvisoError(mensaje: _errorGeneral!),
+            ],
+            // Padding inferior extra para que el último campo
+            // de texto no quede tapado por el botón fijo.
+            const SizedBox(height: 80),
+          ],
+        ),
       ),
     );
   }
@@ -578,7 +555,9 @@ class _FotoTableroCard extends StatelessWidget {
         child: InkWell(
           onTap: cargando ? null : onTap,
           borderRadius: AppRadii.cardRadius,
-          child: tieneFoto ? _buildConFoto(context, colors) : _buildSinFoto(context, colors),
+          child: tieneFoto
+              ? _buildConFoto(context, colors)
+              : _buildSinFoto(context, colors),
         ),
       ),
     );
@@ -619,9 +598,9 @@ class _FotoTableroCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             Text(
               'Tomar foto del tablero',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.xs),
@@ -729,10 +708,7 @@ class _FotoTableroCard extends StatelessWidget {
             )
           else
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
                 color: colors.primary.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(999),
@@ -772,11 +748,7 @@ class _SelectorLitros extends StatelessWidget {
   final ValueChanged<double> onChanged;
   final double? ultimaCantidad;
 
-  static const _atajos = [
-    (10.0, '+10 L'),
-    (20.0, '+20 L'),
-    (50.0, '+50 L'),
-  ];
+  static const _atajos = [(10.0, '+10 L'), (20.0, '+20 L'), (50.0, '+50 L')];
 
   @override
   Widget build(BuildContext context) {
@@ -829,11 +801,11 @@ class _SelectorLitros extends StatelessWidget {
                       valor.toStringAsFixed(1),
                       key: ValueKey(valor),
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'IBM Plex Mono',
                         fontSize: 40,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF1463FF),
+                        color: context.colors.primary,
                       ),
                     ),
                   ),
@@ -861,7 +833,8 @@ class _SelectorLitros extends StatelessWidget {
           Row(
             children: [
               for (final (cantidad, label) in _atajos) ...[
-                if (cantidad != _atajos.first.$1) const SizedBox(width: AppSpacing.sm),
+                if (cantidad != _atajos.first.$1)
+                  const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: _ChipAtajo(
                     label: label,
@@ -990,36 +963,36 @@ class _ChipAtajo extends StatelessWidget {
 /// Barra inferior fija con el botón "Enviar solicitud" — vive fuera del
 /// scroll para que siempre sea accesible sin importar la posición del
 /// formulario. Respeta el safe area inferior (Home Indicator de iOS).
-class _BarraEnviar extends StatelessWidget {
-  const _BarraEnviar({required this.cargando, required this.onEnviar});
+class BarraEnviarSolicitud extends StatelessWidget {
+  const BarraEnviarSolicitud({
+    super.key,
+    required this.cargando,
+    required this.onEnviar,
+  });
 
   final bool cargando;
   final VoidCallback onEnviar;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.sm,
-        AppSpacing.lg,
-        AppSpacing.lg,
-      ),
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        boxShadow: context.shadows.floating,
-        border: Border(
-          top: BorderSide(
-            color: Theme.of(context).dividerColor.withValues(alpha: 0.15),
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: SizedBox(
+          key: const ValueKey('enviar-solicitud-size'),
+          width: double.infinity,
+          height: 52,
+          child: FilledButton(
+            key: const ValueKey('enviar-solicitud-button'),
+            onPressed: cargando ? null : onEnviar,
+            child: cargando
+                ? const SizedBox.square(
+                    dimension: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Enviar solicitud'),
           ),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        child: AppElevatedButton(
-          onPressed: onEnviar,
-          cargando: cargando,
-          child: const Text('Enviar solicitud'),
         ),
       ),
     );

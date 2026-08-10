@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/catalogos_vehiculo.dart';
 import '../../core/cola_solicitudes_offline.dart';
 import '../../core/providers.dart';
 import '../../models/despacho_marimba.dart';
@@ -13,7 +14,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_elevated_button.dart';
 import '../../widgets/aviso_error.dart';
 import '../../widgets/captura_foto_field.dart';
-import '../../widgets/contenido_responsivo.dart';
+import '../../widgets/chofer_operation_scaffold.dart';
 import '../../widgets/selector_vehiculo.dart';
 import '../../widgets/sin_conexion_dialog.dart';
 import '../../widgets/stepper_numerico.dart';
@@ -146,7 +147,9 @@ class _RecorridoMarimbaScreenState
 
   Future<void> _agregarDespacho() async {
     if (_destino == null && _destinoTextoController.text.trim().isEmpty) {
-      setState(() => _errorDespacho = 'Indica qué máquina recibió el combustible.');
+      setState(
+        () => _errorDespacho = 'Indica qué máquina recibió el combustible.',
+      );
       return;
     }
     if (_operadorController.text.trim().isEmpty) {
@@ -197,7 +200,8 @@ class _RecorridoMarimbaScreenState
       // Igual que al abrir — ya quedó en la cola, se reintentará solo.
     }
 
-    final etiquetaDestino = destino?.modelo ?? destino?.etiquetaUnidad ?? destinoTexto!;
+    final etiquetaDestino =
+        destino?.modelo ?? destino?.etiquetaUnidad ?? destinoTexto!;
 
     if (!mounted) return;
     setState(() {
@@ -251,12 +255,11 @@ class _RecorridoMarimbaScreenState
     // Se guarda el `idServidor` (si ya se conoce) ANTES de sincronizar,
     // porque una vez que el cierre tenga éxito el recorrido se quita de
     // su cola — después de eso ya no habría forma de recuperarlo de ahí.
-    final idServidorAntes = (await ref
-            .read(colaRecorridosMarimbaOfflineProvider)
-            .leer())
-        .where((r) => r.idLocal == idLocal)
-        .map((r) => r.idServidor)
-        .firstOrNull;
+    final idServidorAntes =
+        (await ref.read(colaRecorridosMarimbaOfflineProvider).leer())
+            .where((r) => r.idLocal == idLocal)
+            .map((r) => r.idServidor)
+            .firstOrNull;
 
     await ref
         .read(colaCierresRecorridoMarimbaOfflineProvider)
@@ -276,10 +279,10 @@ class _RecorridoMarimbaScreenState
       // Queda en la cola — se reintenta sola.
     }
 
-    final sigueEnCola = (await ref
-            .read(colaRecorridosMarimbaOfflineProvider)
-            .leer())
-        .any((r) => r.idLocal == idLocal);
+    final sigueEnCola =
+        (await ref.read(colaRecorridosMarimbaOfflineProvider).leer()).any(
+          (r) => r.idLocal == idLocal,
+        );
 
     if (!mounted) return;
 
@@ -312,22 +315,13 @@ class _RecorridoMarimbaScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          _recorridoIdLocal == null
-              ? 'Abrir recorrido de marimba'
-              : 'Recorrido · $_frenteActivo',
-        ),
-        leading: BackButton(onPressed: () => context.go(RoutePaths.chofer)),
-      ),
-      body: SafeArea(
-        child: ContenidoResponsivo(
-          child: _recorridoIdLocal == null
-              ? _buildFormularioAbrir(context)
-              : _buildCaptura(context),
-        ),
-      ),
+    return ChoferOperationScaffold(
+      titulo: _recorridoIdLocal == null
+          ? 'Abrir recorrido de marimba'
+          : 'Recorrido · $_frenteActivo',
+      child: _recorridoIdLocal == null
+          ? _buildFormularioAbrir(context)
+          : _buildCaptura(context),
     );
   }
 
@@ -335,7 +329,7 @@ class _RecorridoMarimbaScreenState
     final marimbas = ref
         .watch(vehiculosRepositoryProvider)
         .todos
-        .where((v) => v.tipoUnidad == 'Marimba' && v.activo)
+        .where((v) => esUnidadGranel(v.tipoUnidad) && estaActiva(v))
         .toList();
 
     return Column(
@@ -421,12 +415,17 @@ class _RecorridoMarimbaScreenState
           existenciaEstimada: _existenciaEstimada,
         ),
         const SizedBox(height: 20),
-        Text('Despachos de este recorrido', style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          'Despachos de este recorrido',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         const SizedBox(height: 8),
         if (_despachos.isEmpty)
           Text(
             'Todavía no agregas ningún despacho.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colors.textMuted),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: colors.textMuted),
           )
         else
           ..._despachos.reversed.map(
@@ -441,7 +440,10 @@ class _RecorridoMarimbaScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Agregar despacho', style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                'Agregar despacho',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               const SizedBox(height: 12),
               if (_destinosRecientes.isNotEmpty) ...[
                 Wrap(
@@ -480,7 +482,9 @@ class _RecorridoMarimbaScreenState
               TextButton(
                 onPressed: () => setState(() => _destinoLibre = !_destinoLibre),
                 child: Text(
-                  _destinoLibre ? 'Elegir del catálogo' : 'No está en el catálogo',
+                  _destinoLibre
+                      ? 'Elegir del catálogo'
+                      : 'No está en el catálogo',
                 ),
               ),
               const SizedBox(height: 8),
@@ -617,7 +621,9 @@ class _Dato extends StatelessWidget {
       children: [
         Text(
           etiqueta.toUpperCase(),
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.textMuted),
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: colors.textMuted),
         ),
         const SizedBox(height: 2),
         Text(
@@ -803,7 +809,9 @@ class _DialogoConciliacion {
       context: context,
       builder: (context) => AlertDialog(
         icon: Icon(
-          requiereRevision ? Icons.warning_amber_outlined : Icons.check_circle_outline,
+          requiereRevision
+              ? Icons.warning_amber_outlined
+              : Icons.check_circle_outline,
           color: requiereRevision
               ? context.colors.warning
               : context.colors.success,
