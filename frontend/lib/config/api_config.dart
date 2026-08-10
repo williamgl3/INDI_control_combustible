@@ -1,21 +1,31 @@
+import 'package:flutter/foundation.dart';
+
+/// URL del backend, resuelta en este orden:
+///
+/// 1. `--dart-define=API_BASE_URL=...` si se pasó al compilar/correr —
+///    así producción apunta a un dominio HTTPS sin tocar código:
+///
+///      flutter build web --dart-define=API_BASE_URL=https://api.indicombustible.com
+///      flutter build apk --release --dart-define=API_BASE_URL=https://api.indicombustible.com
+///
+/// 2. Si no se pasó el flag, un default según la plataforma de destino
+///    (desarrollo local, con el backend corriendo en la misma PC):
+///
+///      - Emulador de Android: `http://10.0.2.2:3000` — dentro del
+///        emulador, `localhost` apunta al propio emulador, no al host;
+///        `10.0.2.2` es el alias especial que Android mapea al
+///        `localhost` de la PC que lo corre.
+///        Comando: `flutter run` (con el emulador ya iniciado).
+///      - Web / desktop (Chrome, Windows, etc.): `http://localhost:3000`.
+///        Comando: `flutter run -d chrome` (o `-d windows`, etc.).
 class ApiConfig {
-  /// URL del backend — configurable en tiempo de compilación vía
-  /// `--dart-define=API_BASE_URL=...`, sin tocar código ni recompilar
-  /// manualmente entre entornos:
-  ///
-  ///   flutter run --dart-define=API_BASE_URL=http://192.168.1.83:3000
-  ///   flutter build web --dart-define=API_BASE_URL=https://api.indicombustible.com
-  ///
-  /// Sin ese flag, cae al valor de `defaultValue` de abajo (desarrollo
-  /// local en la LAN de la PC) — así el flujo de trabajo diario de
-  /// `flutter run`/`flutter test` sigue igual que antes, y un pipeline de
-  /// CI/CD real define la URL de producción por fuera del código fuente.
-  static const String baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    // Desarrollo local — IP de LAN de la PC (ver `ipconfig`, adaptador
-    // Wi-Fi) mientras celular y PC estén en la misma red. Usa
-    // 'http://localhost:3000' para correr solo en el navegador/emulador
-    // de la misma PC.
-    defaultValue: 'http://192.168.1.83:3000',
-  );
+  static const String _envOverride = String.fromEnvironment('API_BASE_URL');
+
+  static String get baseUrl {
+    if (_envOverride.isNotEmpty) return _envOverride;
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:3000';
+    }
+    return 'http://localhost:3000';
+  }
 }
