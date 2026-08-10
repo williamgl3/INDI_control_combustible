@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/session_provider.dart';
+import '../core/catalogos_vehiculo.dart';
+import '../core/capacidades_rol.dart';
 import '../models/carga.dart';
 import '../models/perfil.dart';
 import '../models/solicitud_autorizacion.dart';
@@ -84,10 +86,27 @@ String? _redirigirSegunSesion(Perfil? perfil, GoRouterState state) {
 
   final esRutaDeChofer = destino.startsWith(RoutePaths.chofer);
   final esRutaDeAdministrativo = destino.startsWith(RoutePaths.administrativo);
+  final esRutaExclusivaSupervisor =
+      destino == RoutePaths.choferRegistrarDespacho ||
+      destino == RoutePaths.choferRecorridoMarimba;
+  if (destino == RoutePaths.choferSolicitar) {
+    return RoutePaths.choferTipoOperacion;
+  }
+  if (destino.startsWith('${RoutePaths.choferSolicitar}/')) {
+    final categoria = categoriaSolicitudDesdeRuta(
+      state.pathParameters['categoria'],
+    );
+    if (categoria == null || !puedeSolicitarCategoria(perfil.rol, categoria)) {
+      return RoutePaths.choferTipoOperacion;
+    }
+  }
   if (esRutaDeChofer && !esDelPanelDeChofer) {
     return RoutePaths.administrativo;
   }
   if (esRutaDeAdministrativo && !perfil.esAdministrativo) {
+    return RoutePaths.chofer;
+  }
+  if (esRutaExclusivaSupervisor && !perfil.esSupervisor) {
     return RoutePaths.chofer;
   }
 
@@ -98,7 +117,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = _SessionRefreshNotifier(ref);
 
   return GoRouter(
-    initialLocation: RoutePaths.bienvenida,
     refreshListenable: refreshNotifier,
     redirect: (context, state) {
       final perfil = ref.read(sessionProvider);
@@ -142,7 +160,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             _conTransicion(state, const TipoOperacionScreen()),
       ),
       GoRoute(
-        path: RoutePaths.choferSolicitar,
+        path: RoutePaths.choferSolicitarConCategoria,
         // Sin `ChoferMobileWrapper` — igual que `choferTipoOperacion`, esta
         // pantalla ya maneja su propio ancho con `ContenidoResponsivo`.
         // Envolverla aquí anidaba dos `Center`/`ConstrainedBox` (el de
@@ -150,16 +168,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         // además rompía la apertura del menú de `SelectorVehiculo` en
         // pruebas de widget (el toque no llegaba a abrir el dropdown).
         pageBuilder: (context, state) {
-          final categoriaFiltro = state.extra;
+          final categoria = categoriaSolicitudDesdeRuta(
+            state.pathParameters['categoria'],
+          );
+          if (categoria == null) {
+            return _conTransicion(
+              state,
+              RutaInvalidaScreen(
+                onVolver: () => context.go(RoutePaths.choferTipoOperacion),
+              ),
+            );
+          }
           return _conTransicion(
             state,
-            SolicitarCargaScreen(
-              categoriaFiltro: categoriaFiltro is String
-                  ? categoriaFiltro
-                  : null,
-            ),
+            SolicitarCargaScreen(categoria: categoria),
           );
         },
+      ),
+      GoRoute(
+        path: RoutePaths.choferSolicitar,
+        redirect: (_, _) => RoutePaths.choferTipoOperacion,
       ),
       GoRoute(
         path: RoutePaths.choferRegistrarDespacho,

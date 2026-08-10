@@ -112,6 +112,7 @@ solicitudesRouter.post(
     const archivos = req.files as { fotoTablero?: Express.Multer.File[] } | undefined;
     const solicitud = await solicitudesService.enviarSolicitud({
       choferId: req.usuarioActual!.sub,
+      rol: req.usuarioActual!.rol,
       ...datos,
       fotoTableroPath: archivos?.fotoTablero?.[0]
         ? rutaPublicaDeArchivo(archivos.fotoTablero[0].filename)

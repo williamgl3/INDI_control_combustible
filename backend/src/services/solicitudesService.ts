@@ -5,7 +5,12 @@ import { estaEnSemanaDe, finDeSemana, inicioDeSemana } from '../utils/semana';
 import { precioDeDecimal, presupuestoSemanalTotalDecimal } from './preciosService';
 import { buscarVehiculoPorId } from './vehiculosService';
 import { registrarAuditoria } from './auditoriaService';
-import type { EstadoSolicitud, SolicitudAutorizacion } from '../types';
+import type {
+  EstadoSolicitud,
+  RolUsuario,
+  SolicitudAutorizacion,
+  Vehiculo,
+} from '../types';
 
 /// Réplica EXACTA de las reglas de negocio de
 /// `frontend/lib/data/mock_operaciones_repository.dart`
@@ -193,6 +198,7 @@ async function siguienteFolio(): Promise<string> {
 
 export async function enviarSolicitud(datos: {
   choferId: string;
+  rol: RolUsuario;
   vehiculoId: string;
   litrosSolicitados: number;
   esUrgente: boolean;
@@ -201,8 +207,7 @@ export async function enviarSolicitud(datos: {
   fechaProgramada: string;
   fotoTableroPath?: string | null | undefined;
 }): Promise<SolicitudAutorizacion> {
-  const vehiculo = await buscarVehiculoPorId(datos.vehiculoId);
-  if (!vehiculo) throw new ApiError(404, 'Vehículo no encontrado.');
+  const vehiculo = await validarUnidadParaSolicitud(datos.vehiculoId, datos.rol);
 
   // Bifurcación (ver migración 0029): "sin tipoCombustible confirmado"
   // (A) y "tipoCombustible definido pero sin precio vigente" (B) son dos
@@ -284,6 +289,27 @@ export async function enviarSolicitud(datos: {
     ],
   );
   return aSolicitud(rows[0]!);
+}
+
+export async function validarUnidadParaSolicitud(
+  vehiculoId: string,
+  rol: RolUsuario,
+): Promise<Vehiculo> {
+  const vehiculo = await buscarVehiculoPorId(vehiculoId);
+  if (!vehiculo) throw new ApiError(404, 'Unidad no encontrada.');
+  if (!vehiculo.activo) {
+    throw new ApiError(409, 'La unidad no está disponible para operar.');
+  }
+
+  const permitida =
+    vehiculo.tipoUnidad === 'Vehículo' ||
+    vehiculo.tipoUnidad === 'Maquinaria' ||
+    (rol === 'supervisor' &&
+      (vehiculo.tipoUnidad === 'Marimba' || vehiculo.tipoUnidad === 'Pipa'));
+  if (!permitida) {
+    throw new ApiError(403, 'La categoría de unidad no está permitida para este rol.');
+  }
+  return vehiculo;
 }
 
 export async function resolverSolicitud(

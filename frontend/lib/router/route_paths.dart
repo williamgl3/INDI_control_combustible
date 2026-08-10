@@ -1,3 +1,5 @@
+import '../core/catalogos_vehiculo.dart';
+
 /// Rutas de la app. Fuente de verdad de paths para evitar strings sueltos.
 class RoutePaths {
   const RoutePaths._();
@@ -10,6 +12,10 @@ class RoutePaths {
   static const chofer = '/chofer';
   static const choferTipoOperacion = '/chofer/tipo-operacion';
   static const choferSolicitar = '/chofer/solicitar';
+  static const choferSolicitarConCategoria = '/chofer/solicitar/:categoria';
+
+  static String solicitud(CategoriaSolicitud categoria) =>
+      '$choferSolicitar/${categoria.segmentoRuta}';
   static const choferRegistrarDespacho = '/chofer/registrar-despacho';
   static const choferRecorridoMarimba = '/chofer/recorrido-marimba';
   static const choferRespuesta = '/chofer/respuesta';
