@@ -51,7 +51,8 @@ export interface Vehiculo {
   /// pesada recién importada) — ver migración 0022.
   tipoCombustible: string | null;
   modelo: string | null;
-  intervaloServicio: number;
+  /// NULL cuando el intervalo preventivo aún no fue configurado.
+  intervaloServicio: number | null;
   lecturaUltimoServicio: number | null;
   fechaUltimoServicio: string | null;
   activo: boolean;

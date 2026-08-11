@@ -77,4 +77,17 @@ void main() {
       );
     }
   });
+
+  test('acepta y conserva intervalo null', () {
+    final unidad = Vehiculo.fromJson(contrato()..['intervaloServicio'] = null);
+    expect(unidad.intervaloServicio, isNull);
+    expect(unidad.toJson()['intervaloServicio'], isNull);
+  });
+
+  test('rechaza intervalo con tipo inválido o valor no finito', () {
+    for (final valor in ['5000', double.infinity, double.nan]) {
+      final json = contrato()..['intervaloServicio'] = valor;
+      expect(() => Vehiculo.fromJson(json), throwsA(isA<FormatException>()));
+    }
+  });
 }

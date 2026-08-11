@@ -73,7 +73,9 @@ class Vehiculo {
   /// `esUnidadPorHorometro(tipoUnidad)`) toca un servicio general
   /// mecánico. Trae un default por tipo de unidad (ver
   /// `intervaloServicioPorDefecto`) pero es editable por unidad.
-  final double intervaloServicio;
+  /// `null` o un valor heredado <= 0 significa que el intervalo preventivo
+  /// todavía no está configurado.
+  final double? intervaloServicio;
 
   /// Lectura del medidor (km u horas) registrada en el último servicio.
   /// `null` si nunca se le ha registrado un servicio a esta unidad.
@@ -115,7 +117,7 @@ class Vehiculo {
     Object? numeroEconomico = _sinTocar,
     Object? tipoCombustible = _sinTocar,
     String? modelo,
-    double? intervaloServicio,
+    Object? intervaloServicio = _sinTocar,
     double? lecturaUltimoServicio,
     DateTime? fechaUltimoServicio,
     bool? activo,
@@ -133,7 +135,9 @@ class Vehiculo {
           ? this.tipoCombustible
           : tipoCombustible as String?,
       modelo: modelo ?? this.modelo,
-      intervaloServicio: intervaloServicio ?? this.intervaloServicio,
+      intervaloServicio: identical(intervaloServicio, _sinTocar)
+          ? this.intervaloServicio
+          : (intervaloServicio as num?)?.toDouble(),
       lecturaUltimoServicio:
           lecturaUltimoServicio ?? this.lecturaUltimoServicio,
       fechaUltimoServicio: fechaUltimoServicio ?? this.fechaUltimoServicio,
@@ -168,7 +172,13 @@ class Vehiculo {
       numeroEconomico: numeroEconomico,
       tipoCombustible: json['tipoCombustible'] as String?,
       modelo: json['modelo'] as String?,
-      intervaloServicio: (json['intervaloServicio'] as num).toDouble(),
+      intervaloServicio: switch (json['intervaloServicio']) {
+        null => null,
+        final num valor when valor.isFinite => valor.toDouble(),
+        _ => throw const FormatException(
+          'Contrato de unidad inválido: el intervalo debe ser numérico o null.',
+        ),
+      },
       lecturaUltimoServicio: (json['lecturaUltimoServicio'] as num?)
           ?.toDouble(),
       fechaUltimoServicio: json['fechaUltimoServicio'] == null

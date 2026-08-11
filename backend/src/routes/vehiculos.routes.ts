@@ -16,18 +16,30 @@ vehiculosRouter.get(
   }),
 );
 
-const crearVehiculoSchema = z.object({
-  tipoUnidad: z.string().trim().min(1),
-  placas: z.string().trim().nullish(),
-  numeroEconomico: z.string().trim().nullish(),
-  // Nullable — maquinaria pesada puede importarse sin combustible
-  // confirmado con el cliente todavía (ver migración 0022).
-  tipoCombustible: z.string().trim().nullish(),
-  modelo: z.string().trim().nullish(),
-  intervaloServicio: z.number().positive().nullish(),
-  unidadPadreId: z.string().uuid().nullish(),
-  ubicacion: z.string().trim().nullish(),
-});
+const tipoUnidadSchema = z.enum(['Vehículo', 'Maquinaria', 'Marimba', 'Pipa']);
+const tipoCombustibleSchema = z.enum(['Diésel', 'Magna', 'Premium']);
+
+export const crearVehiculoSchema = z
+  .object({
+    tipoUnidad: tipoUnidadSchema,
+    placas: z.string().trim().nullish(),
+    numeroEconomico: z.string().trim().nullish(),
+    tipoCombustible: tipoCombustibleSchema,
+    modelo: z.string().trim().min(1),
+    intervaloServicio: z.number().positive().nullish(),
+    unidadPadreId: z.string().uuid().nullish(),
+    ubicacion: z.string().trim().nullish(),
+    activo: z.boolean().default(true),
+  })
+  .superRefine((datos, ctx) => {
+    if (!datos.placas?.trim() && !datos.numeroEconomico?.trim()) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['placas'],
+        message: 'Captura las placas o el número económico.',
+      });
+    }
+  });
 
 vehiculosRouter.post(
   '/',
@@ -54,15 +66,16 @@ vehiculosRouter.post(
   }),
 );
 
-const actualizarVehiculoSchema = z.object({
-  tipoUnidad: z.string().trim().min(1).optional(),
+export const actualizarVehiculoSchema = z.object({
+  tipoUnidad: tipoUnidadSchema.optional(),
   placas: z.string().trim().nullish(),
   numeroEconomico: z.string().trim().nullish(),
-  tipoCombustible: z.string().trim().nullish(),
-  modelo: z.string().trim().nullish(),
-  intervaloServicio: z.number().positive().optional(),
+  tipoCombustible: tipoCombustibleSchema.optional(),
+  modelo: z.string().trim().min(1).optional(),
+  intervaloServicio: z.number().positive().nullable().optional(),
   unidadPadreId: z.string().uuid().nullish(),
   ubicacion: z.string().trim().nullish(),
+  activo: z.boolean().optional(),
 });
 
 vehiculosRouter.patch(

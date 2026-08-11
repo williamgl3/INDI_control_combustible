@@ -15,7 +15,7 @@ interface FilaVehiculo {
   tipo_combustible: string | null;
   // NOT NULL desde la migración 0019.
   modelo: string;
-  intervalo_servicio: string;
+  intervalo_servicio: string | null;
   lectura_ultimo_servicio: string | null;
   fecha_ultimo_servicio: Date | null;
   activo: boolean;
@@ -43,7 +43,8 @@ function aVehiculo(fila: FilaVehiculo): Vehiculo {
     etiquetaUnidad: etiquetaUnidad(fila.placas, fila.numero_economico),
     tipoCombustible: fila.tipo_combustible,
     modelo: fila.modelo,
-    intervaloServicio: Number(fila.intervalo_servicio),
+    intervaloServicio:
+      fila.intervalo_servicio === null ? null : Number(fila.intervalo_servicio),
     lecturaUltimoServicio:
       fila.lectura_ultimo_servicio === null ? null : Number(fila.lectura_ultimo_servicio),
     fechaUltimoServicio: fila.fecha_ultimo_servicio?.toISOString() ?? null,
@@ -71,42 +72,39 @@ function normalizarTextoLibre(valor: string | null | undefined): string | null {
   return limpio === '' ? null : limpio;
 }
 
-/// Cada tipo de unidad exige un subconjunto distinto de identificadores
-/// físicos — ver migración 0021 y el inventario real de 96 unidades:
-/// Vehículo (placa), Maquinaria (económico, no circula por carretera) o
-/// Marimba (ambos, circula por carretera y además lleva económico
-/// interno de GAMI). Se valida aquí, no solo en el formulario del panel
-/// admin, para que ningún cliente de la API pueda saltarse la regla.
+/// Todas las categorías admiten placa, número económico o ambos, pero
+/// nunca una unidad sin identificador. Se valida también en el servicio
+/// para que otros consumidores internos no dependan exclusivamente de Zod.
 function validarIdentificadoresRequeridos(
-  tipoUnidad: string,
   placas: string | null,
   numeroEconomico: string | null,
 ): void {
-  if (tipoUnidad === 'Vehículo' && !placas) {
-    throw new ApiError(400, 'Las placas son obligatorias para un vehículo ligero.');
-  }
-  if ((tipoUnidad === 'Maquinaria' || tipoUnidad === 'Equipo menor') && !numeroEconomico) {
-    throw new ApiError(
-      400,
-      tipoUnidad === 'Maquinaria'
-        ? 'El número económico es obligatorio para maquinaria pesada.'
-        : 'El número económico es obligatorio para un equipo menor.',
-    );
-  }
-  if (tipoUnidad === 'Marimba' && (!placas || !numeroEconomico)) {
-    throw new ApiError(400, 'La marimba necesita placas y número económico, ambos.');
-  }
   if (!placas && !numeroEconomico) {
-    throw new ApiError(400, 'Indica placas o número económico (al menos uno).');
+    throw new ApiError(400, 'Captura las placas o el número económico.');
   }
 }
 
-/// Réplica de `intervaloServicioPorDefecto`/`esUnidadPorHorometro` en
-/// `frontend/lib/core/catalogos_vehiculo.dart` — 250h para unidades por
-/// horómetro (maquinaria, equipo menor), 5000km para el resto.
-/// TODO-SPEC: valores PLACEHOLDER, igual que en el frontend.
-function intervaloServicioPorDefecto(tipoUnidad: string): number {
-  return tipoUnidad === 'Maquinaria' || tipoUnidad === 'Equipo menor' ? 250 : 5000;
+const TIPOS_UNIDAD_ADMINISTRABLES = new Set(['Vehículo', 'Maquinaria', 'Marimba', 'Pipa']);
+const TIPOS_COMBUSTIBLE = new Set(['Diésel', 'Magna', 'Premium']);
+
+function validarDatosObligatorios(
+  tipoUnidad: string,
+  modelo: string | null,
+  tipoCombustible: string | null,
+): void {
+  if (!TIPOS_UNIDAD_ADMINISTRABLES.has(tipoUnidad)) {
+    throw new ApiError(400, 'El tipo de unidad no es válido.');
+  }
+  if (!modelo) throw new ApiError(400, 'Ingresa el modelo o nombre de la unidad.');
+  if (!tipoCombustible || !TIPOS_COMBUSTIBLE.has(tipoCombustible)) {
+    throw new ApiError(400, 'El tipo de combustible no es válido.');
+  }
+}
+
+function validarIntervalo(intervalo: number | null | undefined): void {
+  if (intervalo != null && (!Number.isFinite(intervalo) || intervalo <= 0)) {
+    throw new ApiError(400, 'El intervalo debe ser mayor que cero.');
+  }
 }
 
 export async function listarVehiculos(): Promise<Vehiculo[]> {
@@ -142,15 +140,15 @@ function nombreDeConstraintViolada(err: unknown): string | null {
 
 function errorDeIdentificadorDuplicado(
   err: unknown,
-  placas: string | null,
-  numeroEconomico: string | null,
+  _placas: string | null,
+  _numeroEconomico: string | null,
 ): ApiError | null {
   const constraint = nombreDeConstraintViolada(err);
   if (constraint === 'vehiculos_placas_normalizada_key') {
-    return new ApiError(409, `Ya existe una unidad con la placa "${placas}".`);
+    return new ApiError(409, 'Ya existe una unidad con esas placas.');
   }
   if (constraint === 'vehiculos_numero_economico_normalizado_key') {
-    return new ApiError(409, `Ya existe una unidad con el número económico "${numeroEconomico}".`);
+    return new ApiError(409, 'Ya existe una unidad con ese número económico.');
   }
   return null;
 }
@@ -176,28 +174,34 @@ export async function crearVehiculo(datos: {
   intervaloServicio?: number | null | undefined;
   unidadPadreId?: string | null | undefined;
   ubicacion?: string | null | undefined;
+  activo: boolean;
 }): Promise<Vehiculo> {
   const placas = normalizar(datos.placas);
   const numeroEconomico = normalizar(datos.numeroEconomico);
-  validarIdentificadoresRequeridos(datos.tipoUnidad, placas, numeroEconomico);
+  const modelo = normalizarTextoLibre(datos.modelo);
+  const tipoCombustible = normalizarTextoLibre(datos.tipoCombustible);
+  validarIdentificadoresRequeridos(placas, numeroEconomico);
+  validarDatosObligatorios(datos.tipoUnidad, modelo, tipoCombustible);
+  validarIntervalo(datos.intervaloServicio);
   await validarUnidadPadre(datos.unidadPadreId ?? null);
 
-  const intervalo = datos.intervaloServicio ?? intervaloServicioPorDefecto(datos.tipoUnidad);
+  const intervalo = datos.intervaloServicio ?? null;
   try {
     const { rows } = await pool.query<FilaVehiculo>(
       `INSERT INTO vehiculos
-         (tipo_unidad, placas, numero_economico, tipo_combustible, modelo, intervalo_servicio, unidad_padre_id, ubicacion)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (tipo_unidad, placas, numero_economico, tipo_combustible, modelo, intervalo_servicio, unidad_padre_id, ubicacion, activo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         datos.tipoUnidad,
         placas,
         numeroEconomico,
-        normalizarTextoLibre(datos.tipoCombustible),
-        datos.modelo ?? null,
+        tipoCombustible,
+        modelo,
         intervalo,
         datos.unidadPadreId ?? null,
         normalizarTextoLibre(datos.ubicacion),
+        datos.activo,
       ],
     );
     return aVehiculo(rows[0]!);
@@ -216,7 +220,7 @@ export async function reportarVehiculoNuevo(datos: {
   tipoCombustible: string;
   modelo: string;
 }): Promise<Vehiculo> {
-  return crearVehiculo(datos);
+  return crearVehiculo({...datos, activo: true});
 }
 
 export async function actualizarVehiculo(
@@ -227,9 +231,10 @@ export async function actualizarVehiculo(
     numeroEconomico?: string | null | undefined;
     tipoCombustible?: string | null | undefined;
     modelo?: string | null | undefined;
-    intervaloServicio?: number | undefined;
+    intervaloServicio?: number | null | undefined;
     unidadPadreId?: string | null | undefined;
     ubicacion?: string | null | undefined;
+    activo?: boolean | undefined;
   },
   actorId?: string | null | undefined,
 ): Promise<Vehiculo> {
@@ -244,32 +249,52 @@ export async function actualizarVehiculo(
       : normalizar(cambios.numeroEconomico);
   const unidadPadreId =
     cambios.unidadPadreId === undefined ? actual.unidadPadreId : cambios.unidadPadreId;
-  validarIdentificadoresRequeridos(tipoUnidad, placas, numeroEconomico);
+  const modelo =
+    cambios.modelo === undefined ? actual.modelo : normalizarTextoLibre(cambios.modelo);
+  const tipoCombustible =
+    cambios.tipoCombustible === undefined
+      ? actual.tipoCombustible
+      : normalizarTextoLibre(cambios.tipoCombustible);
+  validarIdentificadoresRequeridos(placas, numeroEconomico);
+  validarDatosObligatorios(tipoUnidad, modelo, tipoCombustible);
   if (unidadPadreId !== actual.unidadPadreId) {
+    if (unidadPadreId === id) {
+      throw new ApiError(400, 'Una unidad no puede ser su propia unidad padre.');
+    }
     await validarUnidadPadre(unidadPadreId);
   }
 
   let rows: FilaVehiculo[];
+  const intervaloServicio = Object.prototype.hasOwnProperty.call(
+    cambios,
+    'intervaloServicio',
+  )
+    ? (cambios.intervaloServicio ?? null)
+    : actual.intervaloServicio;
+  if (Object.prototype.hasOwnProperty.call(cambios, 'intervaloServicio')) {
+    validarIntervalo(cambios.intervaloServicio);
+  }
+
   try {
     ({ rows } = await pool.query<FilaVehiculo>(
       `UPDATE vehiculos
        SET tipo_unidad = $1, placas = $2, numero_economico = $3, tipo_combustible = $4,
-           modelo = $5, intervalo_servicio = $6, unidad_padre_id = $7, ubicacion = $8
-       WHERE id = $9
+           modelo = $5, intervalo_servicio = $6, unidad_padre_id = $7, ubicacion = $8,
+           activo = $9
+       WHERE id = $10
        RETURNING *`,
       [
         tipoUnidad,
         placas,
         numeroEconomico,
-        cambios.tipoCombustible === undefined
-          ? actual.tipoCombustible
-          : normalizarTextoLibre(cambios.tipoCombustible),
-        cambios.modelo === undefined ? actual.modelo : cambios.modelo,
-        cambios.intervaloServicio ?? actual.intervaloServicio,
+        tipoCombustible,
+        modelo,
+        intervaloServicio,
         unidadPadreId,
         cambios.ubicacion === undefined
           ? actual.ubicacion
           : normalizarTextoLibre(cambios.ubicacion),
+        cambios.activo ?? actual.activo,
         id,
       ],
     ));
