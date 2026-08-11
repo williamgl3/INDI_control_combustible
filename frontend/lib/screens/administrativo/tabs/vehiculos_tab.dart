@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/catalogos_vehiculo.dart';
+import '../../../core/intervalo_mantenimiento.dart';
 import '../../../core/providers.dart';
 import '../../../data/api_client.dart';
 import '../../../models/vehiculo.dart';
@@ -373,6 +374,7 @@ class _FilaUnidad extends StatelessWidget {
           [
             unidad.etiquetaCompleta ?? unidad.etiquetaUnidad,
             unidad.tipoCombustible ?? 'Sin combustible',
+            'Intervalo: ${etiquetaIntervaloMantenimiento(unidad.intervaloServicio, unidad.tipoUnidad)}',
             if (unidad.ubicacion != null) unidad.ubicacion!,
           ].join(' · '),
           maxLines: compacta ? 3 : 1,

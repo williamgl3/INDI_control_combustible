@@ -1,5 +1,6 @@
 import 'package:csv/csv.dart';
 
+import '../../../core/intervalo_mantenimiento.dart';
 import '../../../models/vehiculo.dart';
 import '../../../widgets/fecha_formato.dart';
 
@@ -7,7 +8,7 @@ import '../../../widgets/fecha_formato.dart';
 /// alcanzó este porcentaje del intervalo (85%).
 const _umbralProximo = 0.85;
 
-enum EstadoMantenimiento { alDia, proximo, vencido, sinDatos }
+enum EstadoMantenimiento { noConfigurado, alDia, proximo, vencido, sinDatos }
 
 /// Diagnóstico de mantenimiento preventivo de un [Vehiculo] — función pura
 /// (sin acceso a Riverpod/filesystem) para que se pueda probar sin montar
@@ -43,6 +44,39 @@ class DiagnosticoMantenimiento {
   final DateTime? fechaProyectada;
 }
 
+class ResumenMantenimiento {
+  const ResumenMantenimiento({
+    required this.vencidos,
+    required this.proximos,
+    required this.noConfigurados,
+  });
+
+  final int vencidos;
+  final int proximos;
+  final int noConfigurados;
+}
+
+ResumenMantenimiento resumirMantenimiento(
+  List<DiagnosticoMantenimiento> diagnosticos,
+) => ResumenMantenimiento(
+  vencidos: diagnosticos
+      .where((d) => d.estado == EstadoMantenimiento.vencido)
+      .length,
+  proximos: diagnosticos
+      .where((d) => d.estado == EstadoMantenimiento.proximo)
+      .length,
+  noConfigurados: diagnosticos
+      .where((d) => d.estado == EstadoMantenimiento.noConfigurado)
+      .length,
+);
+
+List<DiagnosticoMantenimiento> filtrarMantenimiento(
+  List<DiagnosticoMantenimiento> diagnosticos,
+  EstadoMantenimiento? estado,
+) => estado == null
+    ? diagnosticos
+    : diagnosticos.where((d) => d.estado == estado).toList();
+
 /// Calcula el diagnóstico de mantenimiento de un vehículo a partir de su
 /// historial de lecturas del medidor (ver
 /// `MockOperacionesRepository.historialLecturas`).
@@ -51,6 +85,14 @@ DiagnosticoMantenimiento calcularMantenimiento({
   required List<({DateTime fecha, double lectura})> historial,
   required DateTime ahora,
 }) {
+  final intervalo = vehiculo.intervaloServicio;
+  if (!intervaloMantenimientoConfigurado(intervalo)) {
+    return DiagnosticoMantenimiento(
+      vehiculo: vehiculo,
+      estado: EstadoMantenimiento.noConfigurado,
+    );
+  }
+
   if (historial.isEmpty && vehiculo.lecturaUltimoServicio == null) {
     return DiagnosticoMantenimiento(
       vehiculo: vehiculo,
@@ -66,7 +108,7 @@ DiagnosticoMantenimiento calcularMantenimiento({
   final fechaBase = vehiculo.fechaUltimoServicio ?? historial.first.fecha;
 
   final usoDesdeServicio = lecturaActual - lecturaBase;
-  final restante = vehiculo.intervaloServicio - usoDesdeServicio;
+  final restante = intervalo! - usoDesdeServicio;
 
   final diasTranscurridos = ahora.difference(fechaBase).inDays;
   final tasaPorDia = diasTranscurridos > 0
@@ -80,7 +122,7 @@ DiagnosticoMantenimiento calcularMantenimiento({
 
   final estado = restante <= 0
       ? EstadoMantenimiento.vencido
-      : usoDesdeServicio >= vehiculo.intervaloServicio * _umbralProximo
+      : usoDesdeServicio >= intervalo * _umbralProximo
       ? EstadoMantenimiento.proximo
       : EstadoMantenimiento.alDia;
 
@@ -114,8 +156,12 @@ String construirCsvMantenimiento(List<DiagnosticoMantenimiento> diagnosticos) {
         d.vehiculo.tipoUnidad,
         d.lecturaActual?.toStringAsFixed(0) ?? '',
         d.usoDesdeServicio?.toStringAsFixed(0) ?? '',
-        d.vehiculo.intervaloServicio.toStringAsFixed(0),
-        d.restante?.toStringAsFixed(0) ?? '',
+        intervaloMantenimientoConfigurado(d.vehiculo.intervaloServicio)
+            ? d.vehiculo.intervaloServicio!.toStringAsFixed(0)
+            : 'No configurado',
+        d.estado == EstadoMantenimiento.noConfigurado
+            ? 'No aplica'
+            : d.restante?.toStringAsFixed(0) ?? '',
         d.fechaProyectada != null
             ? formatearFechaCorta(d.fechaProyectada!)
             : '',
@@ -127,6 +173,8 @@ String construirCsvMantenimiento(List<DiagnosticoMantenimiento> diagnosticos) {
 
 String _etiquetaEstado(EstadoMantenimiento estado) {
   switch (estado) {
+    case EstadoMantenimiento.noConfigurado:
+      return 'No configurado';
     case EstadoMantenimiento.alDia:
       return 'Al día';
     case EstadoMantenimiento.proximo:

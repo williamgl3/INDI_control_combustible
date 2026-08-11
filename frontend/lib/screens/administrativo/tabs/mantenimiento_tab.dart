@@ -20,9 +20,10 @@ import '../../../widgets/contenido_responsivo.dart';
 import '../../../widgets/stat_tile_row.dart';
 import '../../../widgets/ver_foto_dialog.dart';
 import '../registrar_servicio_dialog.dart';
+import '../editar_vehiculo_dialog.dart';
 import 'mantenimiento_calculo.dart';
 
-enum _FiltroVista { todos, vencidos, proximos, alDia, sinDatos }
+enum _FiltroVista { todos, vencidos, proximos, alDia, noConfigurados, sinDatos }
 
 /// Pestaña "Mantenimiento": diagnóstico de mantenimiento preventivo por
 /// vehículo/maquinaria (a partir del km recorrido o del horómetro),
@@ -43,6 +44,7 @@ class _MantenimientoTabState extends ConsumerState<MantenimientoTab> {
     _FiltroVista.vencidos => EstadoMantenimiento.vencido,
     _FiltroVista.proximos => EstadoMantenimiento.proximo,
     _FiltroVista.alDia => EstadoMantenimiento.alDia,
+    _FiltroVista.noConfigurados => EstadoMantenimiento.noConfigurado,
     _FiltroVista.sinDatos => EstadoMantenimiento.sinDatos,
   };
 
@@ -63,6 +65,14 @@ class _MantenimientoTabState extends ConsumerState<MantenimientoTab> {
     }
   }
 
+  Future<void> _configurarIntervalo(Vehiculo vehiculo) async {
+    final guardado = await EditarVehiculoDialog.show(
+      context,
+      vehiculo: vehiculo,
+    );
+    if (guardado == true && mounted) setState(() {});
+  }
+
   Future<void> _resolverIncidencia(IncidenciaVehiculo incidencia) async {
     final comentarioController = TextEditingController();
     final confirmado = await showDialog<bool>(
@@ -71,9 +81,7 @@ class _MantenimientoTabState extends ConsumerState<MantenimientoTab> {
         title: const Text('Marcar como resuelta'),
         content: TextField(
           controller: comentarioController,
-          decoration: const InputDecoration(
-            labelText: 'Comentario (opcional)',
-          ),
+          decoration: const InputDecoration(labelText: 'Comentario (opcional)'),
           maxLines: 2,
         ),
         actions: [
@@ -148,63 +156,77 @@ class _MantenimientoTabState extends ConsumerState<MantenimientoTab> {
         )
         .toList();
 
-    final vencidos = diagnosticos
-        .where((d) => d.estado == EstadoMantenimiento.vencido)
-        .length;
-    final proximos = diagnosticos
-        .where((d) => d.estado == EstadoMantenimiento.proximo)
-        .length;
-
-    final visibles = _filtro == null
-        ? diagnosticos
-        : diagnosticos.where((d) => d.estado == _filtro).toList();
+    final resumen = resumirMantenimiento(diagnosticos);
+    final visibles = filtrarMantenimiento(diagnosticos, _filtro);
 
     return ContenidoResponsivo(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Mantenimiento',
-                      style: Theme.of(context).textTheme.headlineSmall,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final titulo = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Mantenimiento',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Servicio general mecánico proyectado por km recorridos u horómetro.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colors.textSecondary,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Servicio general mecánico proyectado por km recorridos u horómetro.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: colors.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              OutlinedButton.icon(
+                  ),
+                ],
+              );
+              final exportar = OutlinedButton.icon(
                 onPressed: diagnosticos.isEmpty
                     ? null
                     : () => _exportar(diagnosticos),
                 icon: const Icon(Icons.download_outlined),
                 label: const Text('Exportar reporte'),
-              ),
-            ],
+              );
+              if (constraints.maxWidth < 600) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    titulo,
+                    const SizedBox(height: AppSpacing.md),
+                    exportar,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: titulo),
+                  const SizedBox(width: AppSpacing.md),
+                  exportar,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 20),
           StatTileRow(
             tiles: [
               _EstadisticaMantenimiento(
-                valor: '$vencidos',
+                valor: '${resumen.vencidos}',
                 etiqueta: 'Vencidos',
                 color: colors.error,
                 onTap: () =>
                     setState(() => _filtroVista = _FiltroVista.vencidos),
               ),
               _EstadisticaMantenimiento(
-                valor: '$proximos',
+                valor: '${resumen.noConfigurados}',
+                etiqueta: 'Sin configurar',
+                color: colors.textMuted,
+                onTap: () =>
+                    setState(() => _filtroVista = _FiltroVista.noConfigurados),
+              ),
+              _EstadisticaMantenimiento(
+                valor: '${resumen.proximos}',
                 etiqueta: 'Próximos',
                 color: colors.warning,
                 onTap: () =>
@@ -234,6 +256,7 @@ class _MantenimientoTabState extends ConsumerState<MantenimientoTab> {
               _FiltroVista.vencidos: 'Vencidos',
               _FiltroVista.proximos: 'Próximos',
               _FiltroVista.alDia: 'Al día',
+              _FiltroVista.noConfigurados: 'No configurados',
               _FiltroVista.sinDatos: 'Sin datos',
             },
             onChanged: (f) => setState(() => _filtroVista = f),
@@ -262,6 +285,8 @@ class _MantenimientoTabState extends ConsumerState<MantenimientoTab> {
                           diagnostico: d,
                           onRegistrarServicio: () =>
                               _registrarServicio(d.vehiculo, d.lecturaActual),
+                          onConfigurarIntervalo: () =>
+                              _configurarIntervalo(d.vehiculo),
                         ),
                     ],
                   ),
@@ -330,71 +355,104 @@ class _TarjetaMantenimiento extends StatelessWidget {
   const _TarjetaMantenimiento({
     required this.diagnostico,
     required this.onRegistrarServicio,
+    required this.onConfigurarIntervalo,
   });
 
   final DiagnosticoMantenimiento diagnostico;
   final VoidCallback onRegistrarServicio;
+  final VoidCallback onConfigurarIntervalo;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final vehiculo = diagnostico.vehiculo;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const IconBadge(
-            icono: Icons.local_shipping_outlined,
-            color: AppSectionColors.mantenimiento,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${vehiculo.tipoUnidad} · ${vehiculo.etiquetaUnidad}',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                    ),
-                    EstadoMantenimientoBadge(estado: diagnostico.estado),
-                  ],
-                ),
-                const SizedBox(height: 4),
+    final informacion = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const IconBadge(
+          icono: Icons.local_shipping_outlined,
+          color: AppSectionColors.mantenimiento,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    '${vehiculo.tipoUnidad} · ${vehiculo.etiquetaUnidad}',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  EstadoMantenimientoBadge(estado: diagnostico.estado),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                switch (diagnostico.estado) {
+                  EstadoMantenimiento.noConfigurado =>
+                    'Intervalo: No configurado · Restante: —',
+                  EstadoMantenimiento.sinDatos =>
+                    'Aún no hay lecturas registradas para esta unidad.',
+                  _ =>
+                    '${diagnostico.usoDesdeServicio!.toStringAsFixed(0)} '
+                        'de ${vehiculo.intervaloServicio!.toStringAsFixed(0)} '
+                        'desde el último servicio.',
+                },
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
+              ),
+              if (diagnostico.fechaProyectada != null) ...[
+                const SizedBox(height: 2),
                 Text(
-                  diagnostico.estado == EstadoMantenimiento.sinDatos
-                      ? 'Aún no hay lecturas registradas para esta unidad.'
-                      : '${diagnostico.usoDesdeServicio!.toStringAsFixed(0)} '
-                            'de ${vehiculo.intervaloServicio.toStringAsFixed(0)} '
-                            'desde el último servicio.',
+                  'Próximo servicio estimado: '
+                  '${formatearFechaCorta(diagnostico.fechaProyectada!)}',
                   style: Theme.of(
                     context,
-                  ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
+                  ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
                 ),
-                if (diagnostico.fechaProyectada != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    'Próximo servicio estimado: '
-                    '${formatearFechaCorta(diagnostico.fechaProyectada!)}',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
-                  ),
-                ],
               ],
-            ),
+            ],
           ),
-          const SizedBox(width: 8),
-          OutlinedButton(
-            onPressed: onRegistrarServicio,
-            child: const Text('Registrar servicio'),
-          ),
-        ],
+        ),
+      ],
+    );
+    final accion = OutlinedButton(
+      onPressed: diagnostico.estado == EstadoMantenimiento.noConfigurado
+          ? onConfigurarIntervalo
+          : onRegistrarServicio,
+      child: Text(
+        diagnostico.estado == EstadoMantenimiento.noConfigurado
+            ? 'Configurar intervalo'
+            : 'Registrar servicio',
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) => constraints.maxWidth < 600
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  informacion,
+                  const SizedBox(height: AppSpacing.md),
+                  accion,
+                ],
+              )
+            : Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: informacion),
+                  const SizedBox(width: 8),
+                  accion,
+                ],
+              ),
       ),
     );
   }
@@ -438,18 +496,18 @@ class _IncidenciaTile extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   incidencia.descripcion,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colors.textSecondary,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
                 ),
                 const SizedBox(height: 2),
                 Row(
                   children: [
                     Text(
                       formatearFechaCorta(incidencia.creadaEn),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colors.textMuted,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
                     ),
                     if (incidencia.fotoPath != null) ...[
                       const SizedBox(width: 8),
@@ -470,11 +528,8 @@ class _IncidenciaTile extends StatelessWidget {
                             const SizedBox(width: 2),
                             Text(
                               'Ver foto',
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color: colors.primary,
-                              ),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: colors.primary),
                             ),
                           ],
                         ),
@@ -486,10 +541,7 @@ class _IncidenciaTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          OutlinedButton(
-            onPressed: onResolver,
-            child: const Text('Resolver'),
-          ),
+          OutlinedButton(onPressed: onResolver, child: const Text('Resolver')),
         ],
       ),
     );

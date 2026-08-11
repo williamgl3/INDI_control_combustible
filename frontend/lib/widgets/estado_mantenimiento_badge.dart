@@ -15,6 +15,7 @@ class EstadoMantenimientoBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final (color, texto) = switch (estado) {
+      EstadoMantenimiento.noConfigurado => (colors.textMuted, 'No configurado'),
       EstadoMantenimiento.alDia => (colors.success, 'Al día'),
       EstadoMantenimiento.proximo => (colors.warning, 'Próximo'),
       EstadoMantenimiento.vencido => (colors.error, 'Vencido'),

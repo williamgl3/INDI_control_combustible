@@ -343,7 +343,9 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
                       _diagnosticoMantenimiento!.estado !=
                           EstadoMantenimiento.alDia &&
                       _diagnosticoMantenimiento!.estado !=
-                          EstadoMantenimiento.sinDatos)
+                          EstadoMantenimiento.sinDatos &&
+                      _diagnosticoMantenimiento!.estado !=
+                          EstadoMantenimiento.noConfigurado)
                     GroupedRow(
                       titulo:
                           _diagnosticoMantenimiento!.estado ==
