@@ -19,6 +19,7 @@ import { recorridosMarimbaRouter } from './routes/recorridosMarimba.routes';
 import { errorHandler } from './middleware/errorHandler';
 import { UPLOADS_DIR } from './middleware/upload';
 import { logger } from './utils/logger';
+import { httpLoggerOptions } from './utils/httpLogger';
 import { pool } from './db/pool';
 
 dotenv.config({ quiet: true });
@@ -57,6 +58,7 @@ app.use(cors({ origin: construirCorsOrigin() }));
 app.use(
   pinoHttp({
     logger,
+    ...httpLoggerOptions,
     // pino-http ya incluye método/status/tiempo por request; no hace
     // falta loggear nada extra a mano en cada ruta.
     autoLogging: true,
