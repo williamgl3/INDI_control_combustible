@@ -19,11 +19,13 @@ class AppDialogShell extends StatelessWidget {
     super.key,
     required this.child,
     this.header,
+    this.footer,
     this.maxWidth = 420,
   });
 
   final Widget child;
   final Widget? header;
+  final Widget? footer;
   final double maxWidth;
 
   @override
@@ -66,6 +68,19 @@ class AppDialogShell extends StatelessWidget {
                   child: child,
                 ),
               ),
+              if (footer != null)
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.xxl,
+                      AppSpacing.sm,
+                      AppSpacing.xxl,
+                      AppSpacing.xxl,
+                    ),
+                    child: footer,
+                  ),
+                ),
             ],
           ),
         ),

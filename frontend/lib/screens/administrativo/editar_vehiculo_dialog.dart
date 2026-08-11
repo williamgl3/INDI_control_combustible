@@ -3,20 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/catalogos_vehiculo.dart';
 import '../../core/providers.dart';
-import '../../core/validators.dart';
+import '../../core/unidad_form_data.dart';
 import '../../data/api_client.dart';
+import '../../data/vehiculos_repository.dart';
 import '../../models/vehiculo.dart';
-import '../../theme/app_theme.dart';
+import '../../theme/app_spacing.dart';
 import '../../widgets/app_dialog.dart';
 
-/// Modal para que un administrativo dé de alta un vehículo en el catálogo
-/// compartido, o edite uno existente (placas/económico, tipo,
-/// combustible). Si [vehiculo] es `null` se trata de un alta nueva.
-///
-/// El campo de identificación pedido cambia según [_tipoUnidad] — ver
-/// `_mostrarPlacas`/`_mostrarEconomico`: Vehículo pide solo placas,
-/// Maquinaria pide solo económico, Marimba pide ambos (circula por
-/// carretera y además lleva económico interno de GAMI).
 class EditarVehiculoDialog extends ConsumerStatefulWidget {
   const EditarVehiculoDialog({super.key, this.vehiculo});
 
@@ -25,6 +18,7 @@ class EditarVehiculoDialog extends ConsumerStatefulWidget {
   static Future<bool?> show(BuildContext context, {Vehiculo? vehiculo}) {
     return mostrarDialogoApp<bool>(
       context,
+      barrierDismissible: false,
       builder: (_) => EditarVehiculoDialog(vehiculo: vehiculo),
     );
   }
@@ -36,64 +30,77 @@ class EditarVehiculoDialog extends ConsumerStatefulWidget {
 
 class _EditarVehiculoDialogState extends ConsumerState<EditarVehiculoDialog> {
   final _formKey = GlobalKey<FormState>();
+  late final _modeloController = TextEditingController(
+    text: widget.vehiculo?.modelo ?? '',
+  );
   late final _placasController = TextEditingController(
     text: widget.vehiculo?.placas ?? '',
   );
   late final _economicoController = TextEditingController(
     text: widget.vehiculo?.numeroEconomico ?? '',
   );
+  late final _ubicacionController = TextEditingController(
+    text: widget.vehiculo?.ubicacion ?? '',
+  );
   late final _intervaloController = TextEditingController(
-    text:
-        (widget.vehiculo?.intervaloServicio ??
-                intervaloServicioPorDefecto(
-                  widget.vehiculo?.tipoUnidad ?? tiposUnidadVehiculo.first,
-                ))
-            .toStringAsFixed(0),
+    text: widget.vehiculo == null
+        ? ''
+        : widget.vehiculo!.intervaloServicio?.toStringAsFixed(0) ?? '',
   );
 
-  late String _tipoUnidad =
-      widget.vehiculo?.tipoUnidad ?? tiposUnidadVehiculo.first;
-  // `null` = "Sin especificar" — válido de verdad (migración 0022), no
-  // un estado transitorio. En alta nueva arranca en el primer valor real
-  // porque la mayoría de las unidades sí tienen combustible conocido;
-  // al editar respeta lo que ya haya, aunque sea `null`.
-  late String? _tipoCombustible = widget.vehiculo != null
-      ? widget.vehiculo!.tipoCombustible
-      : tiposCombustibleVehiculo.first;
+  late String _tipoUnidad = widget.vehiculo?.tipoUnidad ?? tipoUnidadVehiculo;
+  late String? _tipoCombustible = widget.vehiculo?.tipoCombustible;
+  late bool _activo = widget.vehiculo?.activo ?? true;
   bool _cargando = false;
+  String? _errorIdentificadores;
   String? _errorGeneral;
 
   bool get _esAlta => widget.vehiculo == null;
 
-  /// Vehículo y Marimba circulan por carretera → necesitan placa.
-  bool get _mostrarPlacas => _tipoUnidad != 'Maquinaria';
-
-  /// Maquinaria y Marimba se identifican por número económico interno.
-  bool get _mostrarEconomico => _tipoUnidad != 'Vehículo';
-
   @override
   void dispose() {
+    _modeloController.dispose();
     _placasController.dispose();
     _economicoController.dispose();
+    _ubicacionController.dispose();
     _intervaloController.dispose();
     super.dispose();
   }
 
-  /// Al cambiar de categoría, limpia el controller del campo que deja de
-  /// aplicar — evita arrastrar un valor de la categoría anterior si el
-  /// usuario ya había escrito algo antes de cambiar de tipo (ver PASO 4,
-  /// trampa clásica de formularios dinámicos en Flutter).
-  void _cambiarTipoUnidad(String tipo) {
-    setState(() {
-      _tipoUnidad = tipo;
-      if (!_mostrarPlacas) _placasController.clear();
-      if (!_mostrarEconomico) _economicoController.clear();
-    });
+  UnidadFormData? _datosValidos() {
+    final formularioValido = _formKey.currentState?.validate() ?? false;
+    final errorIdentificadores = UnidadFormValidators.identificadores(
+      _placasController.text,
+      _economicoController.text,
+    );
+    setState(() => _errorIdentificadores = errorIdentificadores);
+    if (!formularioValido || errorIdentificadores != null) return null;
+
+    return UnidadFormData(
+      tipoUnidad: _tipoUnidad,
+      modelo: _modeloController.text.trim(),
+      placas: UnidadFormData.textoOpcional(
+        _placasController.text,
+        mayusculas: true,
+      ),
+      numeroEconomico: UnidadFormData.textoOpcional(
+        _economicoController.text,
+        mayusculas: true,
+      ),
+      tipoCombustible: _tipoCombustible!,
+      intervaloServicio: _intervaloController.text.trim().isEmpty
+          ? null
+          : double.parse(_intervaloController.text.trim()),
+      ubicacion: UnidadFormData.textoOpcional(_ubicacionController.text),
+      activo: _activo,
+      unidadPadreId: widget.vehiculo?.unidadPadreId,
+    );
   }
 
   Future<void> _guardar() async {
-    if (!_formKey.currentState!.validate()) return;
-
+    if (_cargando) return;
+    final datos = _datosValidos();
+    if (datos == null) return;
     setState(() {
       _cargando = true;
       _errorGeneral = null;
@@ -101,40 +108,44 @@ class _EditarVehiculoDialogState extends ConsumerState<EditarVehiculoDialog> {
 
     try {
       final repo = ref.read(vehiculosRepositoryProvider);
-      final intervalo =
-          double.tryParse(_intervaloController.text.trim()) ??
-          intervaloServicioPorDefecto(_tipoUnidad);
-      // Siempre se manda el valor de los dos campos (vacío si el campo
-      // no aplica a esta categoría) — el backend normaliza cadena vacía
-      // a `null`, así que cambiar de categoría también limpia el dato
-      // que ya no corresponde en el registro guardado, no solo en el
-      // formulario.
-      final placas = _mostrarPlacas ? _placasController.text.trim() : '';
-      final economico = _mostrarEconomico
-          ? _economicoController.text.trim()
-          : '';
       if (_esAlta) {
         await repo.crear(
-          tipoUnidad: _tipoUnidad,
-          placas: placas,
-          numeroEconomico: economico,
-          tipoCombustible: _tipoCombustible,
-          intervaloServicio: intervalo,
+          tipoUnidad: datos.tipoUnidad,
+          modelo: datos.modelo,
+          placas: datos.placas,
+          numeroEconomico: datos.numeroEconomico,
+          tipoCombustible: datos.tipoCombustible,
+          intervaloServicio: datos.intervaloServicio,
+          ubicacion: datos.ubicacion,
+          unidadPadreId: datos.unidadPadreId,
+          activo: datos.activo,
         );
       } else {
         await repo.actualizar(
           id: widget.vehiculo!.id,
-          tipoUnidad: _tipoUnidad,
-          placas: placas,
-          numeroEconomico: economico,
-          tipoCombustible: _tipoCombustible,
-          intervaloServicio: intervalo,
+          cambios: ActualizacionVehiculo(
+            tipoUnidad: CampoActualizacion.valor(datos.tipoUnidad),
+            modelo: CampoActualizacion.valor(datos.modelo),
+            placas: CampoActualizacion.valor(datos.placas),
+            numeroEconomico: CampoActualizacion.valor(datos.numeroEconomico),
+            tipoCombustible: CampoActualizacion.valor(datos.tipoCombustible),
+            intervaloServicio: CampoActualizacion.valor(
+              datos.intervaloServicio,
+            ),
+            ubicacion: CampoActualizacion.valor(datos.ubicacion),
+            unidadPadreId: CampoActualizacion.valor(datos.unidadPadreId),
+            activo: CampoActualizacion.valor(datos.activo),
+          ),
         );
       }
-      ref.read(operacionesTickProvider.notifier).state++;
-      if (mounted) Navigator.of(context).pop(true);
-    } on ApiException catch (e) {
-      if (mounted) setState(() => _errorGeneral = e.mensaje);
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _errorGeneral = error.mensaje);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _errorGeneral = 'No pudimos guardar la unidad.');
+      }
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -142,143 +153,251 @@ class _EditarVehiculoDialogState extends ConsumerState<EditarVehiculoDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final colorScheme = Theme.of(context).colorScheme;
+    final tituloCategoria = _esAlta
+        ? 'Agregar ${_tipoUnidad.toLowerCase()}'
+        : 'Editar unidad';
 
     return AppDialogShell(
+      maxWidth: 560,
+      footer: _AccionesDialogo(
+        cargando: _cargando,
+        esAlta: _esAlta,
+        onCancelar: () => Navigator.of(context).pop(false),
+        onGuardar: _guardar,
+      ),
       child: Form(
         key: _formKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              _esAlta ? 'Agregar vehículo' : 'Editar vehículo',
+              _esAlta ? 'Agregar unidad' : 'Editar unidad',
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              tituloCategoria,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            _TituloSeccion(titulo: 'Identificación'),
+            const SizedBox(height: AppSpacing.md),
             DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: _tipoUnidad,
               decoration: const InputDecoration(
                 labelText: 'Tipo de unidad',
-                prefixIcon: Icon(Icons.local_shipping_outlined),
+                prefixIcon: Icon(Icons.category_outlined),
               ),
-              items: tiposUnidadVehiculo
-                  .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+              items: tiposUnidadAdministrables
+                  .map(
+                    (tipo) => DropdownMenuItem(value: tipo, child: Text(tipo)),
+                  )
                   .toList(),
-              onChanged: (v) => _cambiarTipoUnidad(v!),
+              onChanged: _cargando
+                  ? null
+                  : (tipo) => setState(() => _tipoUnidad = tipo!),
             ),
-            // Los campos ocultos se quitan del árbol por completo (no
-            // solo `visible: false`) — un TextFormField oculto pero
-            // presente seguiría corriendo su `validator` y bloquearía el
-            // envío sin ningún error visible.
-            if (_mostrarPlacas) ...[
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: _placasController,
-                decoration: const InputDecoration(
-                  labelText: 'Placas',
-                  hintText: 'Ej. PJ-6567-C',
-                  prefixIcon: Icon(Icons.badge_outlined),
-                ),
-                textCapitalization: TextCapitalization.characters,
-                validator: Validators.placa,
+            const SizedBox(height: AppSpacing.md),
+            TextFormField(
+              controller: _modeloController,
+              decoration: const InputDecoration(
+                labelText: 'Modelo o nombre',
+                prefixIcon: Icon(Icons.directions_car_outlined),
+              ),
+              validator: UnidadFormValidators.modelo,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final placas = _campoIdentificador(
+                  controller: _placasController,
+                  label: 'Placas',
+                  icon: Icons.badge_outlined,
+                );
+                final economico = _campoIdentificador(
+                  controller: _economicoController,
+                  label: 'Número económico',
+                  icon: Icons.numbers_outlined,
+                );
+                if (constraints.maxWidth < 480) {
+                  return Column(
+                    children: [
+                      placas,
+                      const SizedBox(height: AppSpacing.md),
+                      economico,
+                    ],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: placas),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(child: economico),
+                  ],
+                );
+              },
+            ),
+            if (_errorIdentificadores != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                _errorIdentificadores!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colorScheme.error),
               ),
             ],
-            if (_mostrarEconomico) ...[
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: _economicoController,
-                decoration: const InputDecoration(
-                  labelText: 'Número económico',
-                  hintText: 'Ej. EHO-330-056',
-                  prefixIcon: Icon(Icons.tag_outlined),
-                ),
-                textCapitalization: TextCapitalization.characters,
-                validator: (v) => Validators.requerido(
-                  v,
-                  etiqueta: 'El número económico',
-                ),
-              ),
-            ],
-            const SizedBox(height: 20),
+            const SizedBox(height: AppSpacing.xl),
+            _TituloSeccion(titulo: 'Operación'),
+            const SizedBox(height: AppSpacing.md),
             DropdownButtonFormField<String?>(
+              isExpanded: true,
               initialValue: _tipoCombustible,
               decoration: const InputDecoration(
                 labelText: 'Tipo de combustible',
                 prefixIcon: Icon(Icons.local_gas_station_outlined),
               ),
-              items: [
-                ...tiposCombustibleVehiculo.map(
-                  (t) => DropdownMenuItem(value: t, child: Text(t)),
-                ),
-                const DropdownMenuItem(
-                  value: null,
-                  child: Text('Sin especificar'),
-                ),
-              ],
-              onChanged: (v) => setState(() => _tipoCombustible = v),
+              items: tiposCombustibleVehiculo
+                  .map<DropdownMenuItem<String?>>(
+                    (tipo) => DropdownMenuItem<String?>(
+                      value: tipo,
+                      child: Text(tipo),
+                    ),
+                  )
+                  .toList(),
+              validator: (valor) =>
+                  valor == null ? 'Selecciona el tipo de combustible' : null,
+              onChanged: _cargando
+                  ? null
+                  : (tipo) => setState(() => _tipoCombustible = tipo),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: AppSpacing.md),
+            TextFormField(
+              controller: _ubicacionController,
+              decoration: const InputDecoration(
+                labelText: 'Ubicación o frente (opcional)',
+                prefixIcon: Icon(Icons.location_on_outlined),
+              ),
+            ),
+            Material(
+              color: Colors.transparent,
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Unidad activa'),
+                value: _activo,
+                onChanged: _cargando
+                    ? null
+                    : (activo) => setState(() => _activo = activo),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            _TituloSeccion(titulo: 'Mantenimiento'),
+            const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _intervaloController,
               decoration: InputDecoration(
-                labelText: 'Intervalo de servicio general mecánico',
-                suffixText: esUnidadPorHorometro(_tipoUnidad) ? 'horas' : 'km',
+                labelText: 'Intervalo de servicio (opcional)',
                 prefixIcon: const Icon(Icons.build_outlined),
+                suffixText: esUnidadPorHorometro(_tipoUnidad) ? 'horas' : 'km',
               ),
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              validator: (v) {
-                final n = double.tryParse(v?.trim() ?? '');
-                if (n == null || n <= 0) {
-                  return 'Ingresa un número válido mayor a 0.';
-                }
-                return null;
-              },
-              onFieldSubmitted: (_) => _guardar(),
+              validator: UnidadFormValidators.intervalo,
             ),
             if (_errorGeneral != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.md),
               Text(
                 _errorGeneral!,
                 style: Theme.of(
                   context,
-                ).textTheme.bodySmall?.copyWith(color: colors.error),
+                ).textTheme.bodySmall?.copyWith(color: colorScheme.error),
               ),
             ],
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _cargando
-                        ? null
-                        : () => Navigator.of(context).pop(false),
-                    child: const Text('Cancelar'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _cargando ? null : _guardar,
-                    child: _cargando
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(
-                            _esAlta ? 'Agregar vehículo' : 'Guardar vehículo',
-                          ),
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
       ),
     );
   }
+
+  Widget _campoIdentificador({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+  }) {
+    return TextField(
+      controller: controller,
+      textCapitalization: TextCapitalization.characters,
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
+      onChanged: (_) {
+        if (_errorIdentificadores != null &&
+            UnidadFormValidators.identificadores(
+                  _placasController.text,
+                  _economicoController.text,
+                ) ==
+                null) {
+          setState(() => _errorIdentificadores = null);
+        }
+      },
+    );
+  }
+}
+
+class _TituloSeccion extends StatelessWidget {
+  const _TituloSeccion({required this.titulo});
+  final String titulo;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    titulo,
+    style: Theme.of(
+      context,
+    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+  );
+}
+
+class _AccionesDialogo extends StatelessWidget {
+  const _AccionesDialogo({
+    required this.cargando,
+    required this.esAlta,
+    required this.onCancelar,
+    required this.onGuardar,
+  });
+
+  final bool cargando;
+  final bool esAlta;
+  final VoidCallback onCancelar;
+  final VoidCallback onGuardar;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: OutlinedButton(
+          onPressed: cargando ? null : onCancelar,
+          child: const Text('Cancelar'),
+        ),
+      ),
+      const SizedBox(width: AppSpacing.md),
+      Expanded(
+        child: SizedBox(
+          height: 48,
+          child: FilledButton(
+            onPressed: cargando ? null : onGuardar,
+            child: cargando
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(esAlta ? 'Agregar' : 'Guardar vehículo'),
+          ),
+        ),
+      ),
+    ],
+  );
 }
