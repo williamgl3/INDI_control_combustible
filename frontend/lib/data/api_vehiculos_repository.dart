@@ -51,6 +51,9 @@ class ApiVehiculosRepository implements VehiculosRepository {
     String? tipoCombustible,
     String? modelo,
     double? intervaloServicio,
+    String? ubicacion,
+    String? unidadPadreId,
+    bool activo = true,
   }) async {
     final data = await _client.post(
       '/vehiculos',
@@ -61,6 +64,9 @@ class ApiVehiculosRepository implements VehiculosRepository {
         'tipoCombustible': tipoCombustible,
         'modelo': modelo,
         'intervaloServicio': intervaloServicio,
+        'ubicacion': ubicacion,
+        'unidadPadreId': unidadPadreId,
+        'activo': activo,
       },
     );
     final vehiculo = Vehiculo.fromJson(data as Map<String, dynamic>);
@@ -94,24 +100,23 @@ class ApiVehiculosRepository implements VehiculosRepository {
   @override
   Future<Vehiculo> actualizar({
     required String id,
-    String? tipoUnidad,
-    String? placas,
-    String? numeroEconomico,
-    String? tipoCombustible,
-    String? modelo,
-    double? intervaloServicio,
+    required ActualizacionVehiculo cambios,
   }) async {
-    final data = await _client.patch(
-      '/vehiculos/$id',
-      body: {
-        'tipoUnidad': ?tipoUnidad,
-        'placas': ?placas,
-        'numeroEconomico': ?numeroEconomico,
-        'tipoCombustible': tipoCombustible,
-        'modelo': modelo,
-        'intervaloServicio': ?intervaloServicio,
-      },
-    );
+    final body = <String, dynamic>{};
+    void incluir<T>(String nombre, CampoActualizacion<T> campo) {
+      if (campo.incluir) body[nombre] = campo.valor;
+    }
+
+    incluir('tipoUnidad', cambios.tipoUnidad);
+    incluir('placas', cambios.placas);
+    incluir('numeroEconomico', cambios.numeroEconomico);
+    incluir('tipoCombustible', cambios.tipoCombustible);
+    incluir('modelo', cambios.modelo);
+    incluir('intervaloServicio', cambios.intervaloServicio);
+    incluir('ubicacion', cambios.ubicacion);
+    incluir('unidadPadreId', cambios.unidadPadreId);
+    incluir('activo', cambios.activo);
+    final data = await _client.patch('/vehiculos/$id', body: body);
     final vehiculo = Vehiculo.fromJson(data as Map<String, dynamic>);
     _upsert(vehiculo);
     return vehiculo;
@@ -133,10 +138,7 @@ class ApiVehiculosRepository implements VehiculosRepository {
   }
 
   @override
-  Future<void> cambiarEstado({
-    required String id,
-    required bool activo,
-  }) async {
+  Future<void> cambiarEstado({required String id, required bool activo}) async {
     final data = await _client.patch(
       '/vehiculos/$id/estado',
       body: {'activo': activo},

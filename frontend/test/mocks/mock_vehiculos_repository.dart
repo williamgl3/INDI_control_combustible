@@ -51,6 +51,9 @@ class MockVehiculosRepository implements VehiculosRepository {
     String? tipoCombustible,
     String? modelo,
     double? intervaloServicio,
+    String? ubicacion,
+    String? unidadPadreId,
+    bool activo = true,
   }) async {
     await Future.delayed(const Duration(milliseconds: 300));
     final vehiculo = Vehiculo(
@@ -62,8 +65,10 @@ class MockVehiculosRepository implements VehiculosRepository {
           : numeroEconomico,
       tipoCombustible: tipoCombustible,
       modelo: modelo,
-      intervaloServicio:
-          intervaloServicio ?? intervaloServicioPorDefecto(tipoUnidad),
+      intervaloServicio: intervaloServicio,
+      ubicacion: ubicacion,
+      unidadPadreId: unidadPadreId,
+      activo: activo,
     );
     _vehiculos.add(vehiculo);
     return vehiculo;
@@ -89,27 +94,31 @@ class MockVehiculosRepository implements VehiculosRepository {
   @override
   Future<Vehiculo> actualizar({
     required String id,
-    String? tipoUnidad,
-    String? placas,
-    String? numeroEconomico,
-    String? tipoCombustible,
-    String? modelo,
-    double? intervaloServicio,
+    required ActualizacionVehiculo cambios,
   }) async {
     await Future.delayed(const Duration(milliseconds: 300));
     final indice = _vehiculos.indexWhere((v) => v.id == id);
     final actual = _vehiculos[indice];
     final actualizado = actual.copyWith(
-      tipoUnidad: tipoUnidad,
-      placas: placas == null
-          ? actual.placas
-          : (placas.isEmpty ? null : placas),
-      numeroEconomico: numeroEconomico == null
-          ? actual.numeroEconomico
-          : (numeroEconomico.isEmpty ? null : numeroEconomico),
-      tipoCombustible: tipoCombustible,
-      modelo: modelo,
-      intervaloServicio: intervaloServicio,
+      tipoUnidad: cambios.tipoUnidad.incluir ? cambios.tipoUnidad.valor : null,
+      placas: cambios.placas.incluir ? cambios.placas.valor : actual.placas,
+      numeroEconomico: cambios.numeroEconomico.incluir
+          ? cambios.numeroEconomico.valor
+          : actual.numeroEconomico,
+      tipoCombustible: cambios.tipoCombustible.incluir
+          ? cambios.tipoCombustible.valor
+          : actual.tipoCombustible,
+      modelo: cambios.modelo.incluir ? cambios.modelo.valor : null,
+      intervaloServicio: cambios.intervaloServicio.incluir
+          ? cambios.intervaloServicio.valor
+          : actual.intervaloServicio,
+      ubicacion: cambios.ubicacion.incluir
+          ? cambios.ubicacion.valor
+          : actual.ubicacion,
+      unidadPadreId: cambios.unidadPadreId.incluir
+          ? cambios.unidadPadreId.valor
+          : actual.unidadPadreId,
+      activo: cambios.activo.incluir ? cambios.activo.valor : null,
     );
     _vehiculos[indice] = actualizado;
     return actualizado;
@@ -132,10 +141,7 @@ class MockVehiculosRepository implements VehiculosRepository {
   }
 
   @override
-  Future<void> cambiarEstado({
-    required String id,
-    required bool activo,
-  }) async {
+  Future<void> cambiarEstado({required String id, required bool activo}) async {
     await Future.delayed(const Duration(milliseconds: 300));
     final indice = _vehiculos.indexWhere((v) => v.id == id);
     _vehiculos[indice] = _vehiculos[indice].copyWith(activo: activo);
