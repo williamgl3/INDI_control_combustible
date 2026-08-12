@@ -9,6 +9,7 @@ import '../models/recorrido_marimba.dart';
 abstract class RecorridosMarimbaRepository {
   Future<RecorridoMarimba> abrirRecorrido({
     required String marimbaId,
+    required String tipoCombustible,
     required String frente,
     String? cargaId,
     required double litrosIniciales,
@@ -22,6 +23,7 @@ abstract class RecorridosMarimbaRepository {
 
   Future<DespachoMarimba> agregarDespacho({
     required String recorridoId,
+    required String tipoCombustible,
     String? vehiculoDestinoId,
     String? destinoTexto,
     required String operadorTexto,
@@ -37,6 +39,9 @@ abstract class RecorridosMarimbaRepository {
     double? kmCierre,
     double? horasEquipoMenorCierre,
     required String fotoCierrePath,
+    double? existenciaFisica,
+    String? fotoNivelPath,
+    String? observaciones,
   });
 
   /// Panel admin — recorridos filtrados (ver PASO 4c del diseño).

@@ -2,133 +2,64 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, ApiError } from '../utils/asyncHandler';
 import { requireAuth, requireRole, type AuthRequest } from '../middleware/auth';
-import { upload, rutaPublicaDeArchivo, verificarMagicBytes } from '../middleware/upload';
-import * as recorridosMarimbaService from '../services/recorridosMarimbaService';
-import * as despachosMarimbaService from '../services/despachosMarimbaService';
+import { limpiarArchivosAnteError, upload, rutaPublicaDeArchivo, verificarMagicBytes } from '../middleware/upload';
+import * as recorridosService from '../services/recorridosMarimbaService';
+import * as despachosService from '../services/despachosMarimbaService';
 
-export const recorridosMarimbaRouter = Router();
-
+export const recorridosMarimbaRouter=Router();
 recorridosMarimbaRouter.use(requireAuth as never);
+recorridosMarimbaRouter.get('/',requireRole('administrativo','superadmin') as never,
+  asyncHandler(async(req,res)=>{const q=z.object({marimbaId:z.string().uuid().optional(),
+    requiereRevision:z.coerce.boolean().optional()}).parse(req.query);res.json(await recorridosService.listarRecorridos(q));}));
+recorridosMarimbaRouter.get('/:id',requireRole('supervisor','administrativo','superadmin') as never,
+  asyncHandler(async(req:AuthRequest,res)=>{const r=await recorridosService.buscarRecorridoAccesible(
+    req.params.id as string,req.usuarioActual!.sub,req.usuarioActual!.rol);
+  if(!r)throw new ApiError(404,'Recorrido no encontrado.');res.json(r);}));
+recorridosMarimbaRouter.get('/:id/despachos',requireRole('supervisor','administrativo','superadmin') as never,
+  asyncHandler(async(req:AuthRequest,res)=>{const recorrido=await recorridosService.buscarRecorridoAccesible(
+    req.params.id as string,req.usuarioActual!.sub,req.usuarioActual!.rol);
+    if(!recorrido)throw new ApiError(404,'El recorrido no está disponible.');
+    res.json(await despachosService.listarDespachosDeRecorrido(recorrido.id));}));
 
-/// Panel admin: recorridos del día/rango, con filtro de "requiere
-/// revisión" para el tablero de conciliación (ver PASO 4c del diseño).
-recorridosMarimbaRouter.get(
-  '/',
-  requireRole('administrativo', 'superadmin') as never,
-  asyncHandler(async (req, res) => {
-    const query = z
-      .object({
-        marimbaId: z.string().uuid().optional(),
-        requiereRevision: z.coerce.boolean().optional(),
-      })
-      .parse(req.query);
-    res.json(await recorridosMarimbaService.listarRecorridos(query));
-  }),
-);
+const abrirSchema=z.object({marimbaId:z.string().uuid(),operadorId:z.string().uuid().optional(),
+  tipoCombustible:z.enum(['Diésel','Magna','Premium']),
+  frente:z.string().trim().min(1).max(150),kmInicio:z.coerce.number().nonnegative().nullish(),
+  horasEquipoMenorInicio:z.coerce.number().nonnegative().nullish()});
+recorridosMarimbaRouter.post('/',requireRole('supervisor','administrativo','superadmin') as never,
+  asyncHandler(async(req:AuthRequest,res)=>{const d=abrirSchema.parse(req.body);
+    const operadorId=d.operadorId??(req.usuarioActual!.rol==='supervisor'?req.usuarioActual!.sub:null);
+    if(!operadorId)throw new ApiError(400,'Indica el supervisor responsable del recorrido.');
+    res.status(201).json(await recorridosService.crearRecorrido({...d,operadorId,
+      registradoPor:req.usuarioActual!.sub}));}));
 
-recorridosMarimbaRouter.get(
-  '/:id',
-  asyncHandler(async (req, res) => {
-    const recorrido = await recorridosMarimbaService.buscarRecorridoPorId(req.params.id as string);
-    if (!recorrido) throw new ApiError(404, 'Recorrido no encontrado.');
-    res.json(recorrido);
-  }),
-);
+const despachoSchema=z.object({vehiculoDestinoId:z.string().uuid(),operadorTexto:z.string().trim().min(1).max(150),
+  tipoCombustible:z.enum(['Diésel','Magna','Premium']),
+  litrosSuministrados:z.coerce.number().positive().nullish(),horometro:z.coerce.number().nonnegative(),
+  medidorInicial:z.coerce.number().nonnegative().nullish(),medidorFinal:z.coerce.number().nonnegative().nullish(),
+  ubicacion:z.string().trim().max(150).nullish(),observaciones:z.string().trim().max(500).nullish()});
+recorridosMarimbaRouter.post('/:id/despachos',requireRole('supervisor','administrativo','superadmin') as never,
+  upload.fields([{name:'fotoHorometro',maxCount:1},{name:'fotoMedidor',maxCount:1},{name:'fotoEvidencia',maxCount:1}]),
+  verificarMagicBytes,asyncHandler(async(req:AuthRequest,res)=>{const recorrido=await recorridosService.buscarRecorridoPorId(req.params.id as string);
+    if(!recorrido)throw new ApiError(404,'El recorrido no está disponible.');const d=despachoSchema.parse(req.body);
+    const f=req.files as Record<string,Express.Multer.File[]>|undefined;const hor=f?.fotoHorometro?.[0];
+    if(!hor)throw new ApiError(400,'La foto del horómetro es obligatoria.');
+    res.status(201).json(await recorridosService.agregarDespacho(recorrido.id,{...d,marimbaId:recorrido.marimbaId,
+      registradoPor:req.usuarioActual!.sub,
+      actorRol:req.usuarioActual!.rol,
+      fotoHorometroPath:rutaPublicaDeArchivo(hor.filename),
+      fotoMedidorPath:f?.fotoMedidor?.[0]?rutaPublicaDeArchivo(f.fotoMedidor[0].filename):null,
+      fotoEvidenciaPath:f?.fotoEvidencia?.[0]?rutaPublicaDeArchivo(f.fotoEvidencia[0].filename):null}));}));
 
-recorridosMarimbaRouter.get(
-  '/:id/despachos',
-  asyncHandler(async (req, res) => {
-    res.json(await despachosMarimbaService.listarDespachosDeRecorrido(req.params.id as string));
-  }),
-);
+const cerrarSchema=z.object({existenciaFisica:z.coerce.number().nonnegative(),
+  observaciones:z.string().trim().max(1000).nullish(),kmCierre:z.coerce.number().nonnegative().nullish(),
+  horasEquipoMenorCierre:z.coerce.number().nonnegative().nullish()});
+recorridosMarimbaRouter.post('/:id/cerrar',requireRole('supervisor','administrativo','superadmin') as never,
+  upload.fields([{name:'fotoCierre',maxCount:1},{name:'fotoNivel',maxCount:1}]),verificarMagicBytes,
+  asyncHandler(async(req:AuthRequest,res)=>{const d=cerrarSchema.parse(req.body);
+    const f=req.files as Record<string,Express.Multer.File[]>|undefined;const cierre=f?.fotoCierre?.[0];const nivel=f?.fotoNivel?.[0];
+    if(!cierre||!nivel)throw new ApiError(400,'Las evidencias de cierre y nivel son obligatorias.');
+    res.json(await recorridosService.cerrarRecorrido(req.params.id as string,{...d,
+      fotoCierrePath:rutaPublicaDeArchivo(cierre.filename),fotoNivelPath:rutaPublicaDeArchivo(nivel.filename)},
+      req.usuarioActual!.sub,req.usuarioActual!.rol));}));
 
-const crearRecorridoSchema = z.object({
-  marimbaId: z.string().uuid(),
-  frente: z.string().trim().min(1, 'Indica el frente o ubicación del recorrido.'),
-  cargaId: z.string().uuid().nullish(),
-  litrosIniciales: z.coerce.number().nonnegative(),
-  kmInicio: z.coerce.number().nonnegative().nullish(),
-  horasEquipoMenorInicio: z.coerce.number().nonnegative().nullish(),
-});
-
-/// Abre un recorrido (jornada de despacho) — el operador de la marimba,
-/// no necesariamente el mismo rol que carga el tanque (ver
-/// `cargas.routes.ts`).
-recorridosMarimbaRouter.post(
-  '/',
-  requireRole('supervisor', 'administrativo', 'superadmin') as never,
-  asyncHandler(async (req: AuthRequest, res) => {
-    const datos = crearRecorridoSchema.parse(req.body);
-    const recorrido = await recorridosMarimbaService.crearRecorrido({
-      ...datos,
-      operadorId: req.usuarioActual!.sub,
-    });
-    res.status(201).json(recorrido);
-  }),
-);
-
-const agregarDespachoSchema = z.object({
-  vehiculoDestinoId: z.string().uuid().nullish(),
-  destinoTexto: z.string().trim().nullish(),
-  operadorTexto: z.string().trim().min(1, 'Indica quién recibe el combustible.'),
-  residenteTexto: z.string().trim().nullish(),
-  litrosSolicitados: z.coerce.number().nonnegative().nullish(),
-  litrosSuministrados: z.coerce.number().nonnegative(),
-  lecturaMedidor: z.coerce.number().nonnegative().nullish(),
-  estado: z.enum(['activo', 'inactivo']).optional(),
-});
-
-/// Agrega un despacho al recorrido — foto OPCIONAL (ver comentario en
-/// `despachosMarimba.routes.ts`: la evidencia obligatoria de un recorrido
-/// es la foto de cierre, no una por cada uno de los N despachos).
-recorridosMarimbaRouter.post(
-  '/:id/despachos',
-  requireRole('supervisor', 'administrativo', 'superadmin') as never,
-  upload.fields([{ name: 'fotoEvidencia', maxCount: 1 }]),
-  verificarMagicBytes,
-  asyncHandler(async (req: AuthRequest, res) => {
-    const recorrido = await recorridosMarimbaService.buscarRecorridoPorId(req.params.id as string);
-    if (!recorrido) throw new ApiError(404, 'Recorrido no encontrado.');
-
-    const datos = agregarDespachoSchema.parse(req.body);
-    const archivos = req.files as { fotoEvidencia?: Express.Multer.File[] } | undefined;
-    const foto = archivos?.fotoEvidencia?.[0];
-
-    const despacho = await recorridosMarimbaService.agregarDespacho(recorrido.id, {
-      ...datos,
-      marimbaId: recorrido.marimbaId,
-      registradoPor: req.usuarioActual!.sub,
-      fotoEvidenciaPath: foto ? rutaPublicaDeArchivo(foto.filename) : null,
-    });
-    res.status(201).json(despacho);
-  }),
-);
-
-const cerrarRecorridoSchema = z.object({
-  kmCierre: z.coerce.number().nonnegative().nullish(),
-  horasEquipoMenorCierre: z.coerce.number().nonnegative().nullish(),
-});
-
-/// Cierra el recorrido — foto de cierre OBLIGATORIA (bitácora/evidencia
-/// del cierre completo de la jornada, ver PASO 3e del diseño).
-recorridosMarimbaRouter.post(
-  '/:id/cerrar',
-  requireRole('supervisor', 'administrativo', 'superadmin') as never,
-  upload.fields([{ name: 'fotoCierre', maxCount: 1 }]),
-  verificarMagicBytes,
-  asyncHandler(async (req: AuthRequest, res) => {
-    const datos = cerrarRecorridoSchema.parse(req.body);
-    const archivos = req.files as { fotoCierre?: Express.Multer.File[] } | undefined;
-    const foto = archivos?.fotoCierre?.[0];
-    if (!foto) {
-      throw new ApiError(400, 'La foto de cierre es obligatoria para cerrar el recorrido.');
-    }
-
-    const recorrido = await recorridosMarimbaService.cerrarRecorrido(
-      req.params.id as string,
-      { ...datos, fotoCierrePath: rutaPublicaDeArchivo(foto.filename) },
-      req.usuarioActual!.sub,
-    );
-    res.json(recorrido);
-  }),
-);
+recorridosMarimbaRouter.use(limpiarArchivosAnteError);

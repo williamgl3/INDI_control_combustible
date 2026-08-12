@@ -48,6 +48,10 @@ class RevisarSolicitudDialog extends ConsumerStatefulWidget {
 class _RevisarSolicitudDialogState
     extends ConsumerState<RevisarSolicitudDialog> {
   late double _litrosAutorizados = widget.solicitud.litrosSolicitados;
+  late final Map<TipoPartidaSolicitud, double> _autorizadoPorPartida = {
+    for (final partida in widget.solicitud.partidas)
+      partida.tipo: partida.litrosSolicitados,
+  };
   final _motivoController = TextEditingController();
 
   bool _cargando = false;
@@ -59,8 +63,13 @@ class _RevisarSolicitudDialogState
     super.dispose();
   }
 
-  bool get _autorizaMenos =>
-      _litrosAutorizados < widget.solicitud.litrosSolicitados;
+  bool get _autorizaMenos => widget.solicitud.partidas.isNotEmpty
+      ? widget.solicitud.partidas.any(
+          (partida) =>
+              (_autorizadoPorPartida[partida.tipo] ?? 0) <
+              partida.litrosSolicitados,
+        )
+      : _litrosAutorizados < widget.solicitud.litrosSolicitados;
 
   Future<void> _resolver({required bool aprobar}) async {
     final motivoVacio = _motivoController.text.trim().isEmpty;
@@ -91,6 +100,26 @@ class _RevisarSolicitudDialogState
             resueltaPor: admin.nombreCompleto,
             litrosAutorizados: aprobar ? _litrosAutorizados : null,
             motivo: motivoVacio ? null : _motivoController.text.trim(),
+            partidas: widget.solicitud.partidas.isEmpty
+                ? null
+                : widget.solicitud.partidas
+                      .map(
+                        (partida) => ResolucionPartida(
+                          tipo: partida.tipo,
+                          aprobar:
+                              aprobar &&
+                              (_autorizadoPorPartida[partida.tipo] ?? 0) > 0,
+                          litrosAutorizados:
+                              aprobar &&
+                                  (_autorizadoPorPartida[partida.tipo] ?? 0) > 0
+                              ? _autorizadoPorPartida[partida.tipo]
+                              : null,
+                          observaciones: motivoVacio
+                              ? null
+                              : _motivoController.text.trim(),
+                        ),
+                      )
+                      .toList(growable: false),
           );
       HapticFeedback.mediumImpact();
       ref.read(operacionesTickProvider.notifier).state++;
@@ -191,13 +220,27 @@ class _RevisarSolicitudDialogState
             ],
           ),
           const SizedBox(height: 20),
-          StepperNumerico(
-            etiqueta: 'Litros a autorizar',
-            valor: _litrosAutorizados,
-            sufijo: 'L',
-            decimales: 1,
-            onChanged: (v) => setState(() => _litrosAutorizados = v),
-          ),
+          if (widget.solicitud.partidas.isEmpty)
+            StepperNumerico(
+              etiqueta: 'Litros a autorizar',
+              valor: _litrosAutorizados,
+              sufijo: 'L',
+              decimales: 1,
+              onChanged: (v) => setState(() => _litrosAutorizados = v),
+            )
+          else
+            for (final partida in widget.solicitud.partidas) ...[
+              StepperNumerico(
+                etiqueta:
+                    '${partida.etiqueta} · solicitado ${partida.litrosSolicitados.toStringAsFixed(1)} L',
+                valor: _autorizadoPorPartida[partida.tipo]!,
+                sufijo: 'L',
+                decimales: 1,
+                onChanged: (valor) =>
+                    setState(() => _autorizadoPorPartida[partida.tipo] = valor),
+              ),
+              const SizedBox(height: 12),
+            ],
           const SizedBox(height: 16),
           TextField(
             controller: _motivoController,
@@ -240,7 +283,7 @@ class _RevisarSolicitudDialogState
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : Text(
-                          'Autorizar ${_litrosAutorizados.toStringAsFixed(0)} L',
+                          'Autorizar ${(widget.solicitud.partidas.isEmpty ? _litrosAutorizados : _autorizadoPorPartida.values.fold<double>(0, (suma, valor) => suma + valor)).toStringAsFixed(0)} L',
                         ),
                 ),
               ),

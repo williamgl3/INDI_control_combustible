@@ -5,7 +5,7 @@ import '../models/despacho_marimba.dart';
 abstract class DespachosMarimbaRepository {
   /// Saldo actual del libro mayor de la marimba (litros cargados − litros
   /// despachados, acumulado sin reiniciarse por carga ni por día).
-  Future<double> saldoDeMarimba(String marimbaId);
+  Future<double> saldoDeMarimba(String marimbaId, String tipoCombustible);
 
   Future<List<DespachoMarimba>> listarDespachosDeMarimba(String marimbaId);
 

@@ -20,7 +20,6 @@ import '../screens/chofer/mis_solicitudes_screen.dart';
 import '../screens/chofer/respuesta_solicitud_screen.dart';
 import '../screens/chofer/solicitar_carga_screen.dart';
 import '../screens/chofer/subir_evidencias_screen.dart';
-import '../screens/chofer/registrar_despacho_screen.dart';
 import '../screens/chofer/recorrido_marimba_screen.dart';
 import '../screens/chofer/tipo_operacion_screen.dart';
 import '../screens/login/login_screen.dart';
@@ -191,8 +190,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: RoutePaths.choferRegistrarDespacho,
-        pageBuilder: (context, state) =>
-            _conTransicion(state, const RegistrarDespachoScreen()),
+        redirect: (_, _) => RoutePaths.choferRecorridoMarimba,
       ),
       GoRoute(
         path: RoutePaths.choferRecorridoMarimba,

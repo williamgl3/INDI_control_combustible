@@ -1,23 +1,20 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { asyncHandler } from '../utils/asyncHandler';
+import { asyncHandler, ApiError } from '../utils/asyncHandler';
 import { requireAuth, requireRole, type AuthRequest } from '../middleware/auth';
-import { ApiError } from '../utils/asyncHandler';
 import { upload, rutaPublicaDeArchivo, verificarMagicBytes } from '../middleware/upload';
 import * as solicitudesService from '../services/solicitudesService';
 import * as preciosService from '../services/preciosService';
+import * as marimbaPartidasService from '../services/marimbaPartidasService';
 
 export const solicitudesRouter = Router();
-
 solicitudesRouter.use(requireAuth as never);
 
-const fechaIsoSchema = z
-  .string()
-  .refine((v) => !Number.isNaN(new Date(v).getTime()), 'Debe ser una fecha ISO válida.');
+const fechaIsoSchema = z.string().refine(
+  (valor) => !Number.isNaN(new Date(valor).getTime()),
+  'Debe ser una fecha ISO válida.',
+);
 
-/// `estado`/`desde`/`hasta`/`limit`/`before` son todos opcionales — sin
-/// ninguno, el comportamiento es idéntico al de antes (todas las
-/// solicitudes, sin límite). Ver `solicitudesService.listarTodasLasSolicitudes`.
 const listarSolicitudesQuerySchema = z.object({
   estado: z.enum(['pendiente', 'aprobada', 'rechazada']).optional(),
   desde: fechaIsoSchema.optional(),
@@ -26,27 +23,16 @@ const listarSolicitudesQuerySchema = z.object({
   before: fechaIsoSchema.optional(),
 });
 
-solicitudesRouter.get(
-  '/',
-  requireRole('administrativo', 'superadmin') as never,
+solicitudesRouter.get('/', requireRole('administrativo', 'superadmin') as never,
   asyncHandler(async (req, res) => {
-    const filtros = listarSolicitudesQuerySchema.parse(req.query);
-    res.json(await solicitudesService.listarTodasLasSolicitudes(filtros));
-  }),
-);
+    res.json(await solicitudesService.listarTodasLasSolicitudes(listarSolicitudesQuerySchema.parse(req.query)));
+  }));
 
-solicitudesRouter.get(
-  '/mias',
-  asyncHandler(async (req: AuthRequest, res) => {
-    res.json(await solicitudesService.listarSolicitudesDeChofer(req.usuarioActual!.sub));
-  }),
-);
+solicitudesRouter.get('/mias', asyncHandler(async (req: AuthRequest, res) => {
+  res.json(await solicitudesService.listarSolicitudesDeChofer(req.usuarioActual!.sub));
+}));
 
-/// Resumen de presupuesto semanal — usado por Autorizaciones/Finanzas en
-/// el panel admin (`BarraPresupuesto`).
-solicitudesRouter.get(
-  '/resumen-presupuesto',
-  requireRole('administrativo', 'superadmin') as never,
+solicitudesRouter.get('/resumen-presupuesto', requireRole('administrativo', 'superadmin') as never,
   asyncHandler(async (_req, res) => {
     const [total, ejercido, restante] = await Promise.all([
       preciosService.presupuestoSemanalTotal(),
@@ -54,105 +40,113 @@ solicitudesRouter.get(
       solicitudesService.presupuestoRestante(),
     ]);
     res.json({ presupuestoSemanalTotal: total, presupuestoEjercido: ejercido, presupuestoRestante: restante });
-  }),
-);
+  }));
 
-/// Litros ya autorizados (aprobados) de ESE vehículo en la semana actual
-/// — usado por `ChoferHomeScreen` para la barra de tope semanal. No se
-/// puede calcular en el cliente porque un chofer solo ve sus propias
-/// solicitudes (`/mias`), y el tope es del vehículo, no del chofer.
-solicitudesRouter.get(
-  '/vehiculo/:vehiculoId/acumulado-semana',
-  asyncHandler(async (req, res) => {
-    const litros = await solicitudesService.litrosAutorizadosAcumulados(req.params.vehiculoId as string);
-    res.json({ litros });
-  }),
-);
+solicitudesRouter.get('/vehiculo/:vehiculoId/acumulado-semana', asyncHandler(async (req, res) => {
+  res.json({ litros: await solicitudesService.litrosAutorizadosAcumulados(req.params.vehiculoId as string) });
+}));
 
-solicitudesRouter.get(
-  '/folio/:folio',
-  asyncHandler(async (req, res) => {
-    const solicitud = await solicitudesService.buscarSolicitudPorFolio(req.params.folio as string);
-    if (!solicitud) throw new ApiError(404, 'Solicitud no encontrada.');
-    res.json(solicitud);
-  }),
-);
+solicitudesRouter.get('/folio/:folio', asyncHandler(async (req, res) => {
+  const solicitud = await solicitudesService.buscarSolicitudPorFolio(req.params.folio as string);
+  if (!solicitud) throw new ApiError(404, 'Solicitud no encontrada.');
+  solicitud.partidas = await marimbaPartidasService.listarPartidas(solicitud.id).catch(() => []);
+  res.json(solicitud);
+}));
 
-// Llega como `multipart/form-data` (por la foto del tablero), así que
-// todos los campos —incluidos número y booleano— llegan como string; se
-// coaccionan aquí en vez de asumir JSON.
+const partidaSolicitudSchema = z.object({
+  tipo: z.enum(['consumo_propio', 'carga_granel']),
+  litros: z.number().positive(),
+  tipoCombustible: z.enum(['Diésel', 'Magna', 'Premium']),
+  observaciones: z.string().trim().max(500).nullish(),
+});
+
 const enviarSolicitudSchema = z.object({
   vehiculoId: z.string().uuid(),
-  litrosSolicitados: z.coerce.number().positive(),
-  // z.coerce.boolean() NO sirve aquí: `Boolean("false")` es `true` en JS.
-  // El campo llega como string literal `"true"`/`"false"` (multipart).
-  esUrgente: z
-    .union([z.boolean(), z.enum(['true', 'false'])])
-    .optional()
-    .default(false)
-    .transform((v) => v === true || v === 'true'),
+  litrosSolicitados: z.coerce.number().positive().optional(),
+  partidas: z.array(partidaSolicitudSchema).min(1).max(2).optional(),
+  esUrgente: z.union([z.boolean(), z.enum(['true', 'false'])]).optional().default(false)
+    .transform((valor) => valor === true || valor === 'true'),
   motivoChofer: z.string().trim().nullish(),
-  actividad: z.string().trim().min(1, 'Describe la actividad para la que se necesita el combustible.'),
-  fechaProgramada: z
-    .string()
-    .refine((v) => !Number.isNaN(new Date(v).getTime()), 'Ingresa una fecha y hora válidas.'),
+  actividad: z.string().trim().min(1),
+  fechaProgramada: fechaIsoSchema,
+}).refine((datos) => datos.partidas !== undefined || datos.litrosSolicitados !== undefined, {
+  message: 'Indica los litros o las partidas de la solicitud.',
 });
 
-/// Recibe la foto del tablero (km/horómetro actual) como
-/// `multipart/form-data`, campo `fotoTablero` — mismo respaldo visual que
-/// ya se manda por WhatsApp en el proceso real, ahora también al PEDIR
-/// combustible (antes solo se pedía al comprobar la carga).
-solicitudesRouter.post(
-  '/',
-  requireRole('chofer', 'supervisor') as never,
-  upload.fields([{ name: 'fotoTablero', maxCount: 1 }]),
-  verificarMagicBytes,
+solicitudesRouter.post('/', requireRole('chofer', 'supervisor') as never,
+  upload.fields([{ name: 'fotoTablero', maxCount: 1 }]), verificarMagicBytes,
   asyncHandler(async (req: AuthRequest, res) => {
-    const datos = enviarSolicitudSchema.parse(req.body);
-    const archivos = req.files as { fotoTablero?: Express.Multer.File[] } | undefined;
-    const solicitud = await solicitudesService.enviarSolicitud({
-      choferId: req.usuarioActual!.sub,
-      rol: req.usuarioActual!.rol,
-      ...datos,
-      fotoTableroPath: archivos?.fotoTablero?.[0]
-        ? rutaPublicaDeArchivo(archivos.fotoTablero[0].filename)
-        : null,
+    const raw = req.body.partidas;
+    const datos = enviarSolicitudSchema.parse({
+      ...req.body,
+      partidas: typeof raw === 'string' ? JSON.parse(raw) : raw,
     });
+    const archivos = req.files as { fotoTablero?: Express.Multer.File[] } | undefined;
+    const fotoTableroPath = archivos?.fotoTablero?.[0]
+      ? rutaPublicaDeArchivo(archivos.fotoTablero[0].filename) : null;
+    const solicitud = datos.partidas
+      ? await marimbaPartidasService.crearSolicitudConPartidas({
+          solicitanteId: req.usuarioActual!.sub,
+          rol: req.usuarioActual!.rol,
+          vehiculoId: datos.vehiculoId,
+          partidas: datos.partidas,
+          actividad: datos.actividad,
+          fechaProgramada: datos.fechaProgramada,
+          esUrgente: datos.esUrgente,
+          motivoChofer: datos.motivoChofer,
+          fotoTableroPath,
+        })
+      : await solicitudesService.enviarSolicitud({
+          choferId: req.usuarioActual!.sub,
+          rol: req.usuarioActual!.rol,
+          vehiculoId: datos.vehiculoId,
+          litrosSolicitados: datos.litrosSolicitados!,
+          esUrgente: datos.esUrgente,
+          motivoChofer: datos.motivoChofer,
+          actividad: datos.actividad,
+          fechaProgramada: datos.fechaProgramada,
+          fotoTableroPath,
+        });
     res.status(201).json(solicitud);
-  }),
-);
+  }));
 
 const resolverSolicitudSchema = z.object({
-  aprobar: z.boolean(),
+  aprobar: z.boolean().optional(),
   litrosAutorizados: z.number().positive().nullish(),
   motivo: z.string().trim().nullish(),
+  partidas: z.array(z.object({
+    tipo: z.enum(['consumo_propio', 'carga_granel']),
+    aprobar: z.boolean(),
+    litrosAutorizados: z.number().positive().nullish(),
+    observaciones: z.string().trim().max(500).nullish(),
+  })).min(1).max(2).optional(),
+}).refine((datos) => datos.partidas !== undefined || datos.aprobar !== undefined, {
+  message: 'Indica la resolución de la solicitud.',
 });
 
-solicitudesRouter.patch(
-  '/:id/resolver',
-  requireRole('administrativo', 'superadmin') as never,
+solicitudesRouter.patch('/:id/resolver', requireRole('administrativo', 'superadmin') as never,
   asyncHandler(async (req: AuthRequest, res) => {
     const datos = resolverSolicitudSchema.parse(req.body);
-    const solicitud = await solicitudesService.resolverSolicitud(req.params.id as string, {
-      ...datos,
-      resueltaPor: req.usuarioActual!.usuario,
-      resueltaPorId: req.usuarioActual!.sub,
-    });
-    res.json(solicitud);
-  }),
-);
+    if (datos.partidas) {
+      await marimbaPartidasService.autorizarPartidas({
+        solicitudId: req.params.id as string,
+        decisiones: datos.partidas,
+        aprobadaPor: req.usuarioActual!.usuario,
+        aprobadaPorId: req.usuarioActual!.sub,
+      });
+      const solicitud = await solicitudesService.buscarSolicitudPorId(req.params.id as string);
+      if (!solicitud) throw new ApiError(404, 'Solicitud no encontrada.');
+      solicitud.partidas = await marimbaPartidasService.listarPartidas(solicitud.id);
+      res.json(solicitud);
+      return;
+    }
+    res.json(await solicitudesService.resolverSolicitud(req.params.id as string, {
+      aprobar: datos.aprobar!, litrosAutorizados: datos.litrosAutorizados, motivo: datos.motivo,
+      resueltaPor: req.usuarioActual!.usuario, resueltaPorId: req.usuarioActual!.sub,
+    }));
+  }));
 
-/// El chofer cancela su PROPIA solicitud mientras siga pendiente — ver
-/// `solicitudesService.cancelarSolicitud` (por qué no es un endpoint de
-/// administrativo ni un estado nuevo).
-solicitudesRouter.patch(
-  '/:id/cancelar',
-  requireRole('chofer', 'supervisor') as never,
+solicitudesRouter.patch('/:id/cancelar', requireRole('chofer', 'supervisor') as never,
   asyncHandler(async (req: AuthRequest, res) => {
-    const solicitud = await solicitudesService.cancelarSolicitud(
-      req.params.id as string,
-      req.usuarioActual!.sub,
-    );
-    res.json(solicitud);
-  }),
-);
+    res.json(await solicitudesService.cancelarSolicitud(req.params.id as string, req.usuarioActual!.sub));
+  }));

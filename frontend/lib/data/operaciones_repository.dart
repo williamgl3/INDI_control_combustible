@@ -5,6 +5,24 @@ import '../models/precio_combustible.dart';
 import '../models/solicitud_autorizacion.dart';
 import '../models/vehiculo.dart';
 
+class ComprobanteEstacionCarga {
+  const ComprobanteEstacionCarga({
+    required this.folioEstacion,
+    required this.concepto,
+    this.litrosIndicados,
+  });
+
+  final String folioEstacion;
+  final String concepto;
+  final double? litrosIndicados;
+
+  Map<String, dynamic> toJson() => {
+    'folioEstacion': folioEstacion,
+    'concepto': concepto,
+    'litrosIndicados': litrosIndicados,
+  };
+}
+
 /// Interfaz común de operaciones (solicitudes, cargas, cierres, precios) —
 /// implementada por [MockOperacionesRepository] (datos en memoria) y por
 /// la implementación real que habla con el backend.
@@ -70,6 +88,7 @@ abstract class OperacionesRepository {
     // respaldo visual que ya se manda por WhatsApp en el proceso real,
     // antes de que el chofer vaya a cargar combustible.
     String? fotoTableroPath,
+    List<SolicitudPartida>? partidas,
   });
 
   SolicitudAutorizacion? solicitudPorFolio(String folio);
@@ -85,12 +104,14 @@ abstract class OperacionesRepository {
     required String resueltaPor,
     double? litrosAutorizados,
     String? motivo,
+    List<ResolucionPartida>? partidas,
   });
 
   Future<Carga> registrarCarga({
     required String choferId,
     required String vehiculoId,
     required String folioAutorizacion,
+
     /// Folios extra de la misma visita — ej. la carga a granel de la
     /// marimba, pagada con varios folios de una sola vez.
     List<String>? foliosAdicionales,
@@ -100,6 +121,8 @@ abstract class OperacionesRepository {
     String? fotoTicketPath,
     String? fotoTableroPath,
     double? litrosDetectadosOcr,
+    List<SolicitudPartida>? partidas,
+    List<ComprobanteEstacionCarga>? comprobantes,
   });
 
   Carga? cargaAbiertaDeHoy(String choferId);

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs';
-import { extname, join } from 'node:path';
+import { existsSync, mkdirSync } from 'node:fs';
+import { open, unlink } from 'node:fs/promises';
+import { extname, join, relative, resolve } from 'node:path';
 import type { NextFunction, Request, Response } from 'express';
 import dotenv from 'dotenv';
 import multer from 'multer';
@@ -72,13 +73,18 @@ const FIRMAS: Array<(buf: Buffer) => boolean> = [
     ),
 ];
 
-function esImagenValida(rutaArchivo: string): boolean {
-  const fd = readFileSync(rutaArchivo);
-  const encabezado = fd.subarray(0, 16);
-  return FIRMAS.some((coincide) => coincide(encabezado));
+async function esImagenValida(rutaArchivo: string): Promise<boolean> {
+  const archivo = await open(rutaArchivo, 'r');
+  try {
+    const encabezado = Buffer.alloc(16);
+    const { bytesRead } = await archivo.read(encabezado, 0, 16, 0);
+    return FIRMAS.some((coincide) => coincide(encabezado.subarray(0, bytesRead)));
+  } finally {
+    await archivo.close();
+  }
 }
 
-function archivosDeLaPeticion(req: Request): Express.Multer.File[] {
+export function archivosDeLaPeticion(req: Request): Express.Multer.File[] {
   if (req.file) return [req.file];
   if (!req.files) return [];
   return Array.isArray(req.files) ? req.files : Object.values(req.files).flat();
@@ -88,20 +94,37 @@ function archivosDeLaPeticion(req: Request): Express.Multer.File[] {
 /// archivo escrito en disco) y valida los bytes reales contra las firmas
 /// de arriba — si algo no coincide, borra TODOS los archivos de la
 /// petición (no dejar huérfanos en disco) y responde 400.
-export function verificarMagicBytes(req: Request, _res: Response, next: NextFunction) {
+export async function eliminarArchivosNuevos(req: Request): Promise<void> {
+  const raiz = resolve(UPLOADS_DIR);
+  await Promise.all(archivosDeLaPeticion(req).map(async (archivo) => {
+    const objetivo = resolve(archivo.path);
+    const dentro = relative(raiz, objetivo);
+    if (dentro.startsWith('..') || dentro.includes(':') || dentro === '') return;
+    await unlink(objetivo).catch(() => undefined);
+  }));
+}
+
+export function limpiarArchivosAnteError(
+  error: unknown,
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void {
+  void eliminarArchivosNuevos(req).finally(() => next(error));
+}
+
+export async function verificarMagicBytes(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const archivos = archivosDeLaPeticion(req);
-  const invalido = archivos.some((archivo) => !esImagenValida(archivo.path));
-  if (invalido) {
-    for (const archivo of archivos) {
-      try {
-        unlinkSync(archivo.path);
-      } catch {
-        // Ya no existe o no se pudo borrar — no es motivo para tapar el
-        // error real (archivo inválido), seguimos con el rechazo.
-      }
+  try {
+    const resultados = await Promise.all(archivos.map((archivo) => esImagenValida(archivo.path)));
+    if (resultados.every(Boolean)) {
+      next();
+      return;
     }
+    await eliminarArchivosNuevos(req);
     next(new ApiError(400, 'Uno de los archivos no es una imagen válida.'));
-    return;
+  } catch {
+    await eliminarArchivosNuevos(req);
+    next(new ApiError(400, 'No fue posible validar uno de los archivos.'));
   }
-  next();
 }

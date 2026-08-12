@@ -36,10 +36,11 @@ interface FilaSolicitud {
   comentario: string | null;
   creada_en: Date;
   foto_tablero_path: string | null;
+  partidas_json?: SolicitudAutorizacion['partidas'];
 }
 
 function aSolicitud(fila: FilaSolicitud): SolicitudAutorizacion {
-  return {
+  const solicitud: SolicitudAutorizacion = {
     id: fila.id,
     choferId: fila.chofer_id,
     vehiculoId: fila.vehiculo_id,
@@ -57,7 +58,19 @@ function aSolicitud(fila: FilaSolicitud): SolicitudAutorizacion {
     creadaEn: fila.creada_en.toISOString(),
     fotoTableroPath: fila.foto_tablero_path,
   };
+  if (fila.partidas_json?.length) solicitud.partidas = fila.partidas_json;
+  return solicitud;
 }
+
+const seleccionarSolicitudes = `SELECT s.*,
+  COALESCE((SELECT json_agg(json_build_object(
+    'id',sp.id,'solicitudId',sp.solicitud_id,'tipo',sp.tipo,
+    'litrosSolicitados',sp.litros_solicitados,'litrosAutorizados',sp.litros_autorizados,
+    'litrosCargados',COALESCE((SELECT SUM(cp.litros_cargados) FROM carga_partidas cp
+      WHERE cp.solicitud_partida_id=sp.id),0),
+    'tipoCombustible',sp.tipo_combustible,'estado',sp.estado,'observaciones',sp.observaciones)
+    ORDER BY sp.tipo) FROM solicitud_partidas sp WHERE sp.solicitud_id=s.id),'[]'::json) partidas_json
+  FROM solicitudes_autorizacion s`;
 
 /// Filtros opcionales para el panel administrativo (Autorizaciones/
 /// Concentrado) — todos por defecto `undefined`, así que sin argumentos
@@ -100,7 +113,7 @@ export async function listarTodasLasSolicitudes(opciones?: {
   }
 
   const { rows } = await pool.query<FilaSolicitud>(
-    `SELECT * FROM solicitudes_autorizacion ${where} ORDER BY creada_en DESC ${limitSql}`,
+    `${seleccionarSolicitudes} ${where} ORDER BY s.creada_en DESC ${limitSql}`,
     params,
   );
   return rows.map(aSolicitud);
@@ -108,7 +121,7 @@ export async function listarTodasLasSolicitudes(opciones?: {
 
 export async function listarSolicitudesDeChofer(choferId: string): Promise<SolicitudAutorizacion[]> {
   const { rows } = await pool.query<FilaSolicitud>(
-    'SELECT * FROM solicitudes_autorizacion WHERE chofer_id = $1 ORDER BY creada_en DESC',
+    `${seleccionarSolicitudes} WHERE s.chofer_id = $1 ORDER BY s.creada_en DESC`,
     [choferId],
   );
   return rows.map(aSolicitud);
@@ -118,6 +131,14 @@ export async function buscarSolicitudPorFolio(folio: string): Promise<SolicitudA
   const { rows } = await pool.query<FilaSolicitud>(
     'SELECT * FROM solicitudes_autorizacion WHERE folio_autorizacion = $1',
     [folio],
+  );
+  return rows[0] ? aSolicitud(rows[0]) : null;
+}
+
+export async function buscarSolicitudPorId(id: string): Promise<SolicitudAutorizacion | null> {
+  const { rows } = await pool.query<FilaSolicitud>(
+    'SELECT * FROM solicitudes_autorizacion WHERE id = $1',
+    [id],
   );
   return rows[0] ? aSolicitud(rows[0]) : null;
 }

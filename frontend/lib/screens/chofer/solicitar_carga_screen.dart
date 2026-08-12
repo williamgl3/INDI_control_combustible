@@ -15,6 +15,7 @@ import '../../core/providers.dart';
 import '../../core/session_provider.dart';
 import '../../data/api_client.dart';
 import '../../models/vehiculo.dart';
+import '../../models/solicitud_autorizacion.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_radii.dart';
@@ -52,11 +53,38 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
 
   Vehiculo? _vehiculo;
   double _litros = 0;
+  double _litrosConsumoPropio = 0;
+  double _litrosCargaGranel = 0;
+  String? _combustibleGranel;
   double? _ultimaCantidad;
   bool _esUrgente = false;
   bool _cargando = false;
   String? _errorGeneral;
   DiagnosticoMantenimiento? _diagnosticoMantenimiento;
+
+  bool get _esSolicitudGranel => widget.categoria == CategoriaSolicitud.granel;
+  double get _totalSolicitado =>
+      _esSolicitudGranel ? _litrosConsumoPropio + _litrosCargaGranel : _litros;
+
+  List<SolicitudPartida>? get _partidasSolicitud {
+    if (!_esSolicitudGranel) return null;
+    final combustibleMotor = _vehiculo?.tipoCombustible;
+    if (combustibleMotor == null) return const [];
+    return [
+      if (_litrosConsumoPropio > 0)
+        SolicitudPartida(
+          tipo: TipoPartidaSolicitud.consumoPropio,
+          litrosSolicitados: _litrosConsumoPropio,
+          tipoCombustible: combustibleMotor,
+        ),
+      if (_litrosCargaGranel > 0)
+        SolicitudPartida(
+          tipo: TipoPartidaSolicitud.cargaGranel,
+          litrosSolicitados: _litrosCargaGranel,
+          tipoCombustible: _combustibleGranel ?? '',
+        ),
+    ];
+  }
 
   // TODO-SPEC: no existe todavía un catálogo real de supervisores — lista
   // placeholder hasta que haya una decisión de negocio/backend al respecto.
@@ -100,12 +128,13 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
 
   Future<void> _guardarUltimaCantidad() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_kUltimaCantidadKey, _litros);
+    await prefs.setDouble(_kUltimaCantidadKey, _totalSolicitado);
   }
 
   Future<void> _elegirVehiculo(Vehiculo vehiculo) async {
     setState(() {
       _vehiculo = vehiculo;
+      _combustibleGranel = null;
       _diagnosticoMantenimiento = null;
     });
     final repo = ref.read(operacionesRepositoryProvider);
@@ -190,8 +219,24 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
       setState(() => _errorGeneral = 'Elige qué vehículo vas a usar.');
       return;
     }
-    if (_litros <= 0) {
+    if (_totalSolicitado <= 0) {
       setState(() => _errorGeneral = 'Ingresa los litros que necesitas.');
+      return;
+    }
+    if (_esSolicitudGranel && (_partidasSolicitud?.isEmpty ?? true)) {
+      setState(
+        () => _errorGeneral =
+            'La unidad abastecedora debe tener un combustible configurado.',
+      );
+      return;
+    }
+    if (_esSolicitudGranel &&
+        _litrosCargaGranel > 0 &&
+        _combustibleGranel == null) {
+      setState(
+        () =>
+            _errorGeneral = 'Selecciona el combustible transportado a granel.',
+      );
       return;
     }
     if (_esUrgente && _motivoController.text.trim().isEmpty) {
@@ -230,6 +275,15 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
 
     try {
       if (ref.read(conectividadProvider).valueOrNull == false) {
+        if (_esSolicitudGranel) {
+          if (mounted) {
+            setState(
+              () => _errorGeneral =
+                  'Las solicitudes por conceptos requieren conexiÃ³n para conservar cada partida.',
+            );
+          }
+          return;
+        }
         await _encolarSinConexion(motivo: motivo, actividad: actividad);
         return;
       }
@@ -239,12 +293,13 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
           .enviarSolicitud(
             choferId: perfil.id,
             vehiculo: _vehiculo!,
-            litrosSolicitados: _litros,
+            litrosSolicitados: _totalSolicitado,
             esUrgente: _esUrgente,
             motivoChofer: motivo,
             actividad: actividad,
             fechaProgramada: _fechaProgramada,
             fotoTableroPath: _fotoTableroPath,
+            partidas: _partidasSolicitud,
           );
       HapticFeedback.mediumImpact();
       ref.read(operacionesTickProvider.notifier).state++;
@@ -336,7 +391,9 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
                 children: [
                   GroupedRow(
                     titulo: _vehiculo!.tipoCombustible ?? 'Sin especificar',
-                    subtitulo: 'Tipo de combustible',
+                    subtitulo: _esSolicitudGranel
+                        ? 'Combustible para el motor'
+                        : 'Tipo de combustible',
                     icono: Icons.local_gas_station_outlined,
                   ),
                   if (_diagnosticoMantenimiento != null &&
@@ -372,6 +429,30 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
                       onTap: _reportarIncidencia,
                     ),
                 ],
+              ),
+            ],
+            if (_esSolicitudGranel && _litrosCargaGranel > 0) ...[
+              const SizedBox(height: AppSpacing.md),
+              DropdownButtonFormField<String>(
+                initialValue: _combustibleGranel,
+                decoration: const InputDecoration(
+                  labelText: 'Combustible transportado a granel',
+                  prefixIcon: Icon(Icons.local_gas_station_outlined),
+                ),
+                items: tiposCombustibleVehiculo
+                    .map(
+                      (combustible) => DropdownMenuItem(
+                        value: combustible,
+                        child: Text(combustible),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: _cargando
+                    ? null
+                    : (valor) => setState(() => _combustibleGranel = valor),
+                validator: (valor) => _litrosCargaGranel > 0 && valor == null
+                    ? 'Selecciona el combustible transportado'
+                    : null,
               ),
             ],
             if (_vehiculo?.tipoUnidad == 'Maquinaria') ...[
@@ -436,15 +517,45 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
             ),
             const SizedBox(height: AppSpacing.xxl),
             Text(
-              '¿Cuántos litros necesitas?',
+              _esSolicitudGranel
+                  ? 'Combustible por destino'
+                  : '¿Cuántos litros necesitas?',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: AppSpacing.lg),
-            _SelectorLitros(
-              valor: _litros,
-              onChanged: (v) => setState(() => _litros = v),
-              ultimaCantidad: _ultimaCantidad,
-            ),
+            if (_esSolicitudGranel) ...[
+              Text(
+                'Motor de la unidad',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _SelectorLitros(
+                valor: _litrosConsumoPropio,
+                onChanged: (v) => setState(() => _litrosConsumoPropio = v),
+                ultimaCantidad: null,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                'Tanque de almacenamiento a granel',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              _SelectorLitros(
+                valor: _litrosCargaGranel,
+                onChanged: (v) => setState(() => _litrosCargaGranel = v),
+                ultimaCantidad: null,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Total de la visita: ${_totalSolicitado.toStringAsFixed(1)} L',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ] else
+              _SelectorLitros(
+                valor: _litros,
+                onChanged: (v) => setState(() => _litros = v),
+                ultimaCantidad: _ultimaCantidad,
+              ),
             const SizedBox(height: AppSpacing.xl),
             GroupedSection(
               children: [

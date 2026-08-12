@@ -11,6 +11,7 @@ class ApiRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
   @override
   Future<RecorridoMarimba> abrirRecorrido({
     required String marimbaId,
+    required String tipoCombustible,
     required String frente,
     String? cargaId,
     required double litrosIniciales,
@@ -21,6 +22,7 @@ class ApiRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
       '/recorridos-marimba',
       body: {
         'marimbaId': marimbaId,
+        'tipoCombustible': tipoCombustible,
         'frente': frente,
         'cargaId': ?cargaId,
         'litrosIniciales': litrosIniciales,
@@ -43,7 +45,9 @@ class ApiRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
   Future<List<DespachoMarimba>> listarDespachosDeRecorrido(
     String recorridoId,
   ) async {
-    final data = await _client.get('/recorridos-marimba/$recorridoId/despachos');
+    final data = await _client.get(
+      '/recorridos-marimba/$recorridoId/despachos',
+    );
     return (data as List)
         .map((j) => DespachoMarimba.fromJson(j as Map<String, dynamic>))
         .toList();
@@ -52,6 +56,7 @@ class ApiRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
   @override
   Future<DespachoMarimba> agregarDespacho({
     required String recorridoId,
+    required String tipoCombustible,
     String? vehiculoDestinoId,
     String? destinoTexto,
     required String operadorTexto,
@@ -65,14 +70,15 @@ class ApiRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
       '/recorridos-marimba/$recorridoId/despachos',
       campos: {
         'vehiculoDestinoId': ?vehiculoDestinoId,
-        'destinoTexto': ?destinoTexto,
+        'tipoCombustible': tipoCombustible,
         'operadorTexto': operadorTexto,
-        'residenteTexto': ?residenteTexto,
-        'litrosSolicitados': ?litrosSolicitados?.toString(),
         'litrosSuministrados': '$litrosSuministrados',
-        'lecturaMedidor': ?lecturaMedidor?.toString(),
+        'horometro': '${lecturaMedidor ?? 0}',
       },
-      archivos: {'fotoEvidencia': fotoEvidenciaPath},
+      archivos: {
+        'fotoHorometro': fotoEvidenciaPath,
+        'fotoEvidencia': fotoEvidenciaPath,
+      },
     );
     return DespachoMarimba.fromJson(data as Map<String, dynamic>);
   }
@@ -83,14 +89,22 @@ class ApiRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
     double? kmCierre,
     double? horasEquipoMenorCierre,
     required String fotoCierrePath,
+    double? existenciaFisica,
+    String? fotoNivelPath,
+    String? observaciones,
   }) async {
     final data = await _client.postMultipart(
       '/recorridos-marimba/$recorridoId/cerrar',
       campos: {
         'kmCierre': ?kmCierre?.toString(),
         'horasEquipoMenorCierre': ?horasEquipoMenorCierre?.toString(),
+        'existenciaFisica': '${existenciaFisica ?? 0}',
+        'observaciones': ?observaciones,
       },
-      archivos: {'fotoCierre': fotoCierrePath},
+      archivos: {
+        'fotoCierre': fotoCierrePath,
+        'fotoNivel': fotoNivelPath ?? fotoCierrePath,
+      },
     );
     return RecorridoMarimba.fromJson(data as Map<String, dynamic>);
   }

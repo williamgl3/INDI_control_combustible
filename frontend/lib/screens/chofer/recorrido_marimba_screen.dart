@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/catalogos_vehiculo.dart';
-import '../../core/cola_solicitudes_offline.dart';
 import '../../core/providers.dart';
+import '../../data/api_client.dart';
 import '../../models/despacho_marimba.dart';
 import '../../models/recorrido_marimba.dart';
 import '../../models/vehiculo.dart';
@@ -16,7 +16,6 @@ import '../../widgets/aviso_error.dart';
 import '../../widgets/captura_foto_field.dart';
 import '../../widgets/chofer_operation_scaffold.dart';
 import '../../widgets/selector_vehiculo.dart';
-import '../../widgets/sin_conexion_dialog.dart';
 import '../../widgets/stepper_numerico.dart';
 
 /// Jornada de despacho de la marimba: abrir un recorrido, agregar N
@@ -41,8 +40,8 @@ class _RecorridoMarimbaScreenState
     extends ConsumerState<RecorridoMarimbaScreen> {
   // --- Abrir recorrido ---
   Vehiculo? _marimba;
+  String? _tipoCombustible;
   final _frenteController = TextEditingController();
-  double _litrosIniciales = 0;
   double _kmInicio = 0;
   double _horasEquipoMenorInicio = 0;
   bool _abriendo = false;
@@ -50,17 +49,13 @@ class _RecorridoMarimbaScreenState
 
   // --- Recorrido activo (una vez abierto) ---
   String? _recorridoIdLocal;
-  Vehiculo? _marimbaActiva;
   String? _frenteActivo;
   double _litrosInicialesActivos = 0;
   final _despachos = <DespachoMarimba>[];
   final _destinosRecientes = <String>[];
-  int _contadorLocal = 0;
 
   // --- Agregar despacho ---
   Vehiculo? _destino;
-  bool _destinoLibre = false;
-  final _destinoTextoController = TextEditingController();
   final _operadorController = TextEditingController();
   final _residenteController = TextEditingController();
   double _litrosSuministrados = 0;
@@ -75,7 +70,6 @@ class _RecorridoMarimbaScreenState
   @override
   void dispose() {
     _frenteController.dispose();
-    _destinoTextoController.dispose();
     _operadorController.dispose();
     _residenteController.dispose();
     super.dispose();
@@ -88,6 +82,7 @@ class _RecorridoMarimbaScreenState
       _litrosInicialesActivos - _litrosDespachados;
 
   Future<void> _abrirRecorrido() async {
+    if (_abriendo) return;
     if (_marimba == null) {
       setState(() => _errorAbrir = 'Elige qué marimba vas a usar.');
       return;
@@ -96,14 +91,10 @@ class _RecorridoMarimbaScreenState
       setState(() => _errorAbrir = 'Indica el frente donde vas a operar.');
       return;
     }
-    if (_litrosIniciales <= 0) {
-      setState(
-        () => _errorAbrir =
-            'Indica con cuántos litros sale el camión (existencia inicial).',
-      );
+    if (_tipoCombustible == null) {
+      setState(() => _errorAbrir = 'Selecciona el combustible transportado.');
       return;
     }
-
     setState(() {
       _abriendo = true;
       _errorAbrir = null;
@@ -111,44 +102,38 @@ class _RecorridoMarimbaScreenState
 
     final marimba = _marimba!;
     final frente = _frenteController.text.trim();
-    final idLocal = 'recorrido-${DateTime.now().microsecondsSinceEpoch}';
-
-    await ref
-        .read(colaRecorridosMarimbaOfflineProvider)
-        .agregar(
-          RecorridoMarimbaPendienteOffline(
-            idLocal: idLocal,
+    try {
+      final recorrido = await ref
+          .read(recorridosMarimbaRepositoryProvider)
+          .abrirRecorrido(
             marimbaId: marimba.id,
+            tipoCombustible: _tipoCombustible!,
             frente: frente,
-            litrosIniciales: _litrosIniciales,
+            litrosIniciales: 0,
             kmInicio: _kmInicio > 0 ? _kmInicio : null,
             horasEquipoMenorInicio: _horasEquipoMenorInicio > 0
                 ? _horasEquipoMenorInicio
                 : null,
-            creadaEn: DateTime.now(),
-          ),
-        );
-    try {
-      await sincronizarRecorridosMarimba(ref);
-    } catch (_) {
-      // El recorrido ya quedó guardado en la cola — un fallo aquí no
-      // pierde nada, solo significa que no se resolvió todavía.
+          );
+      if (!mounted) return;
+      setState(() {
+        _recorridoIdLocal = recorrido.id;
+        _frenteActivo = frente;
+        _litrosInicialesActivos = recorrido.litrosIniciales;
+      });
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _errorAbrir = error.mensaje);
+    } finally {
+      if (mounted) setState(() => _abriendo = false);
     }
-
-    if (!mounted) return;
-    setState(() {
-      _recorridoIdLocal = idLocal;
-      _marimbaActiva = marimba;
-      _frenteActivo = frente;
-      _litrosInicialesActivos = _litrosIniciales;
-      _abriendo = false;
-    });
   }
 
   Future<void> _agregarDespacho() async {
-    if (_destino == null && _destinoTextoController.text.trim().isEmpty) {
+    if (_agregando) return;
+    if (_destino == null) {
       setState(
-        () => _errorDespacho = 'Indica qué máquina recibió el combustible.',
+        () =>
+            _errorDespacho = 'Selecciona una maquinaria aprobada del catálogo.',
       );
       return;
     }
@@ -160,78 +145,59 @@ class _RecorridoMarimbaScreenState
       setState(() => _errorDespacho = 'Indica los litros despachados.');
       return;
     }
+    if (_lecturaMedidor < 0 || _fotoDespachoPath == null) {
+      setState(
+        () => _errorDespacho =
+            'Captura el horómetro y su evidencia antes del despacho.',
+      );
+      return;
+    }
 
     setState(() {
       _agregando = true;
       _errorDespacho = null;
     });
 
-    final destinoTexto = _destinoLibre
-        ? _destinoTextoController.text.trim()
-        : null;
-    final destino = _destinoLibre ? null : _destino;
+    final destino = _destino!;
     final operador = _operadorController.text.trim();
     final residente = _residenteController.text.trim().isEmpty
         ? null
         : _residenteController.text.trim();
     final litros = _litrosSuministrados;
-    final lectura = _lecturaMedidor > 0 ? _lecturaMedidor : null;
+    final lectura = _lecturaMedidor;
     final foto = _fotoDespachoPath;
 
-    await ref
-        .read(colaDespachosMarimbaOfflineProvider)
-        .agregar(
-          DespachoMarimbaPendienteOffline(
-            idLocal: 'despacho-${DateTime.now().microsecondsSinceEpoch}',
-            recorridoIdLocal: _recorridoIdLocal!,
-            vehiculoDestinoId: destino?.id,
-            destinoTexto: destinoTexto,
+    try {
+      final despacho = await ref
+          .read(recorridosMarimbaRepositoryProvider)
+          .agregarDespacho(
+            recorridoId: _recorridoIdLocal!,
+            tipoCombustible: _tipoCombustible!,
+            vehiculoDestinoId: destino.id,
             operadorTexto: operador,
             residenteTexto: residente,
             litrosSuministrados: litros,
             lecturaMedidor: lectura,
             fotoEvidenciaPath: foto,
-            creadaEn: DateTime.now(),
-          ),
-        );
-    try {
-      await sincronizarRecorridosMarimba(ref);
-    } catch (_) {
-      // Igual que al abrir — ya quedó en la cola, se reintentará solo.
+          );
+      final etiquetaDestino = destino.modelo ?? destino.etiquetaUnidad;
+      if (!mounted) return;
+      setState(() {
+        _despachos.add(despacho);
+        _destinosRecientes.remove(etiquetaDestino);
+        _destinosRecientes.insert(0, etiquetaDestino);
+        if (_destinosRecientes.length > 5) _destinosRecientes.removeLast();
+
+        _destino = null;
+        _litrosSuministrados = 0;
+        _lecturaMedidor = 0;
+        _fotoDespachoPath = null;
+      });
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _errorDespacho = error.mensaje);
+    } finally {
+      if (mounted) setState(() => _agregando = false);
     }
-
-    final etiquetaDestino =
-        destino?.modelo ?? destino?.etiquetaUnidad ?? destinoTexto!;
-
-    if (!mounted) return;
-    setState(() {
-      _despachos.add(
-        DespachoMarimba(
-          id: 'local-${_contadorLocal++}',
-          marimbaId: _marimbaActiva!.id,
-          vehiculoDestinoId: destino?.id,
-          destinoTexto: destinoTexto,
-          operadorTexto: operador,
-          residenteTexto: residente,
-          litrosSuministrados: litros,
-          lecturaMedidor: lectura,
-          fotoEvidenciaPath: foto,
-          registradoPor: '',
-          creadoEn: DateTime.now(),
-          recorridoId: _recorridoIdLocal,
-        ),
-      );
-      _destinosRecientes.remove(etiquetaDestino);
-      _destinosRecientes.insert(0, etiquetaDestino);
-      if (_destinosRecientes.length > 5) _destinosRecientes.removeLast();
-
-      _destino = null;
-      _destinoTextoController.clear();
-      _litrosSuministrados = 0;
-      _lecturaMedidor = 0;
-      _fotoDespachoPath = null;
-      _agregando = false;
-    });
   }
 
   Future<void> _tomarFotoDespacho() async {
@@ -250,67 +216,30 @@ class _RecorridoMarimbaScreenState
     if (resultado == null) return;
 
     setState(() => _cerrando = true);
-    final idLocal = _recorridoIdLocal!;
-
-    // Se guarda el `idServidor` (si ya se conoce) ANTES de sincronizar,
-    // porque una vez que el cierre tenga éxito el recorrido se quita de
-    // su cola — después de eso ya no habría forma de recuperarlo de ahí.
-    final idServidorAntes =
-        (await ref.read(colaRecorridosMarimbaOfflineProvider).leer())
-            .where((r) => r.idLocal == idLocal)
-            .map((r) => r.idServidor)
-            .firstOrNull;
-
-    await ref
-        .read(colaCierresRecorridoMarimbaOfflineProvider)
-        .agregar(
-          CierreRecorridoMarimbaPendienteOffline(
-            idLocal: 'cierre-${DateTime.now().microsecondsSinceEpoch}',
-            recorridoIdLocal: idLocal,
+    try {
+      final recorridoCerrado = await ref
+          .read(recorridosMarimbaRepositoryProvider)
+          .cerrarRecorrido(
+            recorridoId: _recorridoIdLocal!,
             kmCierre: resultado.kmCierre,
             horasEquipoMenorCierre: resultado.horasEquipoMenorCierre,
             fotoCierrePath: resultado.fotoCierrePath,
-            creadaEn: DateTime.now(),
-          ),
-        );
-    try {
-      await sincronizarRecorridosMarimba(ref);
-    } catch (_) {
-      // Queda en la cola — se reintenta sola.
-    }
-
-    final sigueEnCola =
-        (await ref.read(colaRecorridosMarimbaOfflineProvider).leer()).any(
-          (r) => r.idLocal == idLocal,
-        );
-
-    if (!mounted) return;
-
-    if (sigueEnCola) {
-      setState(() => _cerrando = false);
-      await SinConexionDialog.show(
-        context,
-        mensaje:
-            'Guardamos el cierre en este dispositivo. Se enviará solo en '
-            'cuanto vuelvas a tener señal — no hace falta que lo repitas.',
-      );
+            fotoNivelPath: resultado.fotoCierrePath,
+            existenciaFisica: resultado.existenciaFisica,
+            observaciones: resultado.observaciones,
+          );
+      if (!mounted) return;
+      await _DialogoConciliacion.show(context, recorrido: recorridoCerrado);
       if (mounted) context.go(RoutePaths.chofer);
-      return;
+    } on ApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.mensaje)));
+      }
+    } finally {
+      if (mounted) setState(() => _cerrando = false);
     }
-
-    // Se cerró de verdad en el servidor — se busca la conciliación real
-    // para mostrarla (no la estimación local de `_existenciaEstimada`).
-    RecorridoMarimba? recorridoCerrado;
-    if (idServidorAntes != null) {
-      recorridoCerrado = await ref
-          .read(recorridosMarimbaRepositoryProvider)
-          .buscarRecorrido(idServidorAntes);
-    }
-
-    if (!mounted) return;
-    setState(() => _cerrando = false);
-    await _DialogoConciliacion.show(context, recorrido: recorridoCerrado);
-    if (mounted) context.go(RoutePaths.chofer);
   }
 
   @override
@@ -350,9 +279,29 @@ class _RecorridoMarimbaScreenState
                 ),
               )
               .toList(),
-          onChanged: (valor) => setState(
-            () => _marimba = marimbas.where((m) => m.id == valor).firstOrNull,
+          onChanged: (valor) => setState(() {
+            _marimba = marimbas.where((m) => m.id == valor).firstOrNull;
+            _tipoCombustible = null;
+          }),
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          initialValue: _tipoCombustible,
+          decoration: const InputDecoration(
+            labelText: 'Combustible transportado',
+            prefixIcon: Icon(Icons.local_gas_station_outlined),
           ),
+          items: tiposCombustibleVehiculo
+              .map(
+                (combustible) => DropdownMenuItem(
+                  value: combustible,
+                  child: Text(combustible),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: _abriendo
+              ? null
+              : (valor) => setState(() => _tipoCombustible = valor),
         ),
         const SizedBox(height: 16),
         TextFormField(
@@ -364,12 +313,8 @@ class _RecorridoMarimbaScreenState
           ),
         ),
         const SizedBox(height: 16),
-        StepperNumerico(
-          etiqueta: 'Litros con los que sale el camión',
-          valor: _litrosIniciales,
-          sufijo: 'L',
-          paso: 50,
-          onChanged: (v) => setState(() => _litrosIniciales = v),
+        const Text(
+          'La existencia inicial se obtiene del inventario confirmado por el servidor.',
         ),
         const SizedBox(height: 16),
         StepperNumerico(
@@ -450,42 +395,19 @@ class _RecorridoMarimbaScreenState
                   spacing: 8,
                   runSpacing: 4,
                   children: _destinosRecientes
-                      .map(
-                        (etiqueta) => ActionChip(
-                          label: Text(etiqueta),
-                          onPressed: () => setState(() {
-                            _destinoLibre = true;
-                            _destino = null;
-                            _destinoTextoController.text = etiqueta;
-                          }),
-                        ),
-                      )
+                      .map((etiqueta) => Chip(label: Text(etiqueta)))
                       .toList(),
                 ),
                 const SizedBox(height: 12),
               ],
-              if (!_destinoLibre)
-                SelectorVehiculo(
-                  vehiculoSeleccionado: _destino,
-                  filtroTipoUnidad: 'Maquinaria',
-                  filtroUbicacion: _frenteActivo,
-                  onSeleccionar: (v) => setState(() => _destino = v),
-                )
-              else
-                TextFormField(
-                  controller: _destinoTextoController,
-                  decoration: const InputDecoration(
-                    labelText: 'Máquina destino',
-                    prefixIcon: Icon(Icons.precision_manufacturing_outlined),
-                  ),
-                ),
-              TextButton(
-                onPressed: () => setState(() => _destinoLibre = !_destinoLibre),
-                child: Text(
-                  _destinoLibre
-                      ? 'Elegir del catálogo'
-                      : 'No está en el catálogo',
-                ),
+              SelectorVehiculo(
+                vehiculoSeleccionado: _destino,
+                filtroTipoUnidad: 'Maquinaria',
+                filtroUbicacion: _frenteActivo,
+                onSeleccionar: (v) => setState(() => _destino = v),
+              ),
+              const Text(
+                'Si la maquinaria no aparece, repórtala para aprobación administrativa antes de despachar.',
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -513,7 +435,7 @@ class _RecorridoMarimbaScreenState
               ),
               const SizedBox(height: 16),
               StepperNumerico(
-                etiqueta: 'Horómetro de la máquina (opcional)',
+                etiqueta: 'Horómetro de la máquina',
                 valor: _lecturaMedidor,
                 sufijo: 'h',
                 paso: 1,
@@ -522,7 +444,7 @@ class _RecorridoMarimbaScreenState
               ),
               const SizedBox(height: 16),
               CapturaFotoField(
-                etiqueta: 'Foto del despacho (opcional)',
+                etiqueta: 'Foto del horómetro y suministro',
                 icono: Icons.photo_camera_outlined,
                 rutaFoto: _fotoDespachoPath,
                 cargando: _cargandoFotoDespacho,
@@ -686,11 +608,15 @@ class _ResultadoCierre {
     this.kmCierre,
     this.horasEquipoMenorCierre,
     required this.fotoCierrePath,
+    required this.existenciaFisica,
+    this.observaciones,
   });
 
   final double? kmCierre;
   final double? horasEquipoMenorCierre;
   final String fotoCierrePath;
+  final double existenciaFisica;
+  final String? observaciones;
 }
 
 class _DialogoCerrarRecorrido extends ConsumerStatefulWidget {
@@ -715,9 +641,17 @@ class _DialogoCerrarRecorridoState
     extends ConsumerState<_DialogoCerrarRecorrido> {
   double _kmCierre = 0;
   double _horasEquipoMenorCierre = 0;
+  double _existenciaFisica = 0;
+  final _observacionesController = TextEditingController();
   String? _fotoCierrePath;
   bool _cargandoFoto = false;
   String? _error;
+
+  @override
+  void dispose() {
+    _observacionesController.dispose();
+    super.dispose();
+  }
 
   Future<void> _tomarFoto() async {
     setState(() => _cargandoFoto = true);
@@ -756,6 +690,24 @@ class _DialogoCerrarRecorridoState
             onChanged: (v) => setState(() => _horasEquipoMenorCierre = v),
           ),
           const SizedBox(height: 16),
+          StepperNumerico(
+            etiqueta: 'Existencia física al cierre',
+            valor: _existenciaFisica,
+            sufijo: 'L',
+            paso: 1,
+            decimales: 2,
+            onChanged: (v) => setState(() => _existenciaFisica = v),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _observacionesController,
+            decoration: const InputDecoration(
+              labelText: 'Observaciones de conciliación',
+              hintText: 'Obligatorias si existe una diferencia',
+            ),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 16),
           CapturaFotoField(
             etiqueta: 'Foto de cierre (obligatoria)',
             icono: Icons.photo_camera_outlined,
@@ -787,6 +739,10 @@ class _DialogoCerrarRecorridoState
                     ? _horasEquipoMenorCierre
                     : null,
                 fotoCierrePath: _fotoCierrePath!,
+                existenciaFisica: _existenciaFisica,
+                observaciones: _observacionesController.text.trim().isEmpty
+                    ? null
+                    : _observacionesController.text.trim(),
               ),
             );
           },

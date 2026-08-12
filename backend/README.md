@@ -96,3 +96,26 @@ desarrollo, usa el flujo local de arriba y apunta el frontend a
 
 `.github/workflows/backend-ci.yml` corre `tsc --noEmit` y aplica el esquema
 contra un Postgres efímero en cada push/PR que toque `backend/`.
+
+## Flujo de unidades abastecedoras (migración 0031)
+
+Las operaciones nuevas de Marimba y Pipa usan un único modelo de *unidad
+abastecedora*. Una solicitud puede contener `consumo_propio`,
+`carga_granel` o ambas partidas. Solo `carga_granel` crea una entrada en
+`movimientos_inventario_marimba`; cada despacho a maquinaria crea la salida
+correspondiente. El saldo nuevo se deriva exclusivamente de ese libro.
+
+`suministros` es un flujo legado: se conservan tabla y lecturas históricas,
+pero `POST /suministros` responde `410 Gone`. Su reemplazo es:
+
+- `carga_partidas`, para distinguir lo cargado por concepto;
+- `movimientos_inventario_marimba`, para entradas y salidas;
+- `despachos_marimba`, para entregas a maquinaria del catálogo.
+
+La cola offline actual no contiene el contrato suficiente para sincronizar
+partidas, comprobantes, el saldo concurrente, el horómetro y la conciliación.
+Hasta incorporar una `idempotencyKey` por solicitud, carga, entrada, despacho,
+evidencia, cierre e incidencia, estas operaciones exigen conexión y los
+conflictos permanecen visibles para reintento; no deben descartarse como
+éxitos. Los ajustes, mermas, devoluciones y transferencias también quedan
+fuera de 0031 y requieren un flujo administrativo auditado posterior.

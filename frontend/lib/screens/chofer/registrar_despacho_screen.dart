@@ -68,7 +68,7 @@ class _RegistrarDespachoScreenState
     try {
       final saldo = await ref
           .read(despachosMarimbaRepositoryProvider)
-          .saldoDeMarimba(marimba.id);
+          .saldoDeMarimba(marimba.id, marimba.tipoCombustible ?? 'Diésel');
       if (mounted) setState(() => _saldoActual = saldo);
     } catch (_) {
       // El formulario sigue usable sin el saldo visible — el backend

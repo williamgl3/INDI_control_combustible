@@ -8,13 +8,21 @@ class ApiDespachosMarimbaRepository implements DespachosMarimbaRepository {
   final ApiClient _client;
 
   @override
-  Future<double> saldoDeMarimba(String marimbaId) async {
-    final data = await _client.get('/despachos-marimba/saldo/$marimbaId');
-    return ((data as Map<String, dynamic>)['saldoActual'] as num).toDouble();
+  Future<double> saldoDeMarimba(
+    String marimbaId,
+    String tipoCombustible,
+  ) async {
+    final data = await _client.get(
+      '/despachos-marimba/saldo/$marimbaId?tipoCombustible=${Uri.encodeQueryComponent(tipoCombustible)}',
+    );
+    final valor = (data as Map<String, dynamic>)['saldoActual'];
+    return valor is num ? valor.toDouble() : double.parse(valor as String);
   }
 
   @override
-  Future<List<DespachoMarimba>> listarDespachosDeMarimba(String marimbaId) async {
+  Future<List<DespachoMarimba>> listarDespachosDeMarimba(
+    String marimbaId,
+  ) async {
     final data = await _client.get('/despachos-marimba?marimbaId=$marimbaId');
     return (data as List)
         .map((j) => DespachoMarimba.fromJson(j as Map<String, dynamic>))

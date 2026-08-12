@@ -10,6 +10,8 @@ import '../../core/providers.dart';
 import '../../core/session_provider.dart';
 import '../../core/ticket_ocr_service.dart';
 import '../../data/api_client.dart';
+import '../../data/operaciones_repository.dart';
+import '../../models/solicitud_autorizacion.dart';
 import '../../models/vehiculo.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_theme.dart';
@@ -39,9 +41,13 @@ class ComprobarCargaScreen extends ConsumerStatefulWidget {
 
 class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
   final _gasolineraController = TextEditingController();
+  final _folioEstacionController = TextEditingController();
 
   Vehiculo? _vehiculo;
+  SolicitudAutorizacion? _solicitud;
   double _litrosCargados = 0;
+  double _litrosConsumoPropio = 0;
+  double _litrosCargaGranel = 0;
   double _kmAlCargar = 0;
   String? _fotoTicketPath;
   String? _fotoTableroPath;
@@ -61,6 +67,7 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
         .read(operacionesRepositoryProvider)
         .solicitudPorFolio(widget.folioAutorizacion);
     if (solicitud != null) {
+      _solicitud = solicitud;
       _vehiculo = ref
           .read(vehiculosRepositoryProvider)
           .porId(solicitud.vehiculoId);
@@ -70,6 +77,7 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
   @override
   void dispose() {
     _gasolineraController.dispose();
+    _folioEstacionController.dispose();
     super.dispose();
   }
 
@@ -108,15 +116,44 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
     }
   }
 
+  bool get _usaPartidas => _solicitud?.partidas.isNotEmpty ?? false;
+  double get _totalCargado => _usaPartidas
+      ? _litrosConsumoPropio + _litrosCargaGranel
+      : _litrosCargados;
+
+  List<SolicitudPartida>? get _partidasCarga {
+    if (!_usaPartidas) return null;
+    return [
+      if (_litrosConsumoPropio > 0)
+        SolicitudPartida(
+          tipo: TipoPartidaSolicitud.consumoPropio,
+          litrosSolicitados: _litrosConsumoPropio,
+          tipoCombustible: _solicitud!.partidas
+              .firstWhere((p) => p.tipo == TipoPartidaSolicitud.consumoPropio)
+              .tipoCombustible,
+        ),
+      if (_litrosCargaGranel > 0)
+        SolicitudPartida(
+          tipo: TipoPartidaSolicitud.cargaGranel,
+          litrosSolicitados: _litrosCargaGranel,
+          tipoCombustible: _solicitud!.partidas
+              .firstWhere((p) => p.tipo == TipoPartidaSolicitud.cargaGranel)
+              .tipoCombustible,
+        ),
+    ];
+  }
+
   bool get _formularioCompleto =>
       _vehiculo != null &&
-      _litrosCargados > 0 &&
+      _totalCargado > 0 &&
       _kmAlCargar > 0 &&
       _gasolineraController.text.trim().isNotEmpty &&
       _fotoTicketPath != null &&
-      _fotoTableroPath != null;
+      _fotoTableroPath != null &&
+      (!_usaPartidas || _folioEstacionController.text.trim().isNotEmpty);
 
   Future<void> _enviar() async {
+    if (_enviando) return;
     if (!_formularioCompleto) {
       setState(
         () => _errorGeneral =
@@ -142,6 +179,14 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
     // Sin conexión detectada de entrada: se encola directo, igual que en
     // SolicitarCargaScreen — evita esperar el timeout de red.
     if (ref.read(conectividadProvider).valueOrNull == false) {
+      if (_usaPartidas) {
+        setState(() {
+          _enviando = false;
+          _errorGeneral =
+              'La carga por conceptos requiere conexiÃ³n para validar el saldo de cada partida.';
+        });
+        return;
+      }
       await _encolarSinConexion();
       return;
     }
@@ -154,12 +199,22 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
             choferId: perfil.id,
             vehiculoId: _vehiculo!.id,
             folioAutorizacion: widget.folioAutorizacion,
-            litrosCargados: _litrosCargados,
+            litrosCargados: _totalCargado,
             kmAlCargar: _kmAlCargar,
             gasolinera: _gasolineraController.text.trim(),
             fotoTicketPath: _fotoTicketPath,
             fotoTableroPath: _fotoTableroPath,
             litrosDetectadosOcr: _resultadoOcr?.litros,
+            partidas: _partidasCarga,
+            comprobantes: _usaPartidas
+                ? [
+                    ComprobanteEstacionCarga(
+                      folioEstacion: _folioEstacionController.text.trim(),
+                      concepto: 'visita_completa',
+                      litrosIndicados: _resultadoOcr?.litros,
+                    ),
+                  ]
+                : null,
           );
       HapticFeedback.mediumImpact();
       ref.read(operacionesTickProvider.notifier).state++;
@@ -173,6 +228,15 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
       if (mounted) context.go(RoutePaths.chofer);
     } on ApiException catch (e) {
       if (e.status == null) {
+        if (_usaPartidas) {
+          if (mounted) {
+            setState(
+              () => _errorGeneral =
+                  'No se pudo validar el saldo por partida. Conserva los datos y reintenta con conexiÃ³n.',
+            );
+          }
+          return;
+        }
         // Sin `status` HTTP = nunca llegó a un servidor — posible falso
         // positivo del chequeo de conectividad de arriba.
         await _encolarSinConexion();
@@ -279,20 +343,53 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
           ),
           if (_resultadoOcr != null && !_resultadoOcr!.sinDatos) ...[
             const SizedBox(height: 8),
-            _AvisoOcr(
-              resultado: _resultadoOcr!,
-              litrosEscritos: _litrosCargados,
-            ),
+            _AvisoOcr(resultado: _resultadoOcr!, litrosEscritos: _totalCargado),
           ],
           const SizedBox(height: 20),
-          StepperNumerico(
-            etiqueta: 'Litros cargados',
-            valor: _litrosCargados,
-            sufijo: 'L',
-            paso: 1,
-            decimales: 1,
-            onChanged: (v) => setState(() => _litrosCargados = v),
-          ),
+          if (_usaPartidas) ...[
+            if (_solicitud!.partidas.any(
+              (p) => p.tipo == TipoPartidaSolicitud.consumoPropio,
+            ))
+              StepperNumerico(
+                etiqueta: 'Litros cargados al motor',
+                valor: _litrosConsumoPropio,
+                sufijo: 'L',
+                paso: 1,
+                decimales: 1,
+                onChanged: (v) => setState(() => _litrosConsumoPropio = v),
+              ),
+            if (_solicitud!.partidas.length > 1) const SizedBox(height: 16),
+            if (_solicitud!.partidas.any(
+              (p) => p.tipo == TipoPartidaSolicitud.cargaGranel,
+            ))
+              StepperNumerico(
+                etiqueta: 'Litros cargados al tanque a granel',
+                valor: _litrosCargaGranel,
+                sufijo: 'L',
+                paso: 1,
+                decimales: 1,
+                onChanged: (v) => setState(() => _litrosCargaGranel = v),
+              ),
+            const SizedBox(height: 12),
+            Text('Total de la visita: ${_totalCargado.toStringAsFixed(1)} L'),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _folioEstacionController,
+              decoration: const InputDecoration(
+                labelText: 'Folio del ticket de estación',
+                prefixIcon: Icon(Icons.receipt_long_outlined),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ] else
+            StepperNumerico(
+              etiqueta: 'Litros cargados',
+              valor: _litrosCargados,
+              sufijo: 'L',
+              paso: 1,
+              decimales: 1,
+              onChanged: (v) => setState(() => _litrosCargados = v),
+            ),
           const SizedBox(height: 16),
           StepperNumerico(
             etiqueta: porHorometro

@@ -26,6 +26,16 @@ class DespachoMarimba {
     required this.registradoPor,
     required this.creadoEn,
     this.recorridoId,
+    this.responsableId,
+    this.horometro,
+    this.fotoHorometroPath,
+    this.medidorInicial,
+    this.medidorFinal,
+    this.fotoMedidorPath,
+    this.cantidadDeclarada,
+    this.tipoCombustible,
+    this.ubicacion,
+    this.observaciones,
   });
 
   final String id;
@@ -74,11 +84,22 @@ class DespachoMarimba {
   /// Recorrido (jornada) al que pertenece este despacho — `null` en un
   /// despacho suelto, sin pasar por el flujo de recorrido.
   final String? recorridoId;
+  final String? responsableId;
+  final double? horometro;
+  final String? fotoHorometroPath;
+  final double? medidorInicial;
+  final double? medidorFinal;
+  final String? fotoMedidorPath;
+  final bool? cantidadDeclarada;
+  final String? tipoCombustible;
+  final String? ubicacion;
+  final String? observaciones;
 
   /// Diferencia entre lo pedido y lo suministrado — `null` si no se
   /// capturó lo solicitado.
-  double? get diferenciaLitros =>
-      litrosSolicitados == null ? null : litrosSolicitados! - litrosSuministrados;
+  double? get diferenciaLitros => litrosSolicitados == null
+      ? null
+      : litrosSolicitados! - litrosSuministrados;
 
   factory DespachoMarimba.fromJson(Map<String, dynamic> json) {
     return DespachoMarimba(
@@ -90,9 +111,10 @@ class DespachoMarimba {
       residenteTexto: json['residenteTexto'] as String?,
       sitio: json['sitio'] as String?,
       litrosSolicitados: (json['litrosSolicitados'] as num?)?.toDouble(),
-      litrosSuministrados: (json['litrosSuministrados'] as num).toDouble(),
+      litrosSuministrados: _decimalDespacho(json['litrosSuministrados']),
       lecturaMedidor: (json['lecturaMedidor'] as num?)?.toDouble(),
-      precioReferenciaUsado: (json['precioReferenciaUsado'] as num?)?.toDouble(),
+      precioReferenciaUsado: (json['precioReferenciaUsado'] as num?)
+          ?.toDouble(),
       estado: json['estado'] == 'inactivo'
           ? EstadoDespacho.inactivo
           : EstadoDespacho.activo,
@@ -100,6 +122,16 @@ class DespachoMarimba {
       registradoPor: json['registradoPor'] as String,
       creadoEn: DateTime.parse(json['creadoEn'] as String),
       recorridoId: json['recorridoId'] as String?,
+      responsableId: json['responsableId'] as String?,
+      horometro: (json['horometro'] as num?)?.toDouble(),
+      fotoHorometroPath: json['fotoHorometroPath'] as String?,
+      medidorInicial: (json['medidorInicial'] as num?)?.toDouble(),
+      medidorFinal: (json['medidorFinal'] as num?)?.toDouble(),
+      fotoMedidorPath: json['fotoMedidorPath'] as String?,
+      cantidadDeclarada: json['cantidadDeclarada'] as bool?,
+      tipoCombustible: json['tipoCombustible'] as String?,
+      ubicacion: json['ubicacion'] as String?,
+      observaciones: json['observaciones'] as String?,
     );
   }
 
@@ -121,6 +153,25 @@ class DespachoMarimba {
       'registradoPor': registradoPor,
       'creadoEn': creadoEn.toIso8601String(),
       'recorridoId': recorridoId,
+      'responsableId': responsableId,
+      'horometro': horometro,
+      'fotoHorometroPath': fotoHorometroPath,
+      'medidorInicial': medidorInicial,
+      'medidorFinal': medidorFinal,
+      'fotoMedidorPath': fotoMedidorPath,
+      'cantidadDeclarada': cantidadDeclarada,
+      'tipoCombustible': tipoCombustible,
+      'ubicacion': ubicacion,
+      'observaciones': observaciones,
     };
   }
+}
+
+double _decimalDespacho(Object? value) {
+  if (value is num) return value.toDouble();
+  if (value is String) {
+    final parsed = double.tryParse(value);
+    if (parsed != null) return parsed;
+  }
+  throw const FormatException('Litros suministrados inválidos.');
 }

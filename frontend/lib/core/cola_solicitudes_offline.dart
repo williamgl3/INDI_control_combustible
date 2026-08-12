@@ -77,7 +77,11 @@ class ColaSolicitudesOffline {
     final prefs = await SharedPreferences.getInstance();
     final crudo = prefs.getStringList(_key) ?? const [];
     return crudo
-        .map((s) => SolicitudPendienteOffline.fromJson(jsonDecode(s) as Map<String, dynamic>))
+        .map(
+          (s) => SolicitudPendienteOffline.fromJson(
+            jsonDecode(s) as Map<String, dynamic>,
+          ),
+        )
         .toList();
   }
 
@@ -372,6 +376,7 @@ class RecorridoMarimbaPendienteOffline {
   const RecorridoMarimbaPendienteOffline({
     required this.idLocal,
     required this.marimbaId,
+    this.tipoCombustible,
     required this.frente,
     this.cargaId,
     required this.litrosIniciales,
@@ -383,6 +388,7 @@ class RecorridoMarimbaPendienteOffline {
 
   final String idLocal;
   final String marimbaId;
+  final String? tipoCombustible;
   final String frente;
   final String? cargaId;
   final double litrosIniciales;
@@ -397,6 +403,7 @@ class RecorridoMarimbaPendienteOffline {
     return RecorridoMarimbaPendienteOffline(
       idLocal: json['idLocal'] as String,
       marimbaId: json['marimbaId'] as String,
+      tipoCombustible: json['tipoCombustible'] as String?,
       frente: json['frente'] as String,
       cargaId: json['cargaId'] as String?,
       litrosIniciales: (json['litrosIniciales'] as num).toDouble(),
@@ -411,6 +418,7 @@ class RecorridoMarimbaPendienteOffline {
   Map<String, dynamic> toJson() => {
     'idLocal': idLocal,
     'marimbaId': marimbaId,
+    'tipoCombustible': tipoCombustible,
     'frente': frente,
     'cargaId': cargaId,
     'litrosIniciales': litrosIniciales,
@@ -424,6 +432,7 @@ class RecorridoMarimbaPendienteOffline {
     return RecorridoMarimbaPendienteOffline(
       idLocal: idLocal,
       marimbaId: marimbaId,
+      tipoCombustible: tipoCombustible,
       frente: frente,
       cargaId: cargaId,
       litrosIniciales: litrosIniciales,
@@ -735,10 +744,7 @@ class AvisosSincronizacionOfflineStorage {
   Future<void> agregar(AvisoSincronizacionFallida aviso) async {
     final prefs = await SharedPreferences.getInstance();
     final actuales = prefs.getStringList(_key) ?? const [];
-    await prefs.setStringList(_key, [
-      ...actuales,
-      jsonEncode(aviso.toJson()),
-    ]);
+    await prefs.setStringList(_key, [...actuales, jsonEncode(aviso.toJson())]);
   }
 
   Future<void> quitar(String id) async {
@@ -1090,9 +1096,20 @@ Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
   for (final recorrido in recorridos) {
     var idServidor = recorrido.idServidor;
     if (idServidor == null) {
+      if (recorrido.tipoCombustible == null) {
+        await _descartarRecorridoMarimbaCompleto(ref, recorrido.idLocal);
+        await _registrarAviso(
+          ref,
+          idLocal: recorrido.idLocal,
+          descripcion: 'Recorrido de marimba',
+          motivo: 'El recorrido pendiente no identifica el combustible.',
+        );
+        continue;
+      }
       try {
         final creado = await repo.abrirRecorrido(
           marimbaId: recorrido.marimbaId,
+          tipoCombustible: recorrido.tipoCombustible!,
           frente: recorrido.frente,
           cargaId: recorrido.cargaId,
           litrosIniciales: recorrido.litrosIniciales,
@@ -1100,7 +1117,10 @@ Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
           horasEquipoMenorInicio: recorrido.horasEquipoMenorInicio,
         );
         idServidor = creado.id;
-        await colaRecorridos.actualizarIdServidor(recorrido.idLocal, idServidor);
+        await colaRecorridos.actualizarIdServidor(
+          recorrido.idLocal,
+          idServidor,
+        );
       } on ApiException catch (e) {
         // Sin señal de verdad — probablemente todos los recorridos
         // pendientes fallarían igual ahora mismo, se reintenta en el
@@ -1139,6 +1159,7 @@ Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
       try {
         await repo.agregarDespacho(
           recorridoId: idServidor,
+          tipoCombustible: recorrido.tipoCombustible!,
           vehiculoDestinoId: despacho.vehiculoDestinoId,
           destinoTexto: despacho.destinoTexto,
           operadorTexto: despacho.operadorTexto,

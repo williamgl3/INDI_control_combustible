@@ -2,6 +2,7 @@ import Decimal from 'decimal.js';
 import { pool } from '../db/pool';
 import { registrarAuditoria } from './auditoriaService';
 import { precioDeDecimal } from './preciosService';
+import { ApiError } from '../utils/asyncHandler';
 
 // 'ticket' ya no es un tipo aparte — se unificó con 'comprobante' (ambos
 // representan el mismo documento: folio, litros, precio, IVA y total de
@@ -15,6 +16,35 @@ export type TipoEvidencia = 'tablero' | 'comprobante';
 // una hipótesis inicial que se espera ajustar con datos reales de campo,
 // no una regla de negocio fija.
 export const UMBRAL_DESVIACION_PRECIO_REFERENCIA = 0.25;
+
+export async function validarRelacionEvidencia(datos: {
+  usuarioId: string;
+  folioId?: string | null | undefined;
+  cargaId?: string | null | undefined;
+}): Promise<void> {
+  if (!datos.folioId && !datos.cargaId) {
+    throw new ApiError(400, 'La evidencia debe vincularse con una solicitud o carga propia.');
+  }
+  const { rows } = await pool.query<{
+    solicitud_propia: boolean; carga_propia: boolean; relacion_valida: boolean;
+  }>(
+    `SELECT
+       $2::uuid IS NULL OR EXISTS(SELECT 1 FROM solicitudes_autorizacion s WHERE s.id=$2 AND s.chofer_id=$1)
+         AS solicitud_propia,
+       $3::uuid IS NULL OR EXISTS(SELECT 1 FROM cargas c WHERE c.id=$3 AND c.chofer_id=$1)
+         AS carga_propia,
+       $2::uuid IS NULL OR $3::uuid IS NULL OR EXISTS(
+         SELECT 1 FROM cargas c JOIN solicitudes_autorizacion s
+           ON s.folio_autorizacion=c.folio_autorizacion
+         WHERE c.id=$3 AND s.id=$2 AND c.chofer_id=$1)
+         AS relacion_valida`,
+    [datos.usuarioId, datos.folioId ?? null, datos.cargaId ?? null],
+  );
+  const validacion = rows[0];
+  if (!validacion?.solicitud_propia || !validacion.carga_propia || !validacion.relacion_valida) {
+    throw new ApiError(404, 'La operación relacionada no está disponible.');
+  }
+}
 
 export interface Evidencia {
   id: string;

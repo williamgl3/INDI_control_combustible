@@ -186,6 +186,39 @@ void main() {
     );
   });
 
+  testWidgets('ruta antigua de despacho redirige al recorrido sin escribir', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        vehiculosRepositoryProvider.overrideWithValue(
+          MockVehiculosRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .iniciarSesion(
+          const Perfil(
+            id: '2',
+            usuario: 'supervisor1',
+            nombre: 'Supervisión',
+            correo: 'supervisor@example.com',
+            rol: RolUsuario.supervisor,
+          ),
+        );
+    final router = await pumpApp(tester, container: container);
+
+    router.go('/chofer/registrar-despacho');
+    await tester.pumpAndSettle();
+
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/chofer/recorrido-marimba',
+    );
+  });
+
   testWidgets('regreso desde solicitud sin historial usa fallback seguro', (
     tester,
   ) async {

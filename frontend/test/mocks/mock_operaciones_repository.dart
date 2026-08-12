@@ -242,6 +242,7 @@ class MockOperacionesRepository implements OperacionesRepository {
     required String actividad,
     required DateTime fechaProgramada,
     String? fotoTableroPath,
+    List<SolicitudPartida>? partidas,
   }) async {
     await Future.delayed(const Duration(milliseconds: 400));
 
@@ -363,6 +364,7 @@ class MockOperacionesRepository implements OperacionesRepository {
     required String resueltaPor,
     double? litrosAutorizados,
     String? motivo,
+    List<ResolucionPartida>? partidas,
   }) async {
     await Future.delayed(const Duration(milliseconds: 300));
     final indice = _solicitudes.indexWhere((s) => s.id == solicitudId);
@@ -396,6 +398,8 @@ class MockOperacionesRepository implements OperacionesRepository {
     String? fotoTicketPath,
     String? fotoTableroPath,
     double? litrosDetectadosOcr,
+    List<SolicitudPartida>? partidas,
+    List<ComprobanteEstacionCarga>? comprobantes,
   }) async {
     await Future.delayed(const Duration(milliseconds: 400));
     // Sin snapshot de precio de referencia aquí: a diferencia del

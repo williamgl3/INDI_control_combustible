@@ -12,6 +12,7 @@ class RecorridoMarimba {
   const RecorridoMarimba({
     required this.id,
     required this.marimbaId,
+    this.tipoCombustible,
     required this.operadorId,
     required this.frente,
     this.cargaId,
@@ -29,10 +30,17 @@ class RecorridoMarimba {
     this.fotoCierrePath,
     required this.iniciadoEn,
     this.cerradoEn,
+    this.registradoPor,
+    this.entradasGranelTotal,
+    this.existenciaFisica,
+    this.estadoConciliacion,
+    this.observacionesCierre,
+    this.fotoNivelPath,
   });
 
   final String id;
   final String marimbaId;
+  final String? tipoCombustible;
   final String operadorId;
 
   /// Ubicación/frente donde opera este recorrido (ej. "BANCO EL
@@ -66,11 +74,18 @@ class RecorridoMarimba {
   final String? fotoCierrePath;
   final DateTime iniciadoEn;
   final DateTime? cerradoEn;
+  final String? registradoPor;
+  final double? entradasGranelTotal;
+  final double? existenciaFisica;
+  final String? estadoConciliacion;
+  final String? observacionesCierre;
+  final String? fotoNivelPath;
 
   factory RecorridoMarimba.fromJson(Map<String, dynamic> json) {
     return RecorridoMarimba(
       id: json['id'] as String,
       marimbaId: json['marimbaId'] as String,
+      tipoCombustible: json['tipoCombustible'] as String?,
       operadorId: json['operadorId'] as String,
       frente: json['frente'] as String,
       cargaId: json['cargaId'] as String?,
@@ -96,6 +111,12 @@ class RecorridoMarimba {
       cerradoEn: json['cerradoEn'] == null
           ? null
           : DateTime.parse(json['cerradoEn'] as String),
+      registradoPor: json['registradoPor'] as String?,
+      entradasGranelTotal: (json['entradasGranelTotal'] as num?)?.toDouble(),
+      existenciaFisica: (json['existenciaFisica'] as num?)?.toDouble(),
+      estadoConciliacion: json['estadoConciliacion'] as String?,
+      observacionesCierre: json['observacionesCierre'] as String?,
+      fotoNivelPath: json['fotoNivelPath'] as String?,
     );
   }
 
@@ -103,6 +124,7 @@ class RecorridoMarimba {
     return {
       'id': id,
       'marimbaId': marimbaId,
+      'tipoCombustible': tipoCombustible,
       'operadorId': operadorId,
       'frente': frente,
       'cargaId': cargaId,
@@ -120,6 +142,12 @@ class RecorridoMarimba {
       'fotoCierrePath': fotoCierrePath,
       'iniciadoEn': iniciadoEn.toIso8601String(),
       'cerradoEn': cerradoEn?.toIso8601String(),
+      'registradoPor': registradoPor,
+      'entradasGranelTotal': entradasGranelTotal,
+      'existenciaFisica': existenciaFisica,
+      'estadoConciliacion': estadoConciliacion,
+      'observacionesCierre': observacionesCierre,
+      'fotoNivelPath': fotoNivelPath,
     };
   }
 }

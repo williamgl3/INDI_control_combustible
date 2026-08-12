@@ -2,7 +2,12 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler';
 import { requireAuth, requireRole, type AuthRequest } from '../middleware/auth';
-import { upload, rutaPublicaDeArchivo, verificarMagicBytes } from '../middleware/upload';
+import {
+  eliminarArchivosNuevos,
+  upload,
+  rutaPublicaDeArchivo,
+  verificarMagicBytes,
+} from '../middleware/upload';
 import * as evidenciasService from '../services/evidenciasService';
 
 export const evidenciasRouter = Router();
@@ -54,7 +59,8 @@ evidenciasRouter.post(
   ]),
   verificarMagicBytes,
   asyncHandler(async (req: AuthRequest, res) => {
-    const datos = subirSchema.parse(req.body);
+    try {
+      const datos = subirSchema.parse(req.body);
     const archivos = req.files as
       | { foto?: Express.Multer.File[]; fotos?: Express.Multer.File[] }
       | undefined;
@@ -67,7 +73,12 @@ evidenciasRouter.post(
       return;
     }
 
-    const evidencia = await evidenciasService.subir({
+      await evidenciasService.validarRelacionEvidencia({
+        usuarioId: req.usuarioActual!.sub,
+        folioId: datos.folio_id,
+        cargaId: datos.carga_id,
+      });
+      const evidencia = await evidenciasService.subir({
       usuarioId: req.usuarioActual!.sub,
       tipo: datos.tipo,
       fotoUrls: fotoFiles.map((f) => rutaPublicaDeArchivo(f.filename)),
@@ -82,7 +93,11 @@ evidenciasRouter.post(
       montoPagado: datos.monto_pagado ?? null,
     });
 
-    res.status(201).json(evidencia);
+      res.status(201).json(evidencia);
+    } catch (error) {
+      await eliminarArchivosNuevos(req);
+      throw error;
+    }
   }),
 );
 

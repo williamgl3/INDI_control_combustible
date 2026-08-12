@@ -21,6 +21,7 @@ class _FakeRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
   @override
   Future<RecorridoMarimba> abrirRecorrido({
     required String marimbaId,
+    required String tipoCombustible,
     required String frente,
     String? cargaId,
     required double litrosIniciales,
@@ -43,6 +44,7 @@ class _FakeRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
   @override
   Future<DespachoMarimba> agregarDespacho({
     required String recorridoId,
+    required String tipoCombustible,
     String? vehiculoDestinoId,
     String? destinoTexto,
     required String operadorTexto,
@@ -70,6 +72,9 @@ class _FakeRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
     double? kmCierre,
     double? horasEquipoMenorCierre,
     required String fotoCierrePath,
+    double? existenciaFisica,
+    String? fotoNivelPath,
+    String? observaciones,
   }) async {
     llamadas.add('cerrar:$recorridoId');
     return RecorridoMarimba(
@@ -127,6 +132,7 @@ void main() {
             RecorridoMarimbaPendienteOffline(
               idLocal: recorridoIdLocal,
               marimbaId: 'marimba-1',
+              tipoCombustible: 'Diésel',
               frente: 'BANCO EL HUIZACHITO',
               litrosIniciales: 3000,
               creadaEn: DateTime(2026, 1, 1),

@@ -15,10 +15,15 @@ class MockDespachosMarimbaRepository implements DespachosMarimbaRepository {
   }
 
   @override
-  Future<double> saldoDeMarimba(String marimbaId) async => _saldos[marimbaId] ?? 0;
+  Future<double> saldoDeMarimba(
+    String marimbaId,
+    String tipoCombustible,
+  ) async => _saldos['$marimbaId:$tipoCombustible'] ?? _saldos[marimbaId] ?? 0;
 
   @override
-  Future<List<DespachoMarimba>> listarDespachosDeMarimba(String marimbaId) async {
+  Future<List<DespachoMarimba>> listarDespachosDeMarimba(
+    String marimbaId,
+  ) async {
     return _despachos.where((d) => d.marimbaId == marimbaId).toList();
   }
 

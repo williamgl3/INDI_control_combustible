@@ -70,6 +70,19 @@ export interface Vehiculo {
 }
 
 export type EstadoSolicitud = 'pendiente' | 'aprobada' | 'rechazada';
+export type TipoPartidaSolicitud = 'consumo_propio' | 'carga_granel';
+
+export interface SolicitudPartida {
+  id: string;
+  solicitudId: string;
+  tipo: TipoPartidaSolicitud;
+  litrosSolicitados: string;
+  litrosAutorizados: string | null;
+  litrosCargados: string;
+  tipoCombustible: string;
+  estado: EstadoSolicitud;
+  observaciones: string | null;
+}
 
 export interface SolicitudAutorizacion {
   id: string;
@@ -91,6 +104,7 @@ export interface SolicitudAutorizacion {
   comentario: string | null;
   creadaEn: string;
   fotoTableroPath: string | null;
+  partidas?: SolicitudPartida[];
 }
 
 export interface Carga {
@@ -190,7 +204,7 @@ export interface DespachoMarimba {
   // `RecorridoMarimba.frente` cuando `recorridoId` no es null.
   sitio: string | null;
   litrosSolicitados: number | null;
-  litrosSuministrados: number;
+  litrosSuministrados: string;
   lecturaMedidor: number | null;
   precioReferenciaUsado: number | null;
   estado: EstadoDespacho;
@@ -198,11 +212,22 @@ export interface DespachoMarimba {
   registradoPor: string;
   creadoEn: string;
   recorridoId: string | null;
+  responsableId?: string | null;
+  horometro?: number | null;
+  fotoHorometroPath?: string | null;
+  medidorInicial?: number | null;
+  medidorFinal?: number | null;
+  fotoMedidorPath?: string | null;
+  cantidadDeclarada?: boolean | null;
+  tipoCombustible?: string | null;
+  ubicacion?: string | null;
+  observaciones?: string | null;
 }
 
 export interface SaldoMarimba {
   marimbaId: string;
-  saldoActual: number;
+  tipoCombustible: string;
+  saldoActual: string;
 }
 
 export type EstadoRecorridoMarimba = 'abierto' | 'cerrado';
@@ -210,6 +235,7 @@ export type EstadoRecorridoMarimba = 'abierto' | 'cerrado';
 export interface RecorridoMarimba {
   id: string;
   marimbaId: string;
+  tipoCombustible?: string | null;
   operadorId: string;
   frente: string;
   cargaId: string | null;
@@ -227,6 +253,12 @@ export interface RecorridoMarimba {
   fotoCierrePath: string | null;
   iniciadoEn: string;
   cerradoEn: string | null;
+  registradoPor?: string | null;
+  entradasGranelTotal?: number | null;
+  existenciaFisica?: number | null;
+  estadoConciliacion?: 'conciliado' | 'diferencia_pendiente' | null;
+  observacionesCierre?: string | null;
+  fotoNivelPath?: string | null;
 }
 
 /// Payload embebido en el JWT. `tokenVersion` habilita revocación: se

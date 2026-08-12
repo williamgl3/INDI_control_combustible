@@ -3,9 +3,15 @@ import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler';
 import { requireAuth, requireRole, type AuthRequest } from '../middleware/auth';
 import { ApiError } from '../utils/asyncHandler';
-import { upload, rutaPublicaDeArchivo, verificarMagicBytes } from '../middleware/upload';
+import {
+  limpiarArchivosAnteError,
+  upload,
+  rutaPublicaDeArchivo,
+  verificarMagicBytes,
+} from '../middleware/upload';
 import * as cargasService from '../services/cargasService';
 import * as solicitudesService from '../services/solicitudesService';
+import * as marimbaPartidasService from '../services/marimbaPartidasService';
 
 export const cargasRouter = Router();
 
@@ -57,10 +63,23 @@ const registrarCargaSchema = z.object({
   // Carga a granel de la marimba: N folios de una sola visita a la estación
   // (ver migración 0015). Vacío para el flujo normal de chofer individual.
   foliosAdicionales: z.array(z.string().trim().min(1)).optional(),
-  litrosCargados: z.number().positive(),
+  litrosCargados: z.number().positive().optional(),
+  partidas: z.array(z.object({
+    tipo: z.enum(['consumo_propio', 'carga_granel']),
+    litros: z.number().positive(),
+    tipoCombustible: z.enum(['Diésel', 'Magna', 'Premium']),
+  })).min(1).max(2).optional(),
+  comprobantes: z.array(z.object({
+    folioEstacion: z.string().trim().min(1).max(100),
+    concepto: z.enum(['consumo_propio', 'carga_granel', 'visita_completa']),
+    litrosIndicados: z.number().positive().nullish(),
+    fotoPath: z.string().trim().nullish(),
+    fecha: z.string().datetime().nullish(),
+  })).max(20).optional().default([]),
   kmAlCargar: z.number().positive(),
   gasolinera: z.string().trim().min(1),
   litrosDetectadosOcr: z.coerce.number().nullish(),
+  recorridoId: z.string().uuid().nullish(),
 });
 
 /// Recibe las 2 fotos (ticket + tablero) como `multipart/form-data`, campos
@@ -81,15 +100,23 @@ cargasRouter.post(
     // lo manda, llega como string JSON (ej. '["215521","215522"]'), no
     // como array real (multer no parsea JSON anidado en campos de texto).
     const foliosAdicionalesRaw = req.body.foliosAdicionales;
+    const partidasRaw = req.body.partidas;
+    const comprobantesRaw = req.body.comprobantes;
     const datos = registrarCargaSchema.parse({
       ...req.body,
-      litrosCargados: Number(req.body.litrosCargados),
+      litrosCargados: req.body.litrosCargados == null ? undefined : Number(req.body.litrosCargados),
       kmAlCargar: Number(req.body.kmAlCargar),
       foliosAdicionales:
         typeof foliosAdicionalesRaw === 'string'
           ? (JSON.parse(foliosAdicionalesRaw) as unknown)
           : foliosAdicionalesRaw,
+      partidas: typeof partidasRaw === 'string' ? JSON.parse(partidasRaw) : partidasRaw,
+      comprobantes: typeof comprobantesRaw === 'string' ? JSON.parse(comprobantesRaw) : comprobantesRaw,
     });
+
+    if (!datos.partidas && datos.litrosCargados === undefined) {
+      throw new ApiError(400, 'Indica los litros cargados o el desglose por partidas.');
+    }
 
     const solicitud = await solicitudesService.buscarSolicitudPorFolio(datos.folioAutorizacion);
     if (!solicitud || solicitud.estado !== 'aprobada') {
@@ -100,15 +127,41 @@ cargasRouter.post(
       | { fotoTicket?: Express.Multer.File[]; fotoTablero?: Express.Multer.File[] }
       | undefined;
 
+    const fotoTicketPath = archivos?.fotoTicket?.[0]
+      ? rutaPublicaDeArchivo(archivos.fotoTicket[0].filename) : null;
+    const fotoTableroPath = archivos?.fotoTablero?.[0]
+      ? rutaPublicaDeArchivo(archivos.fotoTablero[0].filename) : null;
+    if (datos.partidas) {
+      if (datos.foliosAdicionales?.length) {
+        throw new ApiError(400, 'Usa comprobantes de estaciÃ³n para una carga por partidas.');
+      }
+      const resultado = await marimbaPartidasService.registrarCargaConPartidas({
+        usuarioId: req.usuarioActual!.sub,
+        vehiculoId: datos.vehiculoId,
+        folioAutorizacion: datos.folioAutorizacion,
+        partidas: datos.partidas,
+        comprobantes: datos.comprobantes,
+        kmAlCargar: datos.kmAlCargar,
+        gasolinera: datos.gasolinera,
+        recorridoId: datos.recorridoId,
+        fotoTicketPath,
+        fotoTableroPath,
+        litrosDetectadosOcr: datos.litrosDetectadosOcr,
+      });
+      res.status(201).json(resultado);
+      return;
+    }
     const carga = await cargasService.registrarCarga({
       choferId: req.usuarioActual!.sub,
-      ...datos,
-      fotoTicketPath: archivos?.fotoTicket?.[0]
-        ? rutaPublicaDeArchivo(archivos.fotoTicket[0].filename)
-        : null,
-      fotoTableroPath: archivos?.fotoTablero?.[0]
-        ? rutaPublicaDeArchivo(archivos.fotoTablero[0].filename)
-        : null,
+      vehiculoId: datos.vehiculoId,
+      folioAutorizacion: datos.folioAutorizacion,
+      foliosAdicionales: datos.foliosAdicionales,
+      litrosCargados: datos.litrosCargados!,
+      kmAlCargar: datos.kmAlCargar,
+      gasolinera: datos.gasolinera,
+      litrosDetectadosOcr: datos.litrosDetectadosOcr,
+      fotoTicketPath,
+      fotoTableroPath,
     });
     res.status(201).json(carga);
   }),
@@ -134,3 +187,5 @@ cargasRouter.patch(
     res.json(carga);
   }),
 );
+
+cargasRouter.use(limpiarArchivosAnteError);

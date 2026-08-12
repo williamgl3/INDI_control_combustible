@@ -17,6 +17,111 @@ enum EstadoSolicitud { pendiente, aprobada, rechazada }
 /// estado nunca puede desincronizarse de las cantidades reales.
 enum EstadoVisualSolicitud { pendiente, autorizada, ajustada, rechazada }
 
+enum TipoPartidaSolicitud { consumoPropio, cargaGranel }
+
+enum EstadoPartidaSolicitud { pendiente, aprobada, rechazada }
+
+double _decimalApi(Object? value, String campo) {
+  if (value is num) return value.toDouble();
+  if (value is String) {
+    final parsed = double.tryParse(value);
+    if (parsed != null) return parsed;
+  }
+  throw FormatException('Decimal inválido en $campo.');
+}
+
+double? _decimalApiNullable(Object? value, String campo) =>
+    value == null ? null : _decimalApi(value, campo);
+
+@immutable
+class SolicitudPartida {
+  const SolicitudPartida({
+    this.id,
+    required this.tipo,
+    required this.litrosSolicitados,
+    required this.tipoCombustible,
+    this.litrosAutorizados,
+    this.litrosCargados = 0,
+    this.estado = EstadoPartidaSolicitud.pendiente,
+    this.observaciones,
+  });
+
+  final String? id;
+  final TipoPartidaSolicitud tipo;
+  final double litrosSolicitados;
+  final double? litrosAutorizados;
+  final double litrosCargados;
+  final String tipoCombustible;
+  final EstadoPartidaSolicitud estado;
+  final String? observaciones;
+
+  String get tipoApi => switch (tipo) {
+    TipoPartidaSolicitud.consumoPropio => 'consumo_propio',
+    TipoPartidaSolicitud.cargaGranel => 'carga_granel',
+  };
+
+  String get etiqueta => switch (tipo) {
+    TipoPartidaSolicitud.consumoPropio => 'Consumo propio',
+    TipoPartidaSolicitud.cargaGranel => 'Carga a granel',
+  };
+
+  factory SolicitudPartida.fromJson(Map<String, dynamic> json) {
+    final tipo = switch (json['tipo']) {
+      'consumo_propio' => TipoPartidaSolicitud.consumoPropio,
+      'carga_granel' => TipoPartidaSolicitud.cargaGranel,
+      _ => throw const FormatException('Tipo de partida no reconocido.'),
+    };
+    return SolicitudPartida(
+      id: json['id'] as String?,
+      tipo: tipo,
+      litrosSolicitados: _decimalApi(
+        json['litrosSolicitados'],
+        'litrosSolicitados',
+      ),
+      litrosAutorizados: _decimalApiNullable(
+        json['litrosAutorizados'],
+        'litrosAutorizados',
+      ),
+      litrosCargados:
+          _decimalApiNullable(json['litrosCargados'], 'litrosCargados') ?? 0,
+      tipoCombustible: json['tipoCombustible'] as String,
+      estado: EstadoPartidaSolicitud.values.byName(json['estado'] as String),
+      observaciones: json['observaciones'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toRequestJson() => {
+    'tipo': tipoApi,
+    'litros': litrosSolicitados,
+    'tipoCombustible': tipoCombustible,
+    if (observaciones != null) 'observaciones': observaciones,
+  };
+}
+
+@immutable
+class ResolucionPartida {
+  const ResolucionPartida({
+    required this.tipo,
+    required this.aprobar,
+    this.litrosAutorizados,
+    this.observaciones,
+  });
+
+  final TipoPartidaSolicitud tipo;
+  final bool aprobar;
+  final double? litrosAutorizados;
+  final String? observaciones;
+
+  Map<String, dynamic> toJson() => {
+    'tipo': tipo == TipoPartidaSolicitud.consumoPropio
+        ? 'consumo_propio'
+        : 'carga_granel',
+    'aprobar': aprobar,
+    'litrosAutorizados': litrosAutorizados,
+    'observaciones': observaciones,
+  };
+}
+
 /// Solicitud de autorización de carga de combustible hecha por un chofer
 /// desde /chofer/solicitar, cuya respuesta se muestra en /chofer/respuesta.
 ///
@@ -43,6 +148,7 @@ class SolicitudAutorizacion {
     this.comentario,
     this.pendienteDeSincronizar = false,
     this.fotoTableroPath,
+    this.partidas = const [],
   });
 
   final String id;
@@ -106,6 +212,7 @@ class SolicitudAutorizacion {
   /// antes de ir a cargar combustible. `null` en solicitudes anteriores a
   /// este campo.
   final String? fotoTableroPath;
+  final List<SolicitudPartida> partidas;
 
   /// Ver [EstadoVisualSolicitud]. `aprobada` con 0 litros autorizados
   /// cuenta como rechazo real (unidad inactiva/sin actividad) — el admin
@@ -147,6 +254,7 @@ class SolicitudAutorizacion {
     String? comentario,
     bool? pendienteDeSincronizar,
     String? fotoTableroPath,
+    List<SolicitudPartida>? partidas,
   }) {
     return SolicitudAutorizacion(
       id: id ?? this.id,
@@ -167,6 +275,7 @@ class SolicitudAutorizacion {
       pendienteDeSincronizar:
           pendienteDeSincronizar ?? this.pendienteDeSincronizar,
       fotoTableroPath: fotoTableroPath ?? this.fotoTableroPath,
+      partidas: partidas ?? this.partidas,
     );
   }
 
@@ -189,6 +298,11 @@ class SolicitudAutorizacion {
       comentario: json['comentario'] as String?,
       pendienteDeSincronizar: json['pendienteDeSincronizar'] as bool? ?? false,
       fotoTableroPath: json['fotoTableroPath'] as String?,
+      partidas: (json['partidas'] as List<dynamic>? ?? const [])
+          .map(
+            (item) => SolicitudPartida.fromJson(item as Map<String, dynamic>),
+          )
+          .toList(growable: false),
     );
   }
 
@@ -211,6 +325,7 @@ class SolicitudAutorizacion {
       'comentario': comentario,
       'pendienteDeSincronizar': pendienteDeSincronizar,
       'fotoTableroPath': fotoTableroPath,
+      'partidas': partidas.map((partida) => partida.toRequestJson()).toList(),
     };
   }
 }

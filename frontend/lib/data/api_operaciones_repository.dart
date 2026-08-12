@@ -57,15 +57,12 @@ class ApiOperacionesRepository implements OperacionesRepository {
       final resumen =
           await _client.get('/solicitudes/resumen-presupuesto')
               as Map<String, dynamic>;
-      presupuestoSemanalTotal =
-          (resumen['presupuestoSemanalTotal'] as num).toDouble();
+      presupuestoSemanalTotal = (resumen['presupuestoSemanalTotal'] as num)
+          .toDouble();
 
       final solicitudesData = await _client.get('/solicitudes') as List;
       _solicitudes = solicitudesData
-          .map(
-            (j) =>
-                SolicitudAutorizacion.fromJson(j as Map<String, dynamic>),
-          )
+          .map((j) => SolicitudAutorizacion.fromJson(j as Map<String, dynamic>))
           .toList();
 
       final cargasData = await _client.get('/cargas') as List;
@@ -80,10 +77,7 @@ class ApiOperacionesRepository implements OperacionesRepository {
     } else {
       final solicitudesData = await _client.get('/solicitudes/mias') as List;
       _solicitudes = solicitudesData
-          .map(
-            (j) =>
-                SolicitudAutorizacion.fromJson(j as Map<String, dynamic>),
-          )
+          .map((j) => SolicitudAutorizacion.fromJson(j as Map<String, dynamic>))
           .toList();
 
       final cargasData = await _client.get('/cargas/mias') as List;
@@ -197,10 +191,7 @@ class ApiOperacionesRepository implements OperacionesRepository {
   }) async {
     final data = await _client.patch(
       '/cargas/$cargaId',
-      body: {
-        'litrosCargados': ?litrosCargados,
-        'kmAlCargar': ?kmAlCargar,
-      },
+      body: {'litrosCargados': ?litrosCargados, 'kmAlCargar': ?kmAlCargar},
     );
     final carga = Carga.fromJson(data as Map<String, dynamic>);
     final indice = _cargas.indexWhere((c) => c.id == carga.id);
@@ -220,12 +211,17 @@ class ApiOperacionesRepository implements OperacionesRepository {
     required String actividad,
     required DateTime fechaProgramada,
     String? fotoTableroPath,
+    List<SolicitudPartida>? partidas,
   }) async {
     final data = await _client.postMultipart(
       '/solicitudes',
       campos: {
         'vehiculoId': vehiculo.id,
-        'litrosSolicitados': '$litrosSolicitados',
+        if (partidas == null) 'litrosSolicitados': '$litrosSolicitados',
+        if (partidas != null)
+          'partidas': jsonEncode(
+            partidas.map((partida) => partida.toRequestJson()).toList(),
+          ),
         'esUrgente': '$esUrgente',
         'motivoChofer': ?motivoChofer,
         'actividad': actividad,
@@ -269,13 +265,16 @@ class ApiOperacionesRepository implements OperacionesRepository {
     required String resueltaPor,
     double? litrosAutorizados,
     String? motivo,
+    List<ResolucionPartida>? partidas,
   }) async {
     final data = await _client.patch(
       '/solicitudes/$solicitudId/resolver',
       body: {
-        'aprobar': aprobar,
+        if (partidas == null) 'aprobar': aprobar,
         'litrosAutorizados': litrosAutorizados,
         'motivo': motivo,
+        if (partidas != null)
+          'partidas': partidas.map((partida) => partida.toJson()).toList(),
       },
     );
     final solicitud = SolicitudAutorizacion.fromJson(
@@ -300,6 +299,8 @@ class ApiOperacionesRepository implements OperacionesRepository {
     String? fotoTicketPath,
     String? fotoTableroPath,
     double? litrosDetectadosOcr,
+    List<SolicitudPartida>? partidas,
+    List<ComprobanteEstacionCarga>? comprobantes,
   }) async {
     final data = await _client.postMultipart(
       '/cargas',
@@ -310,18 +311,27 @@ class ApiOperacionesRepository implements OperacionesRepository {
         // JSON, el backend lo parsea (ver `cargas.routes.ts`).
         if (foliosAdicionales != null && foliosAdicionales.isNotEmpty)
           'foliosAdicionales': jsonEncode(foliosAdicionales),
-        'litrosCargados': '$litrosCargados',
+        if (partidas == null) 'litrosCargados': '$litrosCargados',
+        if (partidas != null)
+          'partidas': jsonEncode(
+            partidas.map((partida) => partida.toRequestJson()).toList(),
+          ),
+        if (comprobantes != null)
+          'comprobantes': jsonEncode(
+            comprobantes.map((comprobante) => comprobante.toJson()).toList(),
+          ),
         'kmAlCargar': '$kmAlCargar',
         'gasolinera': gasolinera,
         if (litrosDetectadosOcr != null)
           'litrosDetectadosOcr': '$litrosDetectadosOcr',
       },
-      archivos: {
-        'fotoTicket': fotoTicketPath,
-        'fotoTablero': fotoTableroPath,
-      },
+      archivos: {'fotoTicket': fotoTicketPath, 'fotoTablero': fotoTableroPath},
     );
-    final carga = Carga.fromJson(data as Map<String, dynamic>);
+    final respuesta = data as Map<String, dynamic>;
+    final carga = Carga.fromJson(
+      (partidas == null ? respuesta : respuesta['carga'])
+          as Map<String, dynamic>,
+    );
     _cargas = [..._cargas, carga];
     _cargaAbiertaDeHoy = carga;
     return carga;
@@ -406,8 +416,7 @@ class ApiOperacionesRepository implements OperacionesRepository {
   @override
   Future<void> cargarHistorialLecturas(String vehiculoId) async {
     final data =
-        await _client.get('/vehiculos/$vehiculoId/historial-lecturas')
-            as List;
+        await _client.get('/vehiculos/$vehiculoId/historial-lecturas') as List;
     _historialPorVehiculo[vehiculoId] = data
         .map(
           (j) => (
