@@ -27,6 +27,7 @@ class RoutePaths {
   static const choferSubirEvidencias = '/chofer/subir-evidencias';
 
   static const administrativo = '/administrativo';
+  static const administrativoMarimba = '/administrativo/marimba-pipa';
   static const administrativoChoferDetalle = '/administrativo/chofer';
 
   /// Rutas accesibles sin sesión iniciada.

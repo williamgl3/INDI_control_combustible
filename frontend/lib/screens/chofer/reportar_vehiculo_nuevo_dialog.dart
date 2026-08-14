@@ -95,7 +95,7 @@ class _ReportarVehiculoNuevoDialogState
             modelo: _modeloController.text.trim(),
           );
       ref.read(operacionesTickProvider.notifier).state++;
-      ref.invalidate(catalogoUnidadesProvider);
+      ref.read(catalogoUnidadesProvider.notifier).publicarCambiosLocales();
       if (mounted) Navigator.of(context).pop(vehiculo);
     } on ApiException catch (e) {
       if (mounted) setState(() => _errorGeneral = e.mensaje);

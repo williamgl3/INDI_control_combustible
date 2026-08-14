@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:indi_combustible/core/session_provider.dart';
 import 'package:indi_combustible/core/providers.dart';
 import 'package:indi_combustible/models/perfil.dart';
+import 'package:indi_combustible/models/panel_marimba.dart';
 import 'package:indi_combustible/router/app_router.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
 import 'mocks/mock_vehiculos_repository.dart';
@@ -28,6 +29,58 @@ void main() {
     await tester.pumpAndSettle();
     return router;
   }
+
+  testWidgets('la ruta administrativa de Marimba/Pipa respeta cada rol', (
+    tester,
+  ) async {
+    for (final rol in RolUsuario.values) {
+      final container = ProviderContainer(
+        overrides: [
+          resumenUnidadesMarimbaProvider.overrideWith((ref) async => const []),
+          recorridosAdministrativosMarimbaProvider.overrideWith(
+            (ref, filtros) async => const PaginaRecorridosMarimba(
+              items: [],
+              total: 0,
+              page: 1,
+              limit: 25,
+              totalPages: 0,
+            ),
+          ),
+        ],
+      );
+      container
+          .read(sessionProvider.notifier)
+          .iniciarSesion(
+            Perfil(
+              id: 'panel-${rol.name}',
+              usuario: rol.name,
+              nombre: 'Cuenta',
+              correo: '${rol.name}@example.com',
+              rol: rol,
+            ),
+          );
+      final router = await pumpApp(tester, container: container);
+      router.go('/administrativo/marimba-pipa');
+      await tester.pumpAndSettle();
+      if (rol == RolUsuario.administrativo || rol == RolUsuario.superadmin) {
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          '/administrativo/marimba-pipa',
+        );
+        expect(find.text('Marimba/Pipa'), findsWidgets);
+        router.go(router.routeInformationProvider.value.uri.toString());
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          '/administrativo/marimba-pipa',
+        );
+      } else {
+        expect(router.routeInformationProvider.value.uri.path, '/chofer');
+      }
+      container.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
+  });
 
   testWidgets(
     'sin sesión: rutas públicas se muestran, /chofer redirige a /login',
@@ -98,6 +151,73 @@ void main() {
     expect(find.text('Cargar la marimba'), findsOneWidget);
     expect(find.text('Registrar despacho'), findsOneWidget);
   });
+
+  testWidgets('supervisor puede abrir evidencias y conserva recorridos', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .iniciarSesion(
+          const Perfil(
+            id: '2',
+            usuario: 'supervisor1',
+            nombre: 'Supervisión',
+            correo: 'supervisor@example.com',
+            rol: RolUsuario.supervisor,
+          ),
+        );
+    final router = await pumpApp(tester, container: container);
+
+    router.go('/chofer/subir-evidencias');
+    await tester.pumpAndSettle();
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/chofer/subir-evidencias',
+    );
+
+    router.go('/chofer/recorrido-marimba');
+    await tester.pumpAndSettle();
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/chofer/recorrido-marimba',
+    );
+  });
+
+  for (final rol in [RolUsuario.administrativo, RolUsuario.superadmin]) {
+    testWidgets('${rol.name} no abre rutas operativas manualmente', (
+      tester,
+    ) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      container
+          .read(sessionProvider.notifier)
+          .iniciarSesion(
+            Perfil(
+              id: '3',
+              usuario: rol.name,
+              nombre: 'Cuenta administrativa',
+              correo: '${rol.name}@example.com',
+              rol: rol,
+            ),
+          );
+      final router = await pumpApp(tester, container: container);
+
+      for (final ruta in [
+        '/chofer/cerrar-dia',
+        '/chofer/subir-evidencias',
+        '/chofer/recorrido-marimba',
+      ]) {
+        router.go(ruta);
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          '/administrativo',
+        );
+      }
+    });
+  }
 
   testWidgets('rutas semánticas sobreviven deep link y respetan el rol', (
     tester,

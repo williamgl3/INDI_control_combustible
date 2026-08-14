@@ -1,22 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/app_logger.dart';
 import '../../../core/providers.dart';
+import '../../../models/despacho_marimba.dart';
+import '../../../models/panel_marimba.dart';
 import '../../../models/recorrido_marimba.dart';
-import '../../../theme/app_section_colors.dart';
-import '../../../theme/app_theme.dart';
-import '../../../widgets/app_card.dart';
 import '../../../widgets/contenido_responsivo.dart';
 import '../../../widgets/estado_vacio.dart';
-import '../../../widgets/ios_segmented_control.dart';
 
-enum _FiltroRecorridos { todos, requierenRevision }
-
-/// Pestaña "Marimba": recorridos (jornadas de despacho) del día/rango,
-/// con la conciliación de litros calculada al cierre — separada de
-/// Concentrado/Finanzas porque esas miden combustible por vehículo
-/// individual, no por jornada con control de merma (ver diseño acordado).
 class MarimbaTab extends ConsumerStatefulWidget {
   const MarimbaTab({super.key});
 
@@ -25,42 +16,31 @@ class MarimbaTab extends ConsumerStatefulWidget {
 }
 
 class _MarimbaTabState extends ConsumerState<MarimbaTab> {
-  _FiltroRecorridos _filtro = _FiltroRecorridos.todos;
-  bool _cargando = true;
-  String? _error;
-  List<RecorridoMarimba> _recorridos = [];
+  FiltrosRecorridosMarimba filtros = const FiltrosRecorridosMarimba();
 
-  @override
-  void initState() {
-    super.initState();
-    _cargar();
-  }
-
-  Future<void> _cargar() async {
-    setState(() {
-      _cargando = true;
-      _error = null;
-    });
-    try {
-      final recorridos = await ref
-          .read(recorridosMarimbaRepositoryProvider)
-          .listarRecorridos(
-            requiereRevision: _filtro == _FiltroRecorridos.requierenRevision
-                ? true
-                : null,
-          );
-      if (mounted) setState(() => _recorridos = recorridos);
-    } catch (e) {
-      AppLogger.error('MarimbaTab._cargar', e);
-      if (mounted) setState(() => _error = 'No pudimos cargar los recorridos.');
-    } finally {
-      if (mounted) setState(() => _cargando = false);
-    }
+  void _filtrar({
+    String? categoria,
+    String? combustible,
+    String? estado,
+    bool? revision,
+  }) {
+    setState(
+      () => filtros = FiltrosRecorridosMarimba(
+        categoria: categoria,
+        tipoCombustible: combustible,
+        estado: estado,
+        requiereRevision: revision,
+        limit: filtros.limit,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final resumen = ref.watch(resumenUnidadesMarimbaProvider);
+    final historial = ref.watch(
+      recorridosAdministrativosMarimbaProvider(filtros),
+    );
     return ContenidoResponsivo(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -68,209 +48,336 @@ class _MarimbaTabState extends ConsumerState<MarimbaTab> {
           Row(
             children: [
               Expanded(
-                child: Text('Marimba', style: Theme.of(context).textTheme.headlineSmall),
+                child: Text(
+                  'Marimba/Pipa',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
               ),
               IconButton(
-                onPressed: _cargando ? null : _cargar,
+                tooltip: 'Actualizar unidades',
+                onPressed: () => ref.invalidate(resumenUnidadesMarimbaProvider),
                 icon: const Icon(Icons.refresh),
-                tooltip: 'Actualizar',
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Recorridos de despacho a maquinaria en campo y su conciliación de litros.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
+          const Text(
+            'Consulta administrativa de inventario y recorridos. Las operaciones de campo permanecen separadas.',
           ),
           const SizedBox(height: 20),
-          IosSegmentedControl<_FiltroRecorridos>(
-            valor: _filtro,
-            opciones: const {
-              _FiltroRecorridos.todos: 'Todos',
-              _FiltroRecorridos.requierenRevision: 'Requieren revisión',
-            },
-            onChanged: (f) {
-              setState(() => _filtro = f);
-              _cargar();
-            },
+          Text('Unidades', style: Theme.of(context).textTheme.titleLarge),
+          resumen.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (_, _) => const EstadoVacio(
+              icono: Icons.error_outline,
+              mensaje:
+                  'No fue posible consultar el inventario. El historial permanece disponible.',
+            ),
+            data: (items) => items.isEmpty
+                ? const EstadoVacio(
+                    icono: Icons.local_shipping_outlined,
+                    mensaje: 'No hay Marimbas o Pipas registradas.',
+                  )
+                : Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [for (final u in items) _UnidadCard(unidad: u)],
+                  ),
           ),
-          const SizedBox(height: 16),
-          if (_cargando)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 40),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_error != null)
-            EstadoVacio(icono: Icons.error_outline, mensaje: _error!)
-          else if (_recorridos.isEmpty)
-            const EstadoVacio(
-              icono: Icons.local_shipping_outlined,
-              mensaje: 'No hay recorridos con este filtro.',
-            )
-          else
-            for (final recorrido in _recorridos)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _TarjetaRecorrido(recorrido: recorrido),
-              ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TarjetaRecorrido extends StatelessWidget {
-  const _TarjetaRecorrido({required this.recorrido});
-
-  final RecorridoMarimba recorrido;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final r = recorrido;
-    return AppCard(
-      floating: true,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+          const SizedBox(height: 24),
           Row(
             children: [
               Expanded(
                 child: Text(
-                  r.frente,
-                  style: Theme.of(context).textTheme.titleMedium,
+                  'Historial de recorridos',
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-              if (r.requiereRevision) const _BadgeRequiereRevision(),
-              if (r.estado == EstadoRecorridoMarimba.abierto) ...[
-                const SizedBox(width: 8),
-                _BadgeAbierto(),
-              ],
+              IconButton(
+                tooltip: 'Actualizar historial',
+                onPressed: () => ref.invalidate(
+                  recorridosAdministrativosMarimbaProvider(filtros),
+                ),
+                icon: const Icon(Icons.refresh),
+              ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            '${r.iniciadoEn.day.toString().padLeft(2, '0')}/'
-            '${r.iniciadoEn.month.toString().padLeft(2, '0')}/'
-            '${r.iniciadoEn.year}',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              DropdownButton<String?>(
+                key: const ValueKey('filtro-categoria-marimba'),
+                value: filtros.categoria,
+                hint: const Text('Categoría'),
+                items: const [
+                  DropdownMenuItem(value: null, child: Text('Todas')),
+                  DropdownMenuItem(value: 'Marimba', child: Text('Marimba')),
+                  DropdownMenuItem(value: 'Pipa', child: Text('Pipa')),
+                ],
+                onChanged: (v) => _filtrar(
+                  categoria: v,
+                  combustible: filtros.tipoCombustible,
+                  estado: filtros.estado,
+                  revision: filtros.requiereRevision,
+                ),
+              ),
+              DropdownButton<String?>(
+                value: filtros.tipoCombustible,
+                hint: const Text('Combustible'),
+                items: const [
+                  DropdownMenuItem(value: null, child: Text('Todos')),
+                  DropdownMenuItem(value: 'Magna', child: Text('Magna')),
+                  DropdownMenuItem(value: 'Diésel', child: Text('Diésel')),
+                ],
+                onChanged: (v) => _filtrar(
+                  categoria: filtros.categoria,
+                  combustible: v,
+                  estado: filtros.estado,
+                  revision: filtros.requiereRevision,
+                ),
+              ),
+              DropdownButton<String?>(
+                value: filtros.estado,
+                hint: const Text('Estado'),
+                items: const [
+                  DropdownMenuItem(value: null, child: Text('Todos')),
+                  DropdownMenuItem(value: 'abierto', child: Text('Abiertos')),
+                  DropdownMenuItem(value: 'cerrado', child: Text('Cerrados')),
+                ],
+                onChanged: (v) => _filtrar(
+                  categoria: filtros.categoria,
+                  combustible: filtros.tipoCombustible,
+                  estado: v,
+                  revision: filtros.requiereRevision,
+                ),
+              ),
+              FilterChip(
+                label: const Text('Requiere revisión'),
+                selected: filtros.requiereRevision == true,
+                onSelected: (v) => _filtrar(
+                  categoria: filtros.categoria,
+                  combustible: filtros.tipoCombustible,
+                  estado: filtros.estado,
+                  revision: v ? true : null,
+                ),
+              ),
+              TextButton(
+                onPressed: () =>
+                    setState(() => filtros = const FiltrosRecorridosMarimba()),
+                child: const Text('Limpiar filtros'),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _Dato(
-                  etiqueta: 'Salió con',
-                  valor: '${r.litrosIniciales.toStringAsFixed(0)} L',
-                ),
-              ),
-              Expanded(
-                child: _Dato(
-                  etiqueta: 'Despachado',
-                  valor: r.litrosDespachadosTotal == null
-                      ? '—'
-                      : '${r.litrosDespachadosTotal!.toStringAsFixed(0)} L',
-                ),
-              ),
-              Expanded(
-                child: _Dato(
-                  etiqueta: 'Existencia',
-                  valor: r.existenciaCalculada == null
-                      ? '—'
-                      : '${r.existenciaCalculada!.toStringAsFixed(0)} L',
-                  destacado: r.requiereRevision,
-                ),
-              ),
-            ],
+          historial.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (_, _) => const EstadoVacio(
+              icono: Icons.error_outline,
+              mensaje: 'No fue posible consultar los recorridos.',
+            ),
+            data: (pagina) => pagina.items.isEmpty
+                ? const EstadoVacio(
+                    icono: Icons.route_outlined,
+                    mensaje: 'No hay recorridos con estos filtros.',
+                  )
+                : Column(
+                    children: [
+                      for (final r in pagina.items)
+                        Card(
+                          child: ListTile(
+                            title: Text(r.frente),
+                            subtitle: Text(
+                              '${r.marimbaEtiqueta ?? r.marimbaId} · ${r.tipoCombustible ?? 'Combustible no disponible'} · ${r.responsableNombre ?? 'Responsable no disponible'}',
+                            ),
+                            trailing: Text(r.estado.name),
+                            onTap: () => _detalle(context, r.id),
+                          ),
+                        ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          IconButton(
+                            onPressed: pagina.page > 1
+                                ? () => setState(
+                                    () => filtros = filtros.copyWith(
+                                      page: pagina.page - 1,
+                                    ),
+                                  )
+                                : null,
+                            icon: const Icon(Icons.chevron_left),
+                          ),
+                          Text('Página ${pagina.page} de ${pagina.totalPages}'),
+                          IconButton(
+                            onPressed: pagina.page < pagina.totalPages
+                                ? () => setState(
+                                    () => filtros = filtros.copyWith(
+                                      page: pagina.page + 1,
+                                    ),
+                                  )
+                                : null,
+                            icon: const Icon(Icons.chevron_right),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
           ),
         ],
       ),
     );
   }
-}
 
-class _Dato extends StatelessWidget {
-  const _Dato({
-    required this.etiqueta,
-    required this.valor,
-    this.destacado = false,
-  });
-
-  final String etiqueta;
-  final String valor;
-  final bool destacado;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          etiqueta.toUpperCase(),
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colors.textMuted),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          valor,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: destacado ? colors.warning : colors.textPrimary,
+  Future<void> _detalle(BuildContext context, String id) {
+    return showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        child: SizedBox(
+          width: 720,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Consumer(
+              builder: (context, ref, _) => ref
+                  .watch(detalleAdministrativoMarimbaProvider(id))
+                  .when(
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (_, _) => const EstadoVacio(
+                      icono: Icons.error_outline,
+                      mensaje: 'No fue posible consultar el detalle.',
+                    ),
+                    data: (d) => _Detalle(
+                      recorrido: d.recorrido,
+                      despachos: d.despachos,
+                    ),
+                  ),
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _UnidadCard extends StatelessWidget {
+  const _UnidadCard({required this.unidad});
+  final ResumenUnidadMarimba unidad;
+  String saldo(String? value) => value == null ? 'Sin registro' : '$value L';
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: 310,
+    child: Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              unidad.modelo ??
+                  unidad.numeroEconomico ??
+                  unidad.placas ??
+                  'Unidad sin etiqueta',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            Text(
+              '${unidad.tipoUnidad} · ${unidad.activo ? 'Activa' : 'Inactiva'}',
+            ),
+            const Divider(),
+            Text('Magna: ${saldo(unidad.saldoMagna)}'),
+            Text('Diésel: ${saldo(unidad.saldoDiesel)}'),
+            const SizedBox(height: 6),
+            Text(
+              unidad.recorridoAbiertoId == null
+                  ? 'Sin recorrido abierto'
+                  : 'Recorrido abierto · ${unidad.responsableNombre ?? 'Responsable no disponible'}',
+            ),
+            if (unidad.requiereRevision)
+              const Chip(label: Text('Requiere revisión')),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _Detalle extends StatelessWidget {
+  const _Detalle({required this.recorrido, required this.despachos});
+  final RecorridoMarimba recorrido;
+  final List<DespachoMarimba> despachos;
+  @override
+  Widget build(BuildContext context) => ListView(
+    shrinkWrap: true,
+    children: [
+      Text(
+        'Detalle del recorrido',
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+      Text(
+        '${recorrido.marimbaEtiqueta ?? recorrido.marimbaId} · ${recorrido.frente}',
+      ),
+      Text(
+        'Responsable: ${recorrido.responsableNombre ?? 'Dato no disponible'}',
+      ),
+      Text('Inventario inicial: ${recorrido.litrosIniciales} L'),
+      Text(
+        'Despachado: ${recorrido.litrosDespachadosTotal?.toString() ?? 'Dato no disponible'}',
+      ),
+      Text(
+        'Inventario final: ${recorrido.existenciaFisica?.toString() ?? 'Dato no disponible'}',
+      ),
+      if (recorrido.requiereRevision)
+        const ListTile(
+          leading: Icon(Icons.warning_amber),
+          title: Text('Requiere revisión'),
+          subtitle: Text(
+            'Los valores persistidos presentan una diferencia de conciliación.',
+          ),
+        ),
+      const Divider(),
+      Text('Despachos', style: Theme.of(context).textTheme.titleLarge),
+      for (final d in despachos)
+        ListTile(
+          title: Text(
+            d.unidadDestinoEtiqueta ??
+                d.destinoTexto ??
+                'Unidad destino no disponible',
+          ),
+          subtitle: Text(
+            '${d.tipoCombustible ?? 'Combustible desconocido'} · ${d.litrosSuministrados} L · ${d.cantidadDeclarada == true
+                ? 'Cantidad declarada'
+                : d.cantidadDeclarada == false
+                ? 'Cantidad medida'
+                : 'Registro histórico'}\nMedidor: ${d.medidorInicial?.toString() ?? '—'} → ${d.medidorFinal?.toString() ?? '—'} · Horómetro: ${d.horometro?.toString() ?? '—'}',
+          ),
+          isThreeLine: true,
+        ),
+      const Divider(),
+      Text('Evidencias', style: Theme.of(context).textTheme.titleLarge),
+      _evidencia('Foto de cierre', recorrido.fotoCierrePath),
+      _evidencia('Foto de nivel', recorrido.fotoNivelPath),
+      for (final d in despachos) ...[
+        _evidencia(
+          'Foto de horómetro',
+          d.fotoHorometroPath,
+          key: ValueKey('despacho-${d.id}-foto-horometro'),
+        ),
+        _evidencia(
+          'Foto de medidor',
+          d.fotoMedidorPath,
+          key: ValueKey('despacho-${d.id}-foto-medidor'),
+        ),
+        _evidencia(
+          'Evidencia del despacho',
+          d.fotoEvidenciaPath,
+          key: ValueKey('despacho-${d.id}-foto-evidencia'),
+        ),
       ],
-    );
-  }
-}
-
-class _BadgeRequiereRevision extends StatelessWidget {
-  const _BadgeRequiereRevision();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: colors.warning.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        'REQUIERE REVISIÓN',
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: colors.warning,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.3,
-        ),
-      ),
-    );
-  }
-}
-
-class _BadgeAbierto extends StatelessWidget {
-  const _BadgeAbierto();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: AppSectionColors.autorizaciones.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        'ABIERTO',
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: AppSectionColors.autorizaciones,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.3,
-        ),
-      ),
-    );
-  }
+    ],
+  );
+  Widget _evidencia(String nombre, String? ruta, {Key? key}) => ListTile(
+    key: key,
+    dense: true,
+    leading: const Icon(Icons.image_outlined),
+    title: Text(nombre),
+    trailing: Text(ruta == null ? 'Evidencia no disponible' : 'Disponible'),
+  );
 }

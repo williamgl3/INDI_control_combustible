@@ -11,28 +11,40 @@ import 'package:indi_combustible/models/vehiculo.dart';
 /// Útil para tests de widgets y como referencia de la interfaz que
 /// implementa `ApiVehiculosRepository`.
 class MockVehiculosRepository implements VehiculosRepository {
-  MockVehiculosRepository() {
-    _vehiculos.add(
-      Vehiculo(
-        id: 'veh-1',
-        tipoUnidad: 'Vehículo',
-        modelo: 'Chevrolet NPR 2020',
-        placas: 'ABC-123-A',
-        numeroEconomico: null,
-        tipoCombustible: 'Diésel',
-        intervaloServicio: intervaloServicioPorDefecto('Vehículo'),
-      ),
+  MockVehiculosRepository({
+    List<Vehiculo>? vehiculos,
+    Future<void> Function()? alCargar,
+  }) {
+    _alCargar = alCargar;
+    _vehiculos.addAll(
+      vehiculos ??
+          [
+            Vehiculo(
+              id: 'veh-1',
+              tipoUnidad: 'Vehículo',
+              modelo: 'Chevrolet NPR 2020',
+              placas: 'ABC-123-A',
+              numeroEconomico: null,
+              tipoCombustible: 'Diésel',
+              intervaloServicio: intervaloServicioPorDefecto('Vehículo'),
+            ),
+          ],
     );
   }
 
   final List<Vehiculo> _vehiculos = [];
+  late final Future<void> Function()? _alCargar;
+  int cargasRealizadas = 0;
   int _idSeq = 2;
 
   @override
   List<Vehiculo> get todos => List.unmodifiable(_vehiculos);
 
   @override
-  Future<void> cargarVehiculos() async {}
+  Future<void> cargarVehiculos() async {
+    cargasRealizadas++;
+    await _alCargar?.call();
+  }
 
   @override
   Vehiculo? porId(String id) {

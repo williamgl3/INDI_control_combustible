@@ -124,7 +124,8 @@ class _SelectorVehiculoState extends ConsumerState<SelectorVehiculo> {
             const Text('No fue posible cargar las unidades.'),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: () => ref.invalidate(catalogoUnidadesProvider),
+              onPressed: () =>
+                  ref.read(catalogoUnidadesProvider.notifier).actualizar(),
               icon: const Icon(Icons.refresh),
               label: const Text('Reintentar'),
             ),

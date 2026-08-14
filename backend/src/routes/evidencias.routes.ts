@@ -52,7 +52,7 @@ const subirSchema = z
 
 evidenciasRouter.post(
   '/',
-  requireRole('chofer') as never,
+  requireRole('chofer', 'supervisor') as never,
   upload.fields([
     { name: 'foto', maxCount: 1 }, // compatibilidad con clientes viejos
     { name: 'fotos', maxCount: MAX_FOTOS },

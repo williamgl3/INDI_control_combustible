@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/auth_controller.dart';
 import '../../core/notificaciones_provider.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
 import '../../models/solicitud_autorizacion.dart';
+import '../../router/route_paths.dart';
 import '../../theme/app_breakpoints.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_radii.dart';
@@ -90,7 +92,7 @@ const _destinos = [
   _Destino(
     _SeccionAdmin.marimba,
     Icons.local_shipping_outlined,
-    'Marimba',
+    'Marimba/Pipa',
     AppSectionColors.marimba,
   ),
   _Destino(
@@ -124,7 +126,9 @@ const _seccionesPrincipalesMovil = [
 /// (4 principales + "Más", ver [_seccionesPrincipalesMovil]) — decisión de
 /// arquitectura confirmada por el usuario.
 class AdministrativoHomeScreen extends ConsumerStatefulWidget {
-  const AdministrativoHomeScreen({super.key});
+  const AdministrativoHomeScreen({super.key, this.mostrarMarimba = false});
+
+  final bool mostrarMarimba;
 
   @override
   ConsumerState<AdministrativoHomeScreen> createState() =>
@@ -133,7 +137,21 @@ class AdministrativoHomeScreen extends ConsumerStatefulWidget {
 
 class _AdministrativoHomeScreenState
     extends ConsumerState<AdministrativoHomeScreen> {
-  _SeccionAdmin _seccion = _SeccionAdmin.autorizaciones;
+  late _SeccionAdmin _seccion = widget.mostrarMarimba
+      ? _SeccionAdmin.marimba
+      : _SeccionAdmin.autorizaciones;
+
+  void _seleccionar(_SeccionAdmin seccion) {
+    if (seccion == _SeccionAdmin.marimba) {
+      context.go(RoutePaths.administrativoMarimba);
+      return;
+    }
+    if (widget.mostrarMarimba) {
+      context.go(RoutePaths.administrativo);
+      return;
+    }
+    setState(() => _seccion = seccion);
+  }
 
   /// Mismo patrón que en el panel de chofer (`ChoferHomeScreen`,
   /// `MiPerfilScreen`): confirma antes de cerrar sesión — antes este botón
@@ -293,8 +311,7 @@ class _AdministrativoHomeScreenState
               _SidebarAdmin(
                 indiceSeleccionado: indiceSeleccionado,
                 pendientesAutorizaciones: pendientesAutorizaciones,
-                onSeleccionar: (i) =>
-                    setState(() => _seccion = _destinos[i].seccion),
+                onSeleccionar: (i) => _seleccionar(_destinos[i].seccion),
               ),
               Expanded(child: contenido),
             ],
@@ -325,7 +342,7 @@ class _AdministrativoHomeScreenState
             _abrirMasMovil(context, destinosEnMas);
             return;
           }
-          setState(() => _seccion = destinosPrincipales[i].seccion);
+          _seleccionar(destinosPrincipales[i].seccion);
         },
         destinations: [
           for (final d in destinosPrincipales)

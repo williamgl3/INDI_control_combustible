@@ -270,6 +270,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             _conTransicion(state, const AdministrativoHomeScreen()),
       ),
       GoRoute(
+        path: RoutePaths.administrativoMarimba,
+        pageBuilder: (context, state) => _conTransicion(
+          state,
+          const AdministrativoHomeScreen(mostrarMarimba: true),
+        ),
+      ),
+      GoRoute(
         path: RoutePaths.administrativoChoferDetalle,
         pageBuilder: (context, state) {
           final chofer = state.extra;

@@ -35,7 +35,7 @@ const reportarSchema = z.object({
 /// falta de foto.
 incidenciasRouter.post(
   '/',
-  requireRole('chofer') as never,
+  requireRole('chofer', 'supervisor') as never,
   upload.fields([{ name: 'foto', maxCount: 1 }]),
   verificarMagicBytes,
   asyncHandler(async (req: AuthRequest, res) => {

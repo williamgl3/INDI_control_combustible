@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:indi_combustible/core/providers.dart';
 import 'package:indi_combustible/core/catalogos_vehiculo.dart';
+import 'package:indi_combustible/core/session_provider.dart';
+import 'package:indi_combustible/models/perfil.dart';
 import 'package:indi_combustible/models/vehiculo.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
 import 'package:indi_combustible/widgets/selector_vehiculo.dart';
@@ -15,6 +17,13 @@ import 'mocks/mock_vehiculos_repository.dart';
 /// modelo, insensible a mayúsculas y a que el chofer escriba o no los
 /// guiones — son justo los 3 casos que se discutieron explícitamente.
 void main() {
+  const perfilChofer = Perfil(
+    id: 'chofer-selector',
+    usuario: 'chofer_selector',
+    nombre: 'Chofer',
+    correo: 'chofer.selector@example.com',
+    rol: RolUsuario.chofer,
+  );
   late MockVehiculosRepository repo;
   late ProviderContainer container;
 
@@ -84,6 +93,7 @@ void main() {
     container = ProviderContainer(
       overrides: [vehiculosRepositoryProvider.overrideWithValue(repo)],
     );
+    container.read(sessionProvider.notifier).iniciarSesion(perfilChofer);
   });
 
   tearDown(() => container.dispose());

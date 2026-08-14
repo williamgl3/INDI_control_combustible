@@ -6,7 +6,6 @@ import '../core/session_provider.dart';
 import '../router/route_paths.dart';
 import '../theme/app_radii.dart';
 import '../theme/app_theme.dart';
-import 'icon_badge.dart';
 
 /// Un destino de la navegación de chofer (compartido por [SidebarChofer] y
 /// la barra inferior de `ChoferHomeShell`).
@@ -138,6 +137,7 @@ class SidebarChofer extends ConsumerWidget {
               children: [
                 for (var i = 0; i < destinosChofer.length; i++)
                   _ItemSidebarChofer(
+                    key: ValueKey('sidebar-chofer-destino-$i'),
                     destino: destinosChofer[i],
                     seleccionado: i == indiceSeleccionado,
                     onTap: () => onSeleccionar(i),
@@ -184,6 +184,7 @@ class SidebarChofer extends ConsumerWidget {
 
 class _ItemSidebarChofer extends StatelessWidget {
   const _ItemSidebarChofer({
+    super.key,
     required this.destino,
     required this.seleccionado,
     required this.onTap,
@@ -211,15 +212,15 @@ class _ItemSidebarChofer extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
               children: [
-                IconBadge(
-                  icono: seleccionado
-                      ? destino.iconoSeleccionado
-                      : destino.icono,
-                  color: seleccionado
-                      ? colorScheme.onPrimary
-                      : colorScheme.onSurfaceVariant,
-                  size: 30,
-                  iconSize: 16,
+                SizedBox.square(
+                  dimension: 30,
+                  child: Icon(
+                    seleccionado ? destino.iconoSeleccionado : destino.icono,
+                    color: seleccionado
+                        ? colorScheme.onPrimary
+                        : colorScheme.onSurfaceVariant,
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -228,7 +229,7 @@ class _ItemSidebarChofer extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: seleccionado
-                          ? colorScheme.primary
+                          ? colorScheme.onPrimary
                           : colorScheme.onSurface,
                       fontWeight: seleccionado
                           ? FontWeight.w700

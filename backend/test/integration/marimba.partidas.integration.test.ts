@@ -15,8 +15,11 @@ function protegerBaseAislada(): void {
   } catch {
     throw new Error('DATABASE_URL de integración inválida.');
   }
-  if (!url.pathname.toLowerCase().includes('_test') || url.port === '5432') {
-    throw new Error('La integración exige una base marcada _test y un puerto no productivo.');
+  const hostPermitido = url.hostname === '127.0.0.1' || url.hostname === 'localhost';
+  if (!hostPermitido || !url.pathname.toLowerCase().endsWith('_test') || url.port === '5432') {
+    throw new Error(
+      'La integración exige una base temporal local, terminada en _test y fuera del puerto 5432.',
+    );
   }
 }
 

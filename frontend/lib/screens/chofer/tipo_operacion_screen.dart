@@ -17,7 +17,7 @@ import '../../widgets/sidebar_chofer.dart';
 /// Pantalla intermedia entre "Solicitar carga" y el formulario real: el
 /// chofer elige primero qué tipo de unidad va a operar hoy, y de ahí se
 /// navega ya filtrado al mismo formulario único ([SolicitarCargaScreen])
-/// o, para Marimba/Despacho, a [RegistrarDespachoScreen] — ver
+/// o, para Marimba/Despacho, al recorrido operativo — ver
 /// `tiposUnidadVehiculo` en `catalogos_vehiculo.dart` para el catálogo
 /// compartido de categorías.
 ///

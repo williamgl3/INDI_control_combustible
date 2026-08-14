@@ -28,45 +28,29 @@ void main() {
     expect(estaActiva(unidad), isFalse);
   });
 
-  test('chofer tiene capacidades operativas propias pero no granel', () {
-    expect(
-      tieneCapacidad(RolUsuario.chofer, CapacidadOperativa.solicitarVehiculo),
-      isTrue,
-    );
-    expect(
-      tieneCapacidad(RolUsuario.chofer, CapacidadOperativa.solicitarMaquinaria),
-      isTrue,
-    );
-    expect(
-      tieneCapacidad(
-        RolUsuario.chofer,
-        CapacidadOperativa.administrarRecorrido,
-      ),
-      isFalse,
-    );
+  test('chofer conserva operaciones de campo sin funciones de marimba', () {
+    expect(capacidadesDe(RolUsuario.chofer), {
+      CapacidadOperativa.solicitarVehiculo,
+      CapacidadOperativa.solicitarMaquinaria,
+      CapacidadOperativa.comprobarCarga,
+      CapacidadOperativa.subirEvidencias,
+      CapacidadOperativa.cerrarJornada,
+      CapacidadOperativa.consultarHistorial,
+      CapacidadOperativa.reportarIncidencia,
+    });
   });
 
-  test('supervisor incorpora granel, despachos y recorridos', () {
-    expect(
-      tieneCapacidad(
-        RolUsuario.supervisor,
-        CapacidadOperativa.solicitarUnidadGranel,
-      ),
-      isTrue,
-    );
-    expect(
-      tieneCapacidad(
-        RolUsuario.supervisor,
-        CapacidadOperativa.registrarDespacho,
-      ),
-      isTrue,
-    );
-    expect(
-      tieneCapacidad(
-        RolUsuario.supervisor,
-        CapacidadOperativa.administrarRecorrido,
-      ),
-      isTrue,
-    );
+  test('supervisor hereda campo y agrega funciones de marimba', () {
+    expect(capacidadesDe(RolUsuario.supervisor), {
+      ...capacidadesDe(RolUsuario.chofer),
+      CapacidadOperativa.solicitarUnidadGranel,
+      CapacidadOperativa.registrarDespacho,
+      CapacidadOperativa.administrarRecorrido,
+    });
+  });
+
+  test('roles administrativos no reciben operaciones de campo', () {
+    expect(capacidadesDe(RolUsuario.administrativo), isEmpty);
+    expect(capacidadesDe(RolUsuario.superadmin), isEmpty);
   });
 }

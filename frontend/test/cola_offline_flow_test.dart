@@ -63,108 +63,117 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets(
-    'sin conexión, solicitar carga se encola y se sincroniza sola al '
-    'reconectar',
-    (tester) async {
-      final controlConectividad = StreamController<bool>.broadcast();
-      addTearDown(controlConectividad.close);
+  test('incidencia pendiente conserva la identidad del supervisor', () {
+    final pendiente = IncidenciaPendienteOffline(
+      idLocal: 'incidencia-local',
+      usuarioId: 'supervisor-1',
+      vehiculoId: 'unidad-1',
+      descripcion: 'Incidencia ficticia',
+      creadaEn: DateTime.utc(2026, 8, 12),
+    );
 
-      final container = makeTestContainer(
-        overridesExtra: [
-          conectividadProvider.overrideWith(
-            (ref) => controlConectividad.stream,
-          ),
-        ],
-      );
-      addTearDown(container.dispose);
+    final restaurada = IncidenciaPendienteOffline.fromJson(pendiente.toJson());
 
-      await _pumpAppConSincronizacion(tester, container: container);
+    expect(restaurada.usuarioId, 'supervisor-1');
+    expect(restaurada.vehiculoId, 'unidad-1');
+  });
 
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Usuario'),
-        'chofer1',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Contraseña'),
-        'chofer123',
-      );
-      await tester.ensureVisible(find.text('Ingresar'));
-      await tester.tap(find.text('Ingresar'));
-      await tester.pumpAndSettle();
+  testWidgets('sin conexión, solicitar carga se encola y se sincroniza sola al '
+      'reconectar', (tester) async {
+    final controlConectividad = StreamController<bool>.broadcast();
+    addTearDown(controlConectividad.close);
 
-      // Se marca sin conexión (el provider ya está suscrito tras el pump
-      // de arriba, así que el evento sí llega).
-      controlConectividad.add(false);
-      await tester.pump();
-      await tester.pump();
+    final container = makeTestContainer(
+      overridesExtra: [
+        conectividadProvider.overrideWith((ref) => controlConectividad.stream),
+      ],
+    );
+    addTearDown(container.dispose);
 
-      await tester.tap(find.widgetWithText(FloatingActionButton, 'Solicitar carga'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Vehículo Ligero'));
-      await tester.pumpAndSettle();
-      await _elegirVehiculo(tester, 'ABC-123-A');
-      await tester.ensureVisible(find.text('Tomar foto del tablero'));
-      await tester.tap(find.text('Tomar foto del tablero'));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('L · toca para escribir'));
-      await tester.tap(find.text('L · toca para escribir'));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.descendant(
-          of: find.byType(Dialog),
-          matching: find.byType(TextField),
-        ),
-        '40',
-      );
-      await tester.tap(
-        find.descendant(
-          of: find.byType(Dialog),
-          matching: find.text('Listo'),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Actividad'),
-        'Actividad de prueba',
-      );
-      await tester.ensureVisible(find.text('Enviar solicitud'));
-      await tester.tap(find.text('Enviar solicitud'));
-      await tester.pumpAndSettle();
+    await _pumpAppConSincronizacion(tester, container: container);
 
-      // Se detecta sin conexión de entrada: se encola directo, sin llegar
-      // a intentar la petición real.
-      expect(find.text('Sin conexión'), findsOneWidget);
-      await tester.tap(find.text('Entendido'));
-      await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Usuario'),
+      'chofer1',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Contraseña'),
+      'chofer123',
+    );
+    await tester.ensureVisible(find.text('Ingresar'));
+    await tester.tap(find.text('Ingresar'));
+    await tester.pumpAndSettle();
 
-      expect(
-        find.textContaining('1 solicitud guardada sin conexión'),
-        findsOneWidget,
-      );
+    // Se marca sin conexión (el provider ya está suscrito tras el pump
+    // de arriba, así que el evento sí llega).
+    controlConectividad.add(false);
+    await tester.pump();
+    await tester.pump();
 
-      final repo = container.read(operacionesRepositoryProvider);
-      final chofer1 = container
-          .read(authRepositoryProvider)
-          .listarChoferes()
-          .firstWhere((c) => c.usuario == 'chofer1');
-      expect(repo.solicitudesDeChofer(chofer1.id), isEmpty);
+    await tester.tap(
+      find.widgetWithText(FloatingActionButton, 'Solicitar carga'),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Vehículo Ligero'));
+    await tester.pumpAndSettle();
+    await _elegirVehiculo(tester, 'ABC-123-A');
+    await tester.ensureVisible(find.text('Tomar foto del tablero'));
+    await tester.tap(find.text('Tomar foto del tablero'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('L · toca para escribir'));
+    await tester.tap(find.text('L · toca para escribir'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(Dialog),
+        matching: find.byType(TextField),
+      ),
+      '40',
+    );
+    await tester.tap(
+      find.descendant(of: find.byType(Dialog), matching: find.text('Listo')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Actividad'),
+      'Actividad de prueba',
+    );
+    await tester.ensureVisible(find.text('Enviar solicitud'));
+    await tester.tap(find.text('Enviar solicitud'));
+    await tester.pumpAndSettle();
 
-      // Se reconecta — `observarReconexionParaSincronizar` debe disparar
-      // la sincronización sola. `MockOperacionesRepository.enviarSolicitud`
-      // tiene un `Future.delayed` interno; sin nada en pantalla animando
-      // (a diferencia del botón "Enviar solicitud", que sigue pintando el
-      // spinner), `pumpAndSettle()` se detendría antes de que el timer
-      // termine — se avanza el reloj falso explícitamente primero.
-      controlConectividad.add(true);
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.pumpAndSettle();
+    // Se detecta sin conexión de entrada: se encola directo, sin llegar
+    // a intentar la petición real.
+    expect(find.text('Sin conexión'), findsOneWidget);
+    await tester.tap(find.text('Entendido'));
+    await tester.pumpAndSettle();
 
-      expect(repo.solicitudesDeChofer(chofer1.id), hasLength(1));
-      expect(
-        find.textContaining('solicitud guardada sin conexión'),
-        findsNothing,
-      );
-    },
-  );
+    expect(
+      find.textContaining('1 solicitud guardada sin conexión'),
+      findsOneWidget,
+    );
+
+    final repo = container.read(operacionesRepositoryProvider);
+    final chofer1 = container
+        .read(authRepositoryProvider)
+        .listarChoferes()
+        .firstWhere((c) => c.usuario == 'chofer1');
+    expect(repo.solicitudesDeChofer(chofer1.id), isEmpty);
+
+    // Se reconecta — `observarReconexionParaSincronizar` debe disparar
+    // la sincronización sola. `MockOperacionesRepository.enviarSolicitud`
+    // tiene un `Future.delayed` interno; sin nada en pantalla animando
+    // (a diferencia del botón "Enviar solicitud", que sigue pintando el
+    // spinner), `pumpAndSettle()` se detendría antes de que el timer
+    // termine — se avanza el reloj falso explícitamente primero.
+    controlConectividad.add(true);
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(repo.solicitudesDeChofer(chofer1.id), hasLength(1));
+    expect(
+      find.textContaining('solicitud guardada sin conexión'),
+      findsNothing,
+    );
+  });
 }

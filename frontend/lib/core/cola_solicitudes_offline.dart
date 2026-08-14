@@ -292,6 +292,7 @@ class ColaCerrarDiaOffline {
 class IncidenciaPendienteOffline {
   const IncidenciaPendienteOffline({
     required this.idLocal,
+    required this.usuarioId,
     required this.vehiculoId,
     required this.descripcion,
     required this.creadaEn,
@@ -299,6 +300,7 @@ class IncidenciaPendienteOffline {
   });
 
   final String idLocal;
+  final String usuarioId;
   final String vehiculoId;
   final String descripcion;
   final DateTime creadaEn;
@@ -307,6 +309,7 @@ class IncidenciaPendienteOffline {
   factory IncidenciaPendienteOffline.fromJson(Map<String, dynamic> json) {
     return IncidenciaPendienteOffline(
       idLocal: json['idLocal'] as String,
+      usuarioId: json['usuarioId'] as String? ?? '',
       vehiculoId: json['vehiculoId'] as String,
       descripcion: json['descripcion'] as String,
       creadaEn: DateTime.parse(json['creadaEn'] as String),
@@ -316,6 +319,7 @@ class IncidenciaPendienteOffline {
 
   Map<String, dynamic> toJson() => {
     'idLocal': idLocal,
+    'usuarioId': usuarioId,
     'vehiculoId': vehiculoId,
     'descripcion': descripcion,
     'creadaEn': creadaEn.toIso8601String(),
@@ -375,73 +379,99 @@ class ColaIncidenciasOffline {
 class RecorridoMarimbaPendienteOffline {
   const RecorridoMarimbaPendienteOffline({
     required this.idLocal,
+    required this.usuarioId,
+    required this.rol,
     required this.marimbaId,
-    this.tipoCombustible,
+    required this.tipoCombustible,
     required this.frente,
-    this.cargaId,
-    required this.litrosIniciales,
     this.kmInicio,
     this.horasEquipoMenorInicio,
     required this.creadaEn,
     this.idServidor,
+    this.intentos = 0,
+    this.ultimoError,
   });
 
   final String idLocal;
+  final String usuarioId;
+  final String rol;
   final String marimbaId;
-  final String? tipoCombustible;
+  final String tipoCombustible;
   final String frente;
-  final String? cargaId;
-  final double litrosIniciales;
   final double? kmInicio;
   final double? horasEquipoMenorInicio;
   final DateTime creadaEn;
 
   /// `null` hasta que `POST /recorridos-marimba` responde con éxito.
   final String? idServidor;
+  final int intentos;
+  final String? ultimoError;
 
   factory RecorridoMarimbaPendienteOffline.fromJson(Map<String, dynamic> json) {
     return RecorridoMarimbaPendienteOffline(
       idLocal: json['idLocal'] as String,
+      usuarioId: json['usuarioId'] as String? ?? '',
+      rol: json['rol'] as String? ?? '',
       marimbaId: json['marimbaId'] as String,
-      tipoCombustible: json['tipoCombustible'] as String?,
+      tipoCombustible: json['tipoCombustible'] as String? ?? '',
       frente: json['frente'] as String,
-      cargaId: json['cargaId'] as String?,
-      litrosIniciales: (json['litrosIniciales'] as num).toDouble(),
       kmInicio: (json['kmInicio'] as num?)?.toDouble(),
       horasEquipoMenorInicio: (json['horasEquipoMenorInicio'] as num?)
           ?.toDouble(),
       creadaEn: DateTime.parse(json['creadaEn'] as String),
       idServidor: json['idServidor'] as String?,
+      intentos: json['intentos'] as int? ?? 0,
+      ultimoError: json['ultimoError'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() => {
     'idLocal': idLocal,
+    'usuarioId': usuarioId,
+    'rol': rol,
     'marimbaId': marimbaId,
     'tipoCombustible': tipoCombustible,
     'frente': frente,
-    'cargaId': cargaId,
-    'litrosIniciales': litrosIniciales,
     'kmInicio': kmInicio,
     'horasEquipoMenorInicio': horasEquipoMenorInicio,
     'creadaEn': creadaEn.toIso8601String(),
     'idServidor': idServidor,
+    'intentos': intentos,
+    'ultimoError': ultimoError,
   };
 
   RecorridoMarimbaPendienteOffline conIdServidor(String idServidor) {
     return RecorridoMarimbaPendienteOffline(
       idLocal: idLocal,
+      usuarioId: usuarioId,
+      rol: rol,
       marimbaId: marimbaId,
       tipoCombustible: tipoCombustible,
       frente: frente,
-      cargaId: cargaId,
-      litrosIniciales: litrosIniciales,
       kmInicio: kmInicio,
       horasEquipoMenorInicio: horasEquipoMenorInicio,
       creadaEn: creadaEn,
       idServidor: idServidor,
+      intentos: intentos,
+      ultimoError: null,
     );
   }
+
+  RecorridoMarimbaPendienteOffline conError(String error) =>
+      RecorridoMarimbaPendienteOffline(
+        idLocal: idLocal,
+        usuarioId: usuarioId,
+        rol: rol,
+        marimbaId: marimbaId,
+        tipoCombustible: tipoCombustible,
+        frente: frente,
+        kmInicio: kmInicio,
+        horasEquipoMenorInicio: horasEquipoMenorInicio,
+        creadaEn: creadaEn,
+        idServidor: idServidor,
+        intentos: intentos + 1,
+        ultimoError: error,
+      );
 }
 
 class ColaRecorridosMarimbaOffline {
@@ -486,6 +516,21 @@ class ColaRecorridosMarimbaOffline {
     );
   }
 
+  Future<void> registrarError(String idLocal, String error) async {
+    final prefs = await SharedPreferences.getInstance();
+    final actuales = await leer();
+    await prefs.setStringList(
+      _key,
+      actuales
+          .map(
+            (p) => jsonEncode(
+              (p.idLocal == idLocal ? p.conError(error) : p).toJson(),
+            ),
+          )
+          .toList(),
+    );
+  }
+
   Future<void> quitar(String idLocal) async {
     final prefs = await SharedPreferences.getInstance();
     final actuales = await leer();
@@ -507,62 +552,115 @@ class DespachoMarimbaPendienteOffline {
   const DespachoMarimbaPendienteOffline({
     required this.idLocal,
     required this.recorridoIdLocal,
-    this.vehiculoDestinoId,
-    this.destinoTexto,
+    required this.usuarioId,
+    required this.rol,
+    required this.vehiculoDestinoId,
+    required this.tipoCombustible,
     required this.operadorTexto,
-    this.residenteTexto,
-    this.litrosSolicitados,
-    required this.litrosSuministrados,
-    this.lecturaMedidor,
+    required this.horometro,
+    required this.fotoHorometroPath,
+    this.litrosDeclarados,
+    this.medidorInicial,
+    this.medidorFinal,
+    this.fotoMedidorPath,
     this.fotoEvidenciaPath,
+    this.ubicacion,
+    this.observaciones,
     required this.creadaEn,
+    this.intentos = 0,
+    this.ultimoError,
   });
 
   final String idLocal;
   final String recorridoIdLocal;
-  final String? vehiculoDestinoId;
-  final String? destinoTexto;
+  final String usuarioId;
+  final String rol;
+  final String vehiculoDestinoId;
+  final String tipoCombustible;
   final String operadorTexto;
-  final String? residenteTexto;
-  final double? litrosSolicitados;
-  final double litrosSuministrados;
-  final double? lecturaMedidor;
-
-  /// Opcional — a diferencia de las otras colas con foto, un despacho
-  /// dentro de un recorrido no la exige (ver PASO 3e del diseño: la
-  /// evidencia obligatoria es la foto de cierre del recorrido completo).
+  final double horometro;
+  final String fotoHorometroPath;
+  final double? litrosDeclarados;
+  final double? medidorInicial;
+  final double? medidorFinal;
+  final String? fotoMedidorPath;
   final String? fotoEvidenciaPath;
+  final String? ubicacion;
+  final String? observaciones;
   final DateTime creadaEn;
+  final int intentos;
+  final String? ultimoError;
+
+  bool get esMedido => medidorInicial != null && medidorFinal != null;
 
   factory DespachoMarimbaPendienteOffline.fromJson(Map<String, dynamic> json) {
     return DespachoMarimbaPendienteOffline(
       idLocal: json['idLocal'] as String,
       recorridoIdLocal: json['recorridoIdLocal'] as String,
-      vehiculoDestinoId: json['vehiculoDestinoId'] as String?,
-      destinoTexto: json['destinoTexto'] as String?,
+      usuarioId: json['usuarioId'] as String? ?? '',
+      rol: json['rol'] as String? ?? '',
+      vehiculoDestinoId: json['vehiculoDestinoId'] as String? ?? '',
+      tipoCombustible: json['tipoCombustible'] as String? ?? '',
       operadorTexto: json['operadorTexto'] as String,
-      residenteTexto: json['residenteTexto'] as String?,
-      litrosSolicitados: (json['litrosSolicitados'] as num?)?.toDouble(),
-      litrosSuministrados: (json['litrosSuministrados'] as num).toDouble(),
-      lecturaMedidor: (json['lecturaMedidor'] as num?)?.toDouble(),
+      horometro: (json['horometro'] as num?)?.toDouble() ?? 0,
+      fotoHorometroPath: json['fotoHorometroPath'] as String? ?? '',
+      litrosDeclarados: (json['litrosDeclarados'] as num?)?.toDouble(),
+      medidorInicial: (json['medidorInicial'] as num?)?.toDouble(),
+      medidorFinal: (json['medidorFinal'] as num?)?.toDouble(),
+      fotoMedidorPath: json['fotoMedidorPath'] as String?,
       fotoEvidenciaPath: json['fotoEvidenciaPath'] as String?,
+      ubicacion: json['ubicacion'] as String?,
+      observaciones: json['observaciones'] as String?,
       creadaEn: DateTime.parse(json['creadaEn'] as String),
+      intentos: json['intentos'] as int? ?? 0,
+      ultimoError: json['ultimoError'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() => {
     'idLocal': idLocal,
     'recorridoIdLocal': recorridoIdLocal,
+    'usuarioId': usuarioId,
+    'rol': rol,
     'vehiculoDestinoId': vehiculoDestinoId,
-    'destinoTexto': destinoTexto,
+    'tipoCombustible': tipoCombustible,
     'operadorTexto': operadorTexto,
-    'residenteTexto': residenteTexto,
-    'litrosSolicitados': litrosSolicitados,
-    'litrosSuministrados': litrosSuministrados,
-    'lecturaMedidor': lecturaMedidor,
+    'horometro': horometro,
+    'fotoHorometroPath': fotoHorometroPath,
+    'litrosDeclarados': litrosDeclarados,
+    'medidorInicial': medidorInicial,
+    'medidorFinal': medidorFinal,
+    'fotoMedidorPath': fotoMedidorPath,
     'fotoEvidenciaPath': fotoEvidenciaPath,
+    'ubicacion': ubicacion,
+    'observaciones': observaciones,
     'creadaEn': creadaEn.toIso8601String(),
+    'intentos': intentos,
+    'ultimoError': ultimoError,
   };
+
+  DespachoMarimbaPendienteOffline conError(String error) =>
+      DespachoMarimbaPendienteOffline(
+        idLocal: idLocal,
+        recorridoIdLocal: recorridoIdLocal,
+        usuarioId: usuarioId,
+        rol: rol,
+        vehiculoDestinoId: vehiculoDestinoId,
+        tipoCombustible: tipoCombustible,
+        operadorTexto: operadorTexto,
+        horometro: horometro,
+        fotoHorometroPath: fotoHorometroPath,
+        litrosDeclarados: litrosDeclarados,
+        medidorInicial: medidorInicial,
+        medidorFinal: medidorFinal,
+        fotoMedidorPath: fotoMedidorPath,
+        fotoEvidenciaPath: fotoEvidenciaPath,
+        ubicacion: ubicacion,
+        observaciones: observaciones,
+        creadaEn: creadaEn,
+        intentos: intentos + 1,
+        ultimoError: error,
+      );
 }
 
 class ColaDespachosMarimbaOffline {
@@ -600,6 +698,21 @@ class ColaDespachosMarimbaOffline {
           .toList(),
     );
   }
+
+  Future<void> registrarError(String idLocal, String error) async {
+    final prefs = await SharedPreferences.getInstance();
+    final actuales = await leer();
+    await prefs.setStringList(
+      _key,
+      actuales
+          .map(
+            (p) => jsonEncode(
+              (p.idLocal == idLocal ? p.conError(error) : p).toJson(),
+            ),
+          )
+          .toList(),
+    );
+  }
 }
 
 /// Cierre de un recorrido de marimba pendiente de sincronizar — espera a
@@ -611,18 +724,32 @@ class CierreRecorridoMarimbaPendienteOffline {
   const CierreRecorridoMarimbaPendienteOffline({
     required this.idLocal,
     required this.recorridoIdLocal,
+    required this.usuarioId,
+    required this.rol,
     this.kmCierre,
     this.horasEquipoMenorCierre,
     required this.fotoCierrePath,
+    required this.fotoNivelPath,
+    required this.existenciaFisica,
+    this.observaciones,
     required this.creadaEn,
+    this.intentos = 0,
+    this.ultimoError,
   });
 
   final String idLocal;
   final String recorridoIdLocal;
+  final String usuarioId;
+  final String rol;
   final double? kmCierre;
   final double? horasEquipoMenorCierre;
   final String fotoCierrePath;
+  final String fotoNivelPath;
+  final double existenciaFisica;
+  final String? observaciones;
   final DateTime creadaEn;
+  final int intentos;
+  final String? ultimoError;
 
   factory CierreRecorridoMarimbaPendienteOffline.fromJson(
     Map<String, dynamic> json,
@@ -630,22 +757,53 @@ class CierreRecorridoMarimbaPendienteOffline {
     return CierreRecorridoMarimbaPendienteOffline(
       idLocal: json['idLocal'] as String,
       recorridoIdLocal: json['recorridoIdLocal'] as String,
+      usuarioId: json['usuarioId'] as String? ?? '',
+      rol: json['rol'] as String? ?? '',
       kmCierre: (json['kmCierre'] as num?)?.toDouble(),
       horasEquipoMenorCierre: (json['horasEquipoMenorCierre'] as num?)
           ?.toDouble(),
       fotoCierrePath: json['fotoCierrePath'] as String,
+      fotoNivelPath: json['fotoNivelPath'] as String? ?? '',
+      existenciaFisica: (json['existenciaFisica'] as num?)?.toDouble() ?? 0,
+      observaciones: json['observaciones'] as String?,
       creadaEn: DateTime.parse(json['creadaEn'] as String),
+      intentos: json['intentos'] as int? ?? 0,
+      ultimoError: json['ultimoError'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() => {
     'idLocal': idLocal,
     'recorridoIdLocal': recorridoIdLocal,
+    'usuarioId': usuarioId,
+    'rol': rol,
     'kmCierre': kmCierre,
     'horasEquipoMenorCierre': horasEquipoMenorCierre,
     'fotoCierrePath': fotoCierrePath,
+    'fotoNivelPath': fotoNivelPath,
+    'existenciaFisica': existenciaFisica,
+    'observaciones': observaciones,
     'creadaEn': creadaEn.toIso8601String(),
+    'intentos': intentos,
+    'ultimoError': ultimoError,
   };
+
+  CierreRecorridoMarimbaPendienteOffline conError(String error) =>
+      CierreRecorridoMarimbaPendienteOffline(
+        idLocal: idLocal,
+        recorridoIdLocal: recorridoIdLocal,
+        usuarioId: usuarioId,
+        rol: rol,
+        kmCierre: kmCierre,
+        horasEquipoMenorCierre: horasEquipoMenorCierre,
+        fotoCierrePath: fotoCierrePath,
+        fotoNivelPath: fotoNivelPath,
+        existenciaFisica: existenciaFisica,
+        observaciones: observaciones,
+        creadaEn: creadaEn,
+        intentos: intentos + 1,
+        ultimoError: error,
+      );
 }
 
 class ColaCierresRecorridoMarimbaOffline {
@@ -680,6 +838,21 @@ class ColaCierresRecorridoMarimbaOffline {
       actuales
           .where((p) => p.idLocal != idLocal)
           .map((p) => jsonEncode(p.toJson()))
+          .toList(),
+    );
+  }
+
+  Future<void> registrarError(String idLocal, String error) async {
+    final prefs = await SharedPreferences.getInstance();
+    final actuales = await leer();
+    await prefs.setStringList(
+      _key,
+      actuales
+          .map(
+            (p) => jsonEncode(
+              (p.idLocal == idLocal ? p.conError(error) : p).toJson(),
+            ),
+          )
           .toList(),
     );
   }
@@ -973,8 +1146,10 @@ Future<void> _sincronizarCerrarDia(WidgetRef ref) async {
   if (pendientes.isEmpty) return;
 
   final repo = ref.read(operacionesRepositoryProvider);
+  final usuarioActualId = ref.read(sessionProvider)?.id;
 
   for (final pendiente in pendientes) {
+    if (pendiente.choferId != usuarioActualId) continue;
     if (!File(pendiente.fotoTableroPath).existsSync()) {
       await cola.quitar(pendiente.idLocal);
       AppLogger.error(
@@ -1016,8 +1191,10 @@ Future<void> _sincronizarIncidencias(WidgetRef ref) async {
   if (pendientes.isEmpty) return;
 
   final repo = ref.read(incidenciasRepositoryProvider);
+  final usuarioActualId = ref.read(sessionProvider)?.id;
 
   for (final pendiente in pendientes) {
+    if (pendiente.usuarioId != usuarioActualId) continue;
     final fotoSigueExistiendo =
         pendiente.fotoPath != null && File(pendiente.fotoPath!).existsSync();
     try {
@@ -1041,33 +1218,6 @@ Future<void> _sincronizarIncidencias(WidgetRef ref) async {
   }
 }
 
-/// Descarta un recorrido completo (él mismo + todos sus despachos y su
-/// cierre, si existen) de sus 3 colas — se usa cuando el recorrido en sí
-/// falla por una razón de negocio real (ej. la marimba ya tenía otro
-/// recorrido abierto): sin el recorrido, sus despachos/cierre nunca
-/// podrían sincronizarse (quedarían huérfanos para siempre), así que se
-/// descartan junto con él en vez de dejarlos atorados en la cola.
-Future<void> _descartarRecorridoMarimbaCompleto(
-  WidgetRef ref,
-  String recorridoIdLocal,
-) async {
-  final colaDespachos = ref.read(colaDespachosMarimbaOfflineProvider);
-  final colaCierres = ref.read(colaCierresRecorridoMarimbaOfflineProvider);
-  final colaRecorridos = ref.read(colaRecorridosMarimbaOfflineProvider);
-
-  for (final despacho in await colaDespachos.leer()) {
-    if (despacho.recorridoIdLocal == recorridoIdLocal) {
-      await colaDespachos.quitar(despacho.idLocal);
-    }
-  }
-  for (final cierre in await colaCierres.leer()) {
-    if (cierre.recorridoIdLocal == recorridoIdLocal) {
-      await colaCierres.quitar(cierre.idLocal);
-    }
-  }
-  await colaRecorridos.quitar(recorridoIdLocal);
-}
-
 /// Sincroniza recorridos de marimba — a diferencia de las 4 colas
 /// anteriores (operaciones planas e independientes), esta es una
 /// operación COMPUESTA con dependencias de orden: el recorrido debe
@@ -1085,6 +1235,8 @@ Future<void> _descartarRecorridoMarimbaCompleto(
 ///      de este recorrido, se envía el cierre y, recién ahí, se quita
 ///      también el recorrido de su cola (ciclo completo).
 Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
+  final perfil = ref.read(sessionProvider);
+  if (perfil == null || !perfil.esSupervisor) return;
   final colaRecorridos = ref.read(colaRecorridosMarimbaOfflineProvider);
   final colaDespachos = ref.read(colaDespachosMarimbaOfflineProvider);
   final colaCierres = ref.read(colaCierresRecorridoMarimbaOfflineProvider);
@@ -1094,25 +1246,23 @@ Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
   final repo = ref.read(recorridosMarimbaRepositoryProvider);
 
   for (final recorrido in recorridos) {
+    if (recorrido.usuarioId != perfil.id || recorrido.rol != perfil.rol.name) {
+      continue;
+    }
     var idServidor = recorrido.idServidor;
     if (idServidor == null) {
-      if (recorrido.tipoCombustible == null) {
-        await _descartarRecorridoMarimbaCompleto(ref, recorrido.idLocal);
-        await _registrarAviso(
-          ref,
-          idLocal: recorrido.idLocal,
-          descripcion: 'Recorrido de marimba',
-          motivo: 'El recorrido pendiente no identifica el combustible.',
+      if (recorrido.tipoCombustible.isEmpty) {
+        await colaRecorridos.registrarError(
+          recorrido.idLocal,
+          'El recorrido pendiente no identifica el combustible.',
         );
         continue;
       }
       try {
         final creado = await repo.abrirRecorrido(
           marimbaId: recorrido.marimbaId,
-          tipoCombustible: recorrido.tipoCombustible!,
+          tipoCombustible: recorrido.tipoCombustible,
           frente: recorrido.frente,
-          cargaId: recorrido.cargaId,
-          litrosIniciales: recorrido.litrosIniciales,
           kmInicio: recorrido.kmInicio,
           horasEquipoMenorInicio: recorrido.horasEquipoMenorInicio,
         );
@@ -1126,66 +1276,63 @@ Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
         // pendientes fallarían igual ahora mismo, se reintenta en el
         // próximo evento de reconexión.
         if (e.status == null) return;
-        // Razón de negocio real (ej. "ya hay un recorrido abierto de esta
-        // marimba") — reintentarlo para siempre no lo arreglaría.
-        await _descartarRecorridoMarimbaCompleto(ref, recorrido.idLocal);
-        await _registrarAviso(
-          ref,
-          idLocal: recorrido.idLocal,
-          descripcion: 'Recorrido de marimba',
-          motivo: e.mensaje,
-        );
+        await colaRecorridos.registrarError(recorrido.idLocal, e.mensaje);
         ref.read(operacionesTickProvider.notifier).state++;
         continue;
       }
     }
 
     final despachosDelRecorrido = (await colaDespachos.leer())
-        .where((d) => d.recorridoIdLocal == recorrido.idLocal)
+        .where(
+          (d) =>
+              d.recorridoIdLocal == recorrido.idLocal &&
+              d.usuarioId == perfil.id &&
+              d.rol == perfil.rol.name,
+        )
         .toList();
-    var detenidoPorRed = false;
+    var despachoFallido = false;
     for (final despacho in despachosDelRecorrido) {
-      if (despacho.fotoEvidenciaPath != null &&
-          !File(despacho.fotoEvidenciaPath!).existsSync()) {
-        await colaDespachos.quitar(despacho.idLocal);
-        AppLogger.error(
-          'sincronizarRecorridosMarimba',
-          'La foto del despacho ${despacho.idLocal} ya no existe en el '
-              'dispositivo — se descarta (la foto era opcional, el '
-              'despacho no puede reenviarse con ese dato perdido).',
+      final archivos = <String?>[
+        despacho.fotoHorometroPath,
+        despacho.fotoMedidorPath,
+        despacho.fotoEvidenciaPath,
+      ].whereType<String>();
+      if (archivos.any((ruta) => ruta.isEmpty || !File(ruta).existsSync())) {
+        await colaDespachos.registrarError(
+          despacho.idLocal,
+          'Una evidencia del despacho ya no existe en el dispositivo.',
         );
-        continue;
+        despachoFallido = true;
+        break;
       }
       try {
         await repo.agregarDespacho(
           recorridoId: idServidor,
-          tipoCombustible: recorrido.tipoCombustible!,
+          tipoCombustible: despacho.tipoCombustible,
           vehiculoDestinoId: despacho.vehiculoDestinoId,
-          destinoTexto: despacho.destinoTexto,
           operadorTexto: despacho.operadorTexto,
-          residenteTexto: despacho.residenteTexto,
-          litrosSolicitados: despacho.litrosSolicitados,
-          litrosSuministrados: despacho.litrosSuministrados,
-          lecturaMedidor: despacho.lecturaMedidor,
+          horometro: despacho.horometro,
+          fotoHorometroPath: despacho.fotoHorometroPath,
+          litrosDeclarados: despacho.litrosDeclarados,
+          medidorInicial: despacho.medidorInicial,
+          medidorFinal: despacho.medidorFinal,
+          fotoMedidorPath: despacho.fotoMedidorPath,
           fotoEvidenciaPath: despacho.fotoEvidenciaPath,
+          ubicacion: despacho.ubicacion,
+          observaciones: despacho.observaciones,
         );
         await colaDespachos.quitar(despacho.idLocal);
       } on ApiException catch (e) {
         if (e.status == null) {
-          detenidoPorRed = true;
-          break;
+          return;
         }
-        await colaDespachos.quitar(despacho.idLocal);
-        await _registrarAviso(
-          ref,
-          idLocal: despacho.idLocal,
-          descripcion: 'Despacho de marimba',
-          motivo: e.mensaje,
-        );
+        await colaDespachos.registrarError(despacho.idLocal, e.mensaje);
+        despachoFallido = true;
+        break;
       }
       ref.read(operacionesTickProvider.notifier).state++;
     }
-    if (detenidoPorRed) return;
+    if (despachoFallido) continue;
 
     final quedanDespachosPendientes = (await colaDespachos.leer()).any(
       (d) => d.recorridoIdLocal == recorrido.idLocal,
@@ -1193,19 +1340,21 @@ Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
     if (quedanDespachosPendientes) continue;
 
     final cierre = (await colaCierres.leer())
-        .where((c) => c.recorridoIdLocal == recorrido.idLocal)
+        .where(
+          (c) =>
+              c.recorridoIdLocal == recorrido.idLocal &&
+              c.usuarioId == perfil.id &&
+              c.rol == perfil.rol.name,
+        )
         .toList();
     if (cierre.isEmpty) continue;
     final pendienteCierre = cierre.first;
 
-    if (!File(pendienteCierre.fotoCierrePath).existsSync()) {
-      await colaCierres.quitar(pendienteCierre.idLocal);
-      await colaRecorridos.quitar(recorrido.idLocal);
-      AppLogger.error(
-        'sincronizarRecorridosMarimba',
-        'La foto de cierre del recorrido ${recorrido.idLocal} ya no existe '
-            'en el dispositivo — se descarta (la foto de cierre es '
-            'obligatoria, no se puede cerrar sin ella).',
+    if (!File(pendienteCierre.fotoCierrePath).existsSync() ||
+        !File(pendienteCierre.fotoNivelPath).existsSync()) {
+      await colaCierres.registrarError(
+        pendienteCierre.idLocal,
+        'Una evidencia del cierre ya no existe en el dispositivo.',
       );
       continue;
     }
@@ -1215,19 +1364,15 @@ Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
         kmCierre: pendienteCierre.kmCierre,
         horasEquipoMenorCierre: pendienteCierre.horasEquipoMenorCierre,
         fotoCierrePath: pendienteCierre.fotoCierrePath,
+        fotoNivelPath: pendienteCierre.fotoNivelPath,
+        existenciaFisica: pendienteCierre.existenciaFisica,
+        observaciones: pendienteCierre.observaciones,
       );
       await colaCierres.quitar(pendienteCierre.idLocal);
       await colaRecorridos.quitar(recorrido.idLocal);
     } on ApiException catch (e) {
       if (e.status == null) return;
-      await colaCierres.quitar(pendienteCierre.idLocal);
-      await colaRecorridos.quitar(recorrido.idLocal);
-      await _registrarAviso(
-        ref,
-        idLocal: pendienteCierre.idLocal,
-        descripcion: 'Cierre de recorrido de marimba',
-        motivo: e.mensaje,
-      );
+      await colaCierres.registrarError(pendienteCierre.idLocal, e.mensaje);
     }
     ref.read(operacionesTickProvider.notifier).state++;
   }
@@ -1246,6 +1391,8 @@ Future<void> sincronizarRecorridosMarimba(WidgetRef ref) =>
 /// que una se detenga por falta de red no impide que las demás lo
 /// intenten.
 Future<void> sincronizarSolicitudesOffline(WidgetRef ref) async {
+  final perfil = ref.read(sessionProvider);
+  if (perfil == null || (!perfil.esChofer && !perfil.esSupervisor)) return;
   await _sincronizarSolicitudes(ref);
   await _sincronizarComprobarCarga(ref);
   await _sincronizarCerrarDia(ref);

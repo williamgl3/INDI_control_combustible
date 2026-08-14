@@ -16,6 +16,7 @@ interface FilaDespacho {
   medidor_inicial: string | null; medidor_final: string | null; foto_medidor_path: string | null;
   cantidad_declarada: boolean | null; tipo_combustible: string | null;
   ubicacion: string | null; observaciones: string | null;
+  unidad_destino_etiqueta?: string | null; marimba_etiqueta?: string | null;
 }
 
 const numero = (valor: string | null): number | null => valor === null ? null : Number(valor);
@@ -36,6 +37,8 @@ function aDespacho(fila: FilaDespacho): DespachoMarimba {
     cantidadDeclarada: fila.cantidad_declarada, ubicacion: fila.ubicacion,
     tipoCombustible: fila.tipo_combustible,
     observaciones: fila.observaciones,
+    unidadDestinoEtiqueta: fila.unidad_destino_etiqueta ?? null,
+    marimbaEtiqueta: fila.marimba_etiqueta ?? null,
   };
 }
 
@@ -171,7 +174,13 @@ export async function listarDespachosDeMarimba(marimbaId: string): Promise<Despa
 }
 export async function listarDespachosDeRecorrido(recorridoId: string): Promise<DespachoMarimba[]> {
   const { rows } = await pool.query<FilaDespacho>(
-    'SELECT * FROM despachos_marimba WHERE recorrido_id=$1 ORDER BY creado_en', [recorridoId]);
+    `SELECT d.*,
+      COALESCE(destino.modelo,destino.placas,destino.numero_economico,d.destino_texto) unidad_destino_etiqueta,
+      COALESCE(origen.modelo,origen.placas,origen.numero_economico) marimba_etiqueta
+     FROM despachos_marimba d
+     LEFT JOIN vehiculos destino ON destino.id=d.vehiculo_destino_id
+     JOIN vehiculos origen ON origen.id=d.marimba_id
+     WHERE d.recorrido_id=$1 ORDER BY d.creado_en`, [recorridoId]);
   return rows.map(aDespacho);
 }
 export async function totalDespachadoDeRecorrido(

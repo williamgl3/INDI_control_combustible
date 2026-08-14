@@ -1,21 +1,21 @@
 import '../models/despacho_marimba.dart';
 import '../models/recorrido_marimba.dart';
+import '../models/panel_marimba.dart';
 
 /// Interfaz del flujo de recorridos (jornadas) de despacho de la marimba
 /// — implementada por [ApiRecorridosMarimbaRepository] (real) y por un
-/// fake en tests. Complementa a [DespachosMarimbaRepository]: aquí vive
-/// el encabezado de la jornada y su conciliación; los despachos
-/// individuales que agrega siguen siendo [DespachoMarimba].
+/// fake en tests. Es la única fuente de datos del recorrido completo:
+/// apertura, inventario, despachos y conciliación.
 abstract class RecorridosMarimbaRepository {
   Future<RecorridoMarimba> abrirRecorrido({
     required String marimbaId,
     required String tipoCombustible,
     required String frente,
-    String? cargaId,
-    required double litrosIniciales,
     double? kmInicio,
     double? horasEquipoMenorInicio,
   });
+
+  Future<double> saldoDeMarimba(String marimbaId, String tipoCombustible);
 
   Future<RecorridoMarimba?> buscarRecorrido(String id);
 
@@ -24,14 +24,17 @@ abstract class RecorridosMarimbaRepository {
   Future<DespachoMarimba> agregarDespacho({
     required String recorridoId,
     required String tipoCombustible,
-    String? vehiculoDestinoId,
-    String? destinoTexto,
+    required String vehiculoDestinoId,
     required String operadorTexto,
-    String? residenteTexto,
-    double? litrosSolicitados,
-    required double litrosSuministrados,
-    double? lecturaMedidor,
+    required double horometro,
+    required String fotoHorometroPath,
+    double? litrosDeclarados,
+    double? medidorInicial,
+    double? medidorFinal,
+    String? fotoMedidorPath,
     String? fotoEvidenciaPath,
+    String? ubicacion,
+    String? observaciones,
   });
 
   Future<RecorridoMarimba> cerrarRecorrido({
@@ -39,8 +42,8 @@ abstract class RecorridosMarimbaRepository {
     double? kmCierre,
     double? horasEquipoMenorCierre,
     required String fotoCierrePath,
-    double? existenciaFisica,
-    String? fotoNivelPath,
+    required double existenciaFisica,
+    required String fotoNivelPath,
     String? observaciones,
   });
 
@@ -49,4 +52,10 @@ abstract class RecorridosMarimbaRepository {
     String? marimbaId,
     bool? requiereRevision,
   });
+
+  Future<List<ResumenUnidadMarimba>> listarResumenUnidades();
+
+  Future<PaginaRecorridosMarimba> listarRecorridosAdministrativos(
+    FiltrosRecorridosMarimba filtros,
+  );
 }

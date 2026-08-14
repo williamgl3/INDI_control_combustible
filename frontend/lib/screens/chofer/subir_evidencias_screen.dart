@@ -169,7 +169,8 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
       }
     }
     if (referencia == null || referencia.precioPorLitro <= 0) return false;
-    final desviacion = (precio - referencia.precioPorLitro).abs() / referencia.precioPorLitro;
+    final desviacion =
+        (precio - referencia.precioPorLitro).abs() / referencia.precioPorLitro;
     return desviacion > _umbralDesviacionPrecioReferencia;
   }
 
@@ -247,7 +248,8 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
     // El selector de combustible es un grupo de chips, no un
     // `TextFormField` — el `Form.validate()` de arriba no lo cubre, así
     // que se revisa aquí a mano (mismo criterio que el chequeo de foto).
-    if (_tipo == _TipoEvidencia.comprobante && _tipoCombustibleCargado == null) {
+    if (_tipo == _TipoEvidencia.comprobante &&
+        _tipoCombustibleCargado == null) {
       setState(
         () => _errorGeneral = 'Selecciona el tipo de combustible cargado.',
       );
@@ -294,15 +296,16 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
         await SinConexionDialog.show(
           context,
           mensaje:
-              'La evidencia se guardó localmente y se enviará cuando vuelva la conexión.',
+              'Las evidencias todavía requieren conexión. Conserva las fotos e intenta de nuevo cuando vuelva la señal.',
         );
-      } else {
-        setState(() {
-          _enviando = false;
-          _errorGeneral = 'No se pudo guardar la evidencia. Intenta de nuevo.';
-        });
-        return;
       }
+      setState(() {
+        _enviando = false;
+        _errorGeneral = hayConexion
+            ? 'No se pudo guardar la evidencia. Intenta de nuevo.'
+            : 'No se envió la evidencia. Se requiere conexión.';
+      });
+      return;
     }
 
     if (!mounted) return;
@@ -445,17 +448,23 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
               ),
             ],
             const SizedBox(height: AppSpacing.xl),
-            Text('Litros cargados', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Litros cargados',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _litrosController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 hintText: 'Ej. 40.00',
                 prefixIcon: Icon(Icons.local_gas_station_outlined),
                 suffixText: 'L',
               ),
-              validator: (v) => Validators.numeroPositivo(v, etiqueta: 'Los litros'),
+              validator: (v) =>
+                  Validators.numeroPositivo(v, etiqueta: 'Los litros'),
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: AppSpacing.xl),
@@ -466,13 +475,16 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
             const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _precioController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 hintText: 'Ej. 23.99',
                 prefixIcon: Icon(Icons.sell_outlined),
                 prefixText: '\$ ',
               ),
-              validator: (v) => Validators.numeroPositivo(v, etiqueta: 'El precio por litro'),
+              validator: (v) =>
+                  Validators.numeroPositivo(v, etiqueta: 'El precio por litro'),
               onChanged: (_) => setState(() {}),
             ),
             if (_hayDesviacionPrecioReferencia) ...[
@@ -498,13 +510,16 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
             const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _totalController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 hintText: 'Ej. 959.60',
                 prefixIcon: Icon(Icons.payments_outlined),
                 prefixText: '\$ ',
               ),
-              validator: (v) => Validators.numeroPositivo(v, etiqueta: 'El total pagado'),
+              validator: (v) =>
+                  Validators.numeroPositivo(v, etiqueta: 'El total pagado'),
               onChanged: (_) => setState(() {}),
             ),
             if (_hayDiscrepanciaTotal) ...[
@@ -664,10 +679,7 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
     // mismo patrón que `TipoOperacionScreen`.
     final contenidoStandalone = Column(
       children: [
-        BrandSubHeader(
-          titulo: 'Subir evidencia',
-          onBack: () => context.pop(),
-        ),
+        BrandSubHeader(titulo: 'Subir evidencia', onBack: () => context.pop()),
         Expanded(
           child: SafeArea(
             top: false,

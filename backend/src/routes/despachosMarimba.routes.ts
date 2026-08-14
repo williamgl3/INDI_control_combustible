@@ -31,7 +31,7 @@ const schema = z.object({
   observaciones: z.string().trim().max(500).nullish(),
 });
 
-despachosMarimbaRouter.post('/', requireRole('supervisor', 'administrativo', 'superadmin') as never,
+despachosMarimbaRouter.post('/', requireRole('supervisor') as never,
   upload.fields([{ name: 'fotoHorometro', maxCount: 1 }, { name: 'fotoMedidor', maxCount: 1 },
     { name: 'fotoEvidencia', maxCount: 1 }]), verificarMagicBytes,
   asyncHandler(async (req: AuthRequest, res) => {

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/cola_solicitudes_offline.dart';
 import '../../core/connectivity_provider.dart';
 import '../../core/providers.dart';
+import '../../core/session_provider.dart';
 import '../../data/api_client.dart';
 import '../../models/vehiculo.dart';
 import '../../theme/app_theme.dart';
@@ -23,7 +24,10 @@ class ReportarIncidenciaDialog extends ConsumerStatefulWidget {
 
   final Vehiculo vehiculo;
 
-  static Future<bool?> show(BuildContext context, {required Vehiculo vehiculo}) {
+  static Future<bool?> show(
+    BuildContext context, {
+    required Vehiculo vehiculo,
+  }) {
     return mostrarDialogoApp<bool>(
       context,
       builder: (_) => ReportarIncidenciaDialog(vehiculo: vehiculo),
@@ -109,12 +113,25 @@ class _ReportarIncidenciaDialogState
   /// `cola_solicitudes_offline.dart`) — la foto es opcional aquí (a
   /// diferencia de las otras 3 colas, donde es obligatoria).
   Future<void> _encolarSinConexion(String descripcion) async {
+    final perfil = ref.read(sessionProvider);
+    if (perfil == null) {
+      if (mounted) {
+        setState(() {
+          _cargando = false;
+          _errorGeneral =
+              'Tu sesión ya no está disponible. Inicia sesión de nuevo.';
+        });
+      }
+      return;
+    }
+
     final ahora = DateTime.now();
     await ref
         .read(colaIncidenciasOfflineProvider)
         .agregar(
           IncidenciaPendienteOffline(
             idLocal: 'offline-${ahora.microsecondsSinceEpoch}',
+            usuarioId: perfil.id,
             vehiculoId: widget.vehiculo.id,
             descripcion: descripcion,
             creadaEn: ahora,

@@ -36,6 +36,8 @@ class RecorridoMarimba {
     this.estadoConciliacion,
     this.observacionesCierre,
     this.fotoNivelPath,
+    this.responsableNombre,
+    this.marimbaEtiqueta,
   });
 
   final String id;
@@ -80,6 +82,8 @@ class RecorridoMarimba {
   final String? estadoConciliacion;
   final String? observacionesCierre;
   final String? fotoNivelPath;
+  final String? responsableNombre;
+  final String? marimbaEtiqueta;
 
   factory RecorridoMarimba.fromJson(Map<String, dynamic> json) {
     return RecorridoMarimba(
@@ -117,6 +121,8 @@ class RecorridoMarimba {
       estadoConciliacion: json['estadoConciliacion'] as String?,
       observacionesCierre: json['observacionesCierre'] as String?,
       fotoNivelPath: json['fotoNivelPath'] as String?,
+      responsableNombre: json['responsableNombre'] as String?,
+      marimbaEtiqueta: json['marimbaEtiqueta'] as String?,
     );
   }
 
@@ -148,6 +154,8 @@ class RecorridoMarimba {
       'estadoConciliacion': estadoConciliacion,
       'observacionesCierre': observacionesCierre,
       'fotoNivelPath': fotoNivelPath,
+      'responsableNombre': responsableNombre,
+      'marimbaEtiqueta': marimbaEtiqueta,
     };
   }
 }

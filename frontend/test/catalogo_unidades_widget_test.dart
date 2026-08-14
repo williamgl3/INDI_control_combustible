@@ -2,12 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:indi_combustible/core/providers.dart';
+import 'package:indi_combustible/core/session_provider.dart';
+import 'package:indi_combustible/models/perfil.dart';
 import 'package:indi_combustible/screens/administrativo/tabs/vehiculos_tab.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
 
 import 'mocks/mock_vehiculos_repository.dart';
 
 void main() {
+  const perfilAdministrativo = Perfil(
+    id: 'admin-catalogo-widget',
+    usuario: 'admin_catalogo_widget',
+    nombre: 'Administrativo',
+    correo: 'admin.catalogo@example.com',
+    rol: RolUsuario.administrativo,
+  );
   late MockVehiculosRepository repo;
 
   setUp(() async {
@@ -50,9 +59,16 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    final container = ProviderContainer(
+      overrides: [vehiculosRepositoryProvider.overrideWithValue(repo)],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .iniciarSesion(perfilAdministrativo);
     await tester.pumpWidget(
-      ProviderScope(
-        overrides: [vehiculosRepositoryProvider.overrideWithValue(repo)],
+      UncontrolledProviderScope(
+        container: container,
         child: MaterialApp(
           theme: AppTheme.light(),
           darkTheme: AppTheme.dark(),

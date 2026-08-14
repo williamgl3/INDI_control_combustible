@@ -64,7 +64,7 @@ class _VehiculosTabState extends ConsumerState<VehiculosTab> {
   Future<void> _agregar() async {
     final guardado = await EditarVehiculoDialog.show(context);
     if (guardado == true && mounted) {
-      ref.invalidate(catalogoUnidadesProvider);
+      ref.read(catalogoUnidadesProvider.notifier).publicarCambiosLocales();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Unidad agregada correctamente.')),
       );
@@ -74,7 +74,7 @@ class _VehiculosTabState extends ConsumerState<VehiculosTab> {
   Future<void> _editar(Vehiculo unidad) async {
     final guardado = await EditarVehiculoDialog.show(context, vehiculo: unidad);
     if (guardado == true && mounted) {
-      ref.invalidate(catalogoUnidadesProvider);
+      ref.read(catalogoUnidadesProvider.notifier).publicarCambiosLocales();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Unidad actualizada correctamente.')),
       );
@@ -99,7 +99,7 @@ class _VehiculosTabState extends ConsumerState<VehiculosTab> {
       await ref
           .read(vehiculosRepositoryProvider)
           .cambiarEstado(id: unidad.id, activo: activar);
-      ref.invalidate(catalogoUnidadesProvider);
+      ref.read(catalogoUnidadesProvider.notifier).publicarCambiosLocales();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -193,7 +193,8 @@ class _VehiculosTabState extends ConsumerState<VehiculosTab> {
               icono: Icons.cloud_off_outlined,
               mensaje: 'No fue posible cargar el catálogo.',
               textoAccion: 'Reintentar',
-              onAccion: () => ref.invalidate(catalogoUnidadesProvider),
+              onAccion: () =>
+                  ref.read(catalogoUnidadesProvider.notifier).actualizar(),
             ),
             data: _construirCatalogo,
           ),

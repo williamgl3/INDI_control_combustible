@@ -4,7 +4,7 @@ enum EstadoDespacho { activo, inactivo }
 
 /// Un despacho de combustible de la marimba hacia una unidad de
 /// maquinaria en campo — la SALIDA del libro mayor de saldo de la
-/// marimba (ver `saldoActual` en `DespachosMarimbaRepository`). La
+/// marimba. La
 /// ENTRADA sigue siendo una [Carga] normal de un [Vehiculo] con
 /// `tipoUnidad == 'Marimba'`.
 @immutable
@@ -36,6 +36,8 @@ class DespachoMarimba {
     this.tipoCombustible,
     this.ubicacion,
     this.observaciones,
+    this.unidadDestinoEtiqueta,
+    this.marimbaEtiqueta,
   });
 
   final String id;
@@ -94,6 +96,8 @@ class DespachoMarimba {
   final String? tipoCombustible;
   final String? ubicacion;
   final String? observaciones;
+  final String? unidadDestinoEtiqueta;
+  final String? marimbaEtiqueta;
 
   /// Diferencia entre lo pedido y lo suministrado — `null` si no se
   /// capturó lo solicitado.
@@ -132,6 +136,8 @@ class DespachoMarimba {
       tipoCombustible: json['tipoCombustible'] as String?,
       ubicacion: json['ubicacion'] as String?,
       observaciones: json['observaciones'] as String?,
+      unidadDestinoEtiqueta: json['unidadDestinoEtiqueta'] as String?,
+      marimbaEtiqueta: json['marimbaEtiqueta'] as String?,
     );
   }
 
@@ -163,6 +169,8 @@ class DespachoMarimba {
       'tipoCombustible': tipoCombustible,
       'ubicacion': ubicacion,
       'observaciones': observaciones,
+      'unidadDestinoEtiqueta': unidadDestinoEtiqueta,
+      'marimbaEtiqueta': marimbaEtiqueta,
     };
   }
 }

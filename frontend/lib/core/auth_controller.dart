@@ -1,9 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/auth_repository.dart';
 import '../models/perfil.dart';
 import 'app_logger.dart';
-import 'cola_solicitudes_offline.dart';
 import 'providers.dart';
 import 'session_provider.dart';
 
@@ -88,15 +89,8 @@ class AuthController {
     final perfil = await _ref.read(sessionStorageProvider).leerPerfil();
     if (token == null || perfil == null) return;
 
-    // Precarga ANTES de anunciar la sesión: el guard de rutas navega en
-    // cuanto `sessionProvider` cambia, así que si `iniciarSesion` fuera
-    // primero, la pantalla de inicio del chofer podría alcanzar a
-    // renderizar con listas vacías por un instante antes de que lleguen
-    // los datos reales. El token ya está guardado por separado
-    // (`TokenStorage`, no depende de `sessionProvider`), así que
-    // `_precargarDatos` puede llamar al backend sin problema.
-    await _precargarDatos(perfil);
     _ref.read(sessionProvider.notifier).iniciarSesion(perfil);
+    unawaited(precargarDatosDeSesion(perfil));
   }
 
   Future<void> _completarSesion(ResultadoAuth resultado) async {
@@ -106,52 +100,56 @@ class AuthController {
         .read(tokenStorageProvider)
         .guardarRefreshToken(resultado.refreshToken);
     await _ref.read(sessionStorageProvider).guardarPerfil(perfil);
-    // Mismo orden que en `restaurarSesionAlIniciar` y por la misma razón.
-    await _precargarDatos(perfil);
     _ref.read(sessionProvider.notifier).iniciarSesion(perfil);
+    unawaited(precargarDatosDeSesion(perfil));
   }
 
-  Future<void> _precargarDatos(Perfil perfil) async {
-    // Con la sesión ya lista (token guardado, así que el ApiClient lo
-    // manda en cada petición), se precarga todo lo que las pantallas
-    // leen de forma síncrona de los repositorios (ver
-    // `operacionesTickProvider`). Si falla (sin conexión, etc.), no se
-    // interrumpe el login — las pantallas simplemente verán listas
-    // vacías hasta que se reintente.
-    try {
-      await Future.wait([
-        _ref.read(vehiculosRepositoryProvider).cargarVehiculos(),
-        _ref
-            .read(operacionesRepositoryProvider)
-            .cargarDatosIniciales(perfil: perfil),
-        if (perfil.esAdministrativo) ...[
-          _ref.read(authRepositoryProvider).cargarChoferes(),
-          _ref.read(incidenciasRepositoryProvider).cargarTodasLasIncidencias(),
-          _ref.read(evidenciasRepositoryProvider).cargarTodasLasEvidencias(),
-        ] else
-          _ref.read(incidenciasRepositoryProvider).cargarMisIncidencias(),
-      ]);
-    } catch (e) {
-      // Antes fallaba en silencio. Ahora, para el chofer (el centro de
-      // notificaciones de `notificaciones_provider.dart` solo existe para
-      // ese rol), queda un aviso visible — el manejo de conectividad ya
-      // está definido (`connectivity_provider.dart` +
-      // `cola_solicitudes_offline.dart`).
-      if (perfil.esChofer) {
-        await _ref
-            .read(avisosSincronizacionOfflineProvider)
-            .agregar(
-              AvisoSincronizacionFallida(
-                id: 'aviso-precarga-${DateTime.now().microsecondsSinceEpoch}',
-                descripcion: 'Sincronización inicial',
-                motivo: 'No pudimos traer tus datos más recientes.',
-                ocurridoEn: DateTime.now(),
-              ),
-            );
+  /// Inicia cargas independientes para la sesión ya autenticada. Es
+  /// público para poder validar la matriz de roles sin iniciar navegación.
+  Future<void> precargarDatosDeSesion(Perfil perfil) async {
+    Future<void> aislada(String nombre, Future<void> Function() carga) async {
+      try {
+        await carga();
+      } catch (e) {
+        AppLogger.error('AuthController.precargarDatosDeSesion.$nombre', e);
       }
-      AppLogger.error('AuthController._precargarDatos', e);
     }
-    _ref.read(operacionesTickProvider.notifier).state++;
+
+    await Future.wait([
+      aislada('unidades', () async {
+        await _ref.read(catalogoUnidadesProvider.future);
+      }),
+      aislada('operaciones', () async {
+        await _ref
+            .read(operacionesRepositoryProvider)
+            .cargarDatosIniciales(perfil: perfil);
+        if (_ref.read(sessionProvider)?.id == perfil.id) {
+          _ref.read(operacionesTickProvider.notifier).state++;
+        }
+      }),
+      if (perfil.esAdministrativo) ...[
+        aislada(
+          'usuarios',
+          () => _ref.read(authRepositoryProvider).cargarChoferes(),
+        ),
+        aislada(
+          'incidencias',
+          () => _ref
+              .read(incidenciasRepositoryProvider)
+              .cargarTodasLasIncidencias(),
+        ),
+        aislada(
+          'evidencias',
+          () => _ref
+              .read(evidenciasRepositoryProvider)
+              .cargarTodasLasEvidencias(),
+        ),
+      ] else
+        aislada(
+          'incidencias',
+          () => _ref.read(incidenciasRepositoryProvider).cargarMisIncidencias(),
+        ),
+    ]);
   }
 }
 

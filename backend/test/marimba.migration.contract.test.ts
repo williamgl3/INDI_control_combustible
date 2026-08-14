@@ -25,6 +25,9 @@ describe('contrato declarativo de la migración 0031', () => {
       'FOREIGN KEY (solicitud_partida_id, solicitud_id, vehiculo_id, tipo, tipo_combustible)',
     );
     expect(sql).toContain('FOREIGN KEY (carga_partida_id, carga_id, concepto)');
+    expect(sql).toContain(
+      'FOREIGN KEY (despacho_id, recorrido_id, marimba_id, tipo_combustible)',
+    );
   });
 
   it('conserva cantidad_declarada nullable y sin default', () => {

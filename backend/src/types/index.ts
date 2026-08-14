@@ -222,6 +222,8 @@ export interface DespachoMarimba {
   tipoCombustible?: string | null;
   ubicacion?: string | null;
   observaciones?: string | null;
+  unidadDestinoEtiqueta?: string | null;
+  marimbaEtiqueta?: string | null;
 }
 
 export interface SaldoMarimba {
@@ -259,6 +261,8 @@ export interface RecorridoMarimba {
   estadoConciliacion?: 'conciliado' | 'diferencia_pendiente' | null;
   observacionesCierre?: string | null;
   fotoNivelPath?: string | null;
+  responsableNombre?: string | null;
+  marimbaEtiqueta?: string | null;
 }
 
 /// Payload embebido en el JWT. `tokenVersion` habilita revocación: se

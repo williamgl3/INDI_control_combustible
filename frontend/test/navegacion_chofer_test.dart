@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:indi_combustible/core/session_provider.dart';
+import 'package:indi_combustible/models/perfil.dart';
 import 'package:indi_combustible/router/route_paths.dart';
 import 'package:indi_combustible/screens/chofer/chofer_home_shell.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
@@ -33,6 +36,62 @@ void main() {
       );
     }
   });
+
+  for (final perfil in [_chofer, _supervisor]) {
+    testWidgets(
+      'el sidebar muestra iconos contrastantes para ${perfil.rol.name}',
+      (tester) async {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [sessionProvider.overrideWith(() => _Sesion(perfil))],
+            child: MaterialApp(
+              theme: AppTheme.light(),
+              home: Scaffold(
+                body: SidebarChofer(
+                  indiceSeleccionado: 1,
+                  onSeleccionar: _sinAccion,
+                ),
+              ),
+            ),
+          ),
+        );
+
+        final context = tester.element(find.byType(SidebarChofer));
+        final scheme = Theme.of(context).colorScheme;
+
+        expect(find.byType(Icon), findsNWidgets(destinosChofer.length));
+        for (final destino in destinosChofer) {
+          expect(find.text(destino.etiqueta), findsOneWidget);
+        }
+
+        for (var i = 0; i < destinosChofer.length; i++) {
+          final item = find.byKey(ValueKey('sidebar-chofer-destino-$i'));
+          final icon = tester.widget<Icon>(
+            find.descendant(of: item, matching: find.byType(Icon)),
+          );
+          final material = tester.widget<Material>(
+            find.descendant(of: item, matching: find.byType(Material)),
+          );
+          final activo = i == 1;
+
+          expect(material.color, activo ? scheme.primary : Colors.transparent);
+          expect(
+            icon.color,
+            activo ? scheme.onPrimary : scheme.onSurfaceVariant,
+          );
+          expect(icon.color, isNot(material.color));
+        }
+
+        expect(
+          find.byWidgetPredicate(
+            (widget) => widget is Material && widget.color == scheme.primary,
+          ),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   for (final themeMode in [ThemeMode.light, ThemeMode.dark]) {
     testWidgets('la barra usa colores semánticos en $themeMode', (
@@ -100,3 +159,30 @@ void main() {
 }
 
 void _sinAccion(int _) {}
+
+const _chofer = Perfil(
+  id: 'chofer-sidebar',
+  usuario: 'chofer.sidebar',
+  nombre: 'Chofer',
+  apellidoPaterno: 'Prueba',
+  correo: 'chofer.sidebar@example.com',
+  rol: RolUsuario.chofer,
+);
+
+const _supervisor = Perfil(
+  id: 'supervisor-sidebar',
+  usuario: 'supervisor.sidebar',
+  nombre: 'Supervisor',
+  apellidoPaterno: 'Prueba',
+  correo: 'supervisor.sidebar@example.com',
+  rol: RolUsuario.supervisor,
+);
+
+class _Sesion extends SessionController {
+  _Sesion(this.perfil);
+
+  final Perfil perfil;
+
+  @override
+  Perfil? build() => perfil;
+}

@@ -155,15 +155,17 @@ ALTER TABLE recorridos_marimba
 ALTER TABLE despachos_marimba
   ADD CONSTRAINT despachos_id_marimba_combustible_unique
     UNIQUE(id, marimba_id, tipo_combustible),
+  ADD CONSTRAINT despachos_id_recorrido_marimba_combustible_unique
+    UNIQUE(id, recorrido_id, marimba_id, tipo_combustible),
   ADD CONSTRAINT despachos_recorrido_marimba_fk
     FOREIGN KEY (recorrido_id, marimba_id) REFERENCES recorridos_marimba(id, marimba_id);
 ALTER TABLE movimientos_inventario_marimba
   ADD CONSTRAINT movimientos_recorrido_marimba_combustible_fk
     FOREIGN KEY (recorrido_id, marimba_id, tipo_combustible)
     REFERENCES recorridos_marimba(id, marimba_id, tipo_combustible),
-  ADD CONSTRAINT movimientos_despacho_marimba_combustible_fk
-    FOREIGN KEY (despacho_id, marimba_id, tipo_combustible)
-    REFERENCES despachos_marimba(id, marimba_id, tipo_combustible);
+  ADD CONSTRAINT movimientos_despacho_recorrido_marimba_combustible_fk
+    FOREIGN KEY (despacho_id, recorrido_id, marimba_id, tipo_combustible)
+    REFERENCES despachos_marimba(id, recorrido_id, marimba_id, tipo_combustible);
 
 -- `suministros`, `movimientos_marimba` y `saldo_marimba` permanecen sin
 -- cambios para consultas históricas. Las operaciones nuevas usan las

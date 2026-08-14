@@ -47,7 +47,7 @@ const cerrarDiaSchema = z.object({
 /// `fotoTablero` — igual que `CapturaFotoField` en `CerrarDiaScreen`.
 cierresDiaRouter.post(
   '/',
-  requireRole('chofer') as never,
+  requireRole('chofer', 'supervisor') as never,
   upload.single('fotoTablero'),
   verificarMagicBytes,
   asyncHandler(async (req: AuthRequest, res) => {

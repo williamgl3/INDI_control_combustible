@@ -18,6 +18,7 @@ interface FilaRecorrido {
   estado_conciliacion: 'conciliado' | 'diferencia_pendiente' | null;
   observaciones_cierre: string | null; foto_nivel_path: string | null;
   tipo_combustible: string | null;
+  responsable_nombre?: string | null; marimba_etiqueta?: string | null;
 }
 const n = (v: string | null): number | null => v === null ? null : Number(v);
 function aRecorrido(f: FilaRecorrido): RecorridoMarimba {
@@ -32,11 +33,16 @@ function aRecorrido(f: FilaRecorrido): RecorridoMarimba {
     registradoPor:f.registrado_por, entradasGranelTotal:n(f.entradas_granel_total),
     existenciaFisica:n(f.existencia_fisica), estadoConciliacion:f.estado_conciliacion,
     observacionesCierre:f.observaciones_cierre, fotoNivelPath:f.foto_nivel_path,
-    tipoCombustible:f.tipo_combustible };
+    tipoCombustible:f.tipo_combustible,responsableNombre:f.responsable_nombre??null,
+    marimbaEtiqueta:f.marimba_etiqueta??null };
 }
 
 export async function buscarRecorridoPorId(id:string):Promise<RecorridoMarimba|null>{
-  const {rows}=await pool.query<FilaRecorrido>('SELECT * FROM recorridos_marimba WHERE id=$1',[id]);
+  const {rows}=await pool.query<FilaRecorrido>(`SELECT r.*,
+    NULLIF(trim(concat_ws(' ',u.nombre,u.apellido_paterno,u.apellido_materno)),'') responsable_nombre,
+    COALESCE(v.modelo,v.placas,v.numero_economico) marimba_etiqueta
+    FROM recorridos_marimba r JOIN vehiculos v ON v.id=r.marimba_id
+    JOIN usuarios u ON u.id=r.operador_id WHERE r.id=$1`,[id]);
   return rows[0]?aRecorrido(rows[0]):null;
 }
 export async function buscarRecorridoAccesible(
@@ -57,6 +63,82 @@ export async function listarRecorridos(f?:{
   const where=condiciones.length?`WHERE ${condiciones.join(' AND ')}`:'';
   const {rows}=await pool.query<FilaRecorrido>(`SELECT * FROM recorridos_marimba ${where} ORDER BY iniciado_en DESC`,valores);
   return rows.map(aRecorrido);
+}
+
+export interface ResumenUnidadMarimba {
+  id:string; tipoUnidad:string; placas:string|null; numeroEconomico:string|null;
+  modelo:string|null; activo:boolean; recorridoAbiertoId:string|null;
+  responsableId:string|null;responsableNombre:string|null;fechaApertura:string|null;
+  saldoMagna:string|null;saldoDiesel:string|null;ultimaActividad:string|null;
+  requiereRevision:boolean;
+}
+
+export async function resumenUnidadesAdministrativo():Promise<ResumenUnidadMarimba[]>{
+  const {rows}=await pool.query<{
+    id:string;tipo_unidad:string;placas:string|null;numero_economico:string|null;
+    modelo:string|null;activo:boolean;recorrido_abierto_id:string|null;
+    responsable_id:string|null;responsable_nombre:string|null;fecha_apertura:Date|null;
+    saldo_magna:string|null;saldo_diesel:string|null;ultima_actividad:Date|null;
+    requiere_revision:boolean;
+  }>(`SELECT v.id,v.tipo_unidad,v.placas,v.numero_economico,v.modelo,v.activo,
+      r.id recorrido_abierto_id,r.operador_id responsable_id,
+      NULLIF(trim(concat_ws(' ',u.nombre,u.apellido_paterno,u.apellido_materno)),'') responsable_nombre,
+      r.iniciado_en fecha_apertura,s.saldo_magna,s.saldo_diesel,COALESCE(r.requiere_revision,false) requiere_revision,
+      GREATEST(r.iniciado_en,a.ultima_actividad) ultima_actividad
+    FROM vehiculos v
+    LEFT JOIN LATERAL (
+      SELECT
+        SUM(CASE WHEN tipo_combustible='Magna' THEN CASE WHEN tipo='entrada_granel' THEN litros ELSE -litros END END)::text saldo_magna,
+        SUM(CASE WHEN tipo_combustible='Diésel' THEN CASE WHEN tipo='entrada_granel' THEN litros ELSE -litros END END)::text saldo_diesel
+      FROM movimientos_inventario_marimba WHERE marimba_id=v.id
+    ) s ON true
+    LEFT JOIN LATERAL (
+      SELECT * FROM recorridos_marimba WHERE marimba_id=v.id AND estado='abierto'
+      ORDER BY iniciado_en DESC LIMIT 1
+    ) r ON true
+    LEFT JOIN usuarios u ON u.id=r.operador_id
+    LEFT JOIN LATERAL (
+      SELECT MAX(creado_en) ultima_actividad FROM movimientos_inventario_marimba WHERE marimba_id=v.id
+    ) a ON true
+    WHERE v.tipo_unidad IN ('Marimba','Pipa') ORDER BY v.activo DESC,v.numero_economico,v.placas`);
+  return rows.map((fila)=>({
+    id:fila.id,tipoUnidad:fila.tipo_unidad,placas:fila.placas,
+    numeroEconomico:fila.numero_economico,modelo:fila.modelo,activo:fila.activo,
+    recorridoAbiertoId:fila.recorrido_abierto_id,responsableId:fila.responsable_id,
+    responsableNombre:fila.responsable_nombre,fechaApertura:fila.fecha_apertura?.toISOString()??null,
+    saldoMagna:fila.saldo_magna,saldoDiesel:fila.saldo_diesel,
+    ultimaActividad:fila.ultima_actividad?.toISOString()??null,
+    requiereRevision:fila.requiere_revision,
+  }));
+}
+
+export async function listarRecorridosAdministrativo(f:{
+  marimbaId?:string|undefined;categoria?:'Marimba'|'Pipa'|undefined;tipoCombustible?:string|undefined;
+  estado?:EstadoRecorridoMarimba|undefined;responsableId?:string|undefined;
+  requiereRevision?:boolean|undefined;fechaDesde?:Date|undefined;fechaHasta?:Date|undefined;
+  page:number;limit:number;
+}):Promise<{items:RecorridoMarimba[];total:number;page:number;limit:number;totalPages:number}>{
+  const condiciones:string[]=[];const valores:unknown[]=[];
+  const agregar=(sql:string,valor:unknown)=>{valores.push(valor);condiciones.push(`${sql}$${valores.length}`);};
+  if(f.marimbaId)agregar('r.marimba_id=',f.marimbaId);
+  if(f.categoria)agregar('v.tipo_unidad=',f.categoria);
+  if(f.tipoCombustible)agregar('r.tipo_combustible=',f.tipoCombustible);
+  if(f.estado)agregar('r.estado=',f.estado);
+  if(f.responsableId)agregar('r.operador_id=',f.responsableId);
+  if(f.requiereRevision!==undefined)agregar('r.requiere_revision=',f.requiereRevision);
+  if(f.fechaDesde)agregar('r.iniciado_en>=',f.fechaDesde);
+  if(f.fechaHasta)agregar('r.iniciado_en<=',f.fechaHasta);
+  const where=condiciones.length?`WHERE ${condiciones.join(' AND ')}`:'';
+  const base='FROM recorridos_marimba r JOIN vehiculos v ON v.id=r.marimba_id';
+  const {rows:totalRows}=await pool.query<{total:string}>(`SELECT count(*) total ${base} ${where}`,valores);
+  valores.push(f.limit,(f.page-1)*f.limit);
+  const {rows}=await pool.query<FilaRecorrido>(`SELECT r.*,
+    NULLIF(trim(concat_ws(' ',u.nombre,u.apellido_paterno,u.apellido_materno)),'') responsable_nombre,
+    COALESCE(v.modelo,v.placas,v.numero_economico) marimba_etiqueta
+    ${base} JOIN usuarios u ON u.id=r.operador_id ${where}
+    ORDER BY r.iniciado_en DESC LIMIT $${valores.length-1} OFFSET $${valores.length}`,valores);
+  const total=Number(totalRows[0]?.total??0);
+  return {items:rows.map(aRecorrido),total,page:f.page,limit:f.limit,totalPages:Math.ceil(total/f.limit)};
 }
 
 export async function crearRecorrido(datos:{marimbaId:string;operadorId:string;registradoPor:string;frente:string;
