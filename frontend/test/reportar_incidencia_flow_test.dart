@@ -49,10 +49,10 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.ensureVisible(
-        find.widgetWithText(FloatingActionButton, 'Solicitar carga'),
+        find.byKey(const ValueKey('solicitar-desde-estado-vacio')),
       );
       await tester.tap(
-        find.widgetWithText(FloatingActionButton, 'Solicitar carga'),
+        find.byKey(const ValueKey('solicitar-desde-estado-vacio')),
       );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Vehículo Ligero'));
@@ -82,6 +82,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Incidencia reportada.'), findsOneWidget);
+      final mensajeContext = tester.element(find.byType(SnackBar));
+      ScaffoldMessenger.of(mensajeContext).hideCurrentSnackBar();
+      await tester.pumpAndSettle();
 
       // Vuelve a /chofer y entra como admin en una sesión nueva.
       // "Cerrar sesión" del chofer está en la pestaña Perfil del bottom nav.
@@ -91,7 +94,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.arrow_back));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Perfil'));
+      final accesoPerfil = find.byKey(const ValueKey('sidebar-chofer-perfil'));
+      await tester.ensureVisible(accesoPerfil);
+      await tester.tap(accesoPerfil);
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Cerrar sesión'));
       await tester.tap(find.text('Cerrar sesión'));
@@ -103,10 +108,6 @@ void main() {
           matching: find.text('Cerrar sesión'),
         ),
       );
-      await tester.pumpAndSettle();
-
-      await tester.ensureVisible(find.text('Iniciar sesión'));
-      await tester.tap(find.text('Iniciar sesión'));
       await tester.pumpAndSettle();
 
       await tester.ensureVisible(find.text('Entrar como administrador'));
@@ -142,10 +143,7 @@ void main() {
       // GroupedSection pinta su `header` en mayúsculas (ver
       // `grouped_section.dart`: `header!.toUpperCase()`).
       expect(find.text('INCIDENCIAS REPORTADAS (1)'), findsOneWidget);
-      expect(
-        find.text('Se ponchó una llanta en el camino.'),
-        findsOneWidget,
-      );
+      expect(find.text('Se ponchó una llanta en el camino.'), findsOneWidget);
 
       // El admin la marca como resuelta.
       await tester.ensureVisible(find.text('Resolver'));
@@ -161,10 +159,7 @@ void main() {
 
       expect(find.textContaining('INCIDENCIAS REPORTADAS'), findsNothing);
       final incidenciasRepo = container.read(incidenciasRepositoryProvider);
-      expect(
-        incidenciasRepo.todasLasIncidencias.first.estado.name,
-        'resuelta',
-      );
+      expect(incidenciasRepo.todasLasIncidencias.first.estado.name, 'resuelta');
     },
   );
 }

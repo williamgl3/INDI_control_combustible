@@ -61,7 +61,9 @@ void main() {
 
       // Solicitar carga. chofer1 no tiene historial todavía, así que queda
       // pendiente de revisión manual (no se auto-aprueba).
-      await tester.tap(find.widgetWithText(FloatingActionButton, 'Solicitar carga'));
+      await tester.tap(
+        find.byKey(const ValueKey('solicitar-desde-estado-vacio')),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Vehículo Ligero'));
       await tester.pumpAndSettle();
@@ -80,10 +82,7 @@ void main() {
         '40',
       );
       await tester.tap(
-        find.descendant(
-          of: find.byType(Dialog),
-          matching: find.text('Listo'),
-        ),
+        find.descendant(of: find.byType(Dialog), matching: find.text('Listo')),
       );
       await tester.pumpAndSettle();
       await tester.enterText(
@@ -101,7 +100,7 @@ void main() {
       // El admin la resuelve desde su propia sesión (esto también ejercita
       // RevisarSolicitudDialog de punta a punta). "Cerrar sesión" del
       // chofer ahora está en la pestaña Perfil del bottom nav.
-      await tester.tap(find.text('Perfil'));
+      await tester.tap(find.byKey(const ValueKey('sidebar-chofer-perfil')));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Cerrar sesión'));
       await tester.tap(find.text('Cerrar sesión'));
@@ -115,10 +114,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Sin sesión, la app aterriza en la pantalla de bienvenida.
-      await tester.ensureVisible(find.text('Iniciar sesión'));
-      await tester.tap(find.text('Iniciar sesión'));
-      await tester.pumpAndSettle();
+      // El cierre explícito reemplaza la pantalla protegida por Login;
+      // no debe quedar una pantalla administrativa en el historial.
+      expect(find.widgetWithText(TextFormField, 'Usuario'), findsOneWidget);
 
       await tester.ensureVisible(find.text('Entrar como administrador'));
       await tester.tap(find.text('Entrar como administrador'));
@@ -171,10 +169,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Sin sesión, la app aterriza en la pantalla de bienvenida.
-      await tester.ensureVisible(find.text('Iniciar sesión'));
-      await tester.tap(find.text('Iniciar sesión'));
-      await tester.pumpAndSettle();
+      expect(find.widgetWithText(TextFormField, 'Usuario'), findsOneWidget);
 
       // De vuelta como chofer1, en una sesión nueva.
       await tester.enterText(

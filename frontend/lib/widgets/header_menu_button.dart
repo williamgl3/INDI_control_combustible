@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/app_motion.dart';
 import '../theme/app_radii.dart';
@@ -57,7 +58,10 @@ class _HeaderMenuButtonState extends State<HeaderMenuButton>
     // llega a desmontarse antes de que `build()` los toque, un `late final`
     // los crearía recién en `dispose()`, y armar un ticker con `vsync: this`
     // ahí es inválido (el context ya está inactivo).
-    _animController = AnimationController(vsync: this, duration: AppMotion.base);
+    _animController = AnimationController(
+      vsync: this,
+      duration: AppMotion.base,
+    );
     _fade = CurvedAnimation(parent: _animController, curve: AppMotion.curve);
     _slide = Tween<Offset>(
       begin: const Offset(0, -0.06),
@@ -90,49 +94,62 @@ class _HeaderMenuButtonState extends State<HeaderMenuButton>
       child: OverlayPortal(
         controller: _overlayController,
         overlayChildBuilder: (context) {
-          return Stack(
-            children: [
-              // Barrera invisible: cierra el menú al tocar fuera de él.
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: _cerrar,
-                ),
-              ),
-              CompositedTransformFollower(
-                link: _link,
-                targetAnchor: Alignment.bottomRight,
-                followerAnchor: Alignment.topRight,
-                offset: const Offset(0, 10),
-                child: FadeTransition(
-                  opacity: _fade,
-                  child: SlideTransition(
-                    position: _slide,
-                    child: Align(
-                      alignment: Alignment.topRight,
-                      child: Material(
-                        color: Colors.transparent,
-                        child: ConstrainedBox(
-                          // 220 es el ancho mínimo (el que se ve bien con
-                          // etiquetas cortas como "Tema"); `IntrinsicWidth`
-                          // deja crecer la tarjeta si algún ítem trae una
-                          // etiqueta más larga, en vez de partir de un
-                          // ancho fijo que esa etiqueta pueda desbordar.
-                          constraints: const BoxConstraints(minWidth: 220),
-                          child: IntrinsicWidth(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                              decoration: BoxDecoration(
-                                color: colors.surface,
-                                borderRadius: AppRadii.cardRadius,
-                                boxShadow: context.shadows.raised,
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  for (final item in widget.items)
-                                    _MenuTile(item: item, onCerrar: _cerrar),
-                                ],
+          return CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.escape): () => _cerrar(),
+            },
+            child: Focus(
+              autofocus: true,
+              child: Stack(
+                children: [
+                  // Barrera invisible: cierra el menú al tocar fuera de él.
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTap: _cerrar,
+                    ),
+                  ),
+                  CompositedTransformFollower(
+                    link: _link,
+                    targetAnchor: Alignment.bottomRight,
+                    followerAnchor: Alignment.topRight,
+                    offset: const Offset(0, 10),
+                    child: FadeTransition(
+                      opacity: _fade,
+                      child: SlideTransition(
+                        position: _slide,
+                        child: Align(
+                          alignment: Alignment.topRight,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: ConstrainedBox(
+                              // 220 es el ancho mínimo (el que se ve bien con
+                              // etiquetas cortas como "Tema"); `IntrinsicWidth`
+                              // deja crecer la tarjeta si algún ítem trae una
+                              // etiqueta más larga, en vez de partir de un
+                              // ancho fijo que esa etiqueta pueda desbordar.
+                              constraints: const BoxConstraints(minWidth: 220),
+                              child: IntrinsicWidth(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colors.surface,
+                                    borderRadius: AppRadii.cardRadius,
+                                    boxShadow: context.shadows.raised,
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      for (final item in widget.items)
+                                        _MenuTile(
+                                          item: item,
+                                          onCerrar: _cerrar,
+                                        ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -140,9 +157,9 @@ class _HeaderMenuButtonState extends State<HeaderMenuButton>
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           );
         },
         child: HeaderGlassButton(
@@ -155,45 +172,35 @@ class _HeaderMenuButtonState extends State<HeaderMenuButton>
   }
 }
 
-class _MenuTile extends StatefulWidget {
+class _MenuTile extends StatelessWidget {
   const _MenuTile({required this.item, required this.onCerrar});
 
   final HeaderMenuItem item;
   final Future<void> Function() onCerrar;
 
   @override
-  State<_MenuTile> createState() => _MenuTileState();
-}
-
-class _MenuTileState extends State<_MenuTile> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final color = widget.item.destructive ? colors.error : colors.textPrimary;
+    final color = item.destructive ? colors.error : colors.textPrimary;
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        hoverColor: colors.surfaceAlt,
+        focusColor: colors.primary.withValues(alpha: 0.1),
         onTap: () async {
-          await widget.onCerrar();
-          widget.item.onTap();
+          await onCerrar();
+          item.onTap();
         },
-        child: AnimatedContainer(
-          duration: AppMotion.fast,
-          curve: AppMotion.curve,
-          color: _hover ? colors.surfaceAlt : Colors.transparent,
+        child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
-              Icon(widget.item.icon, size: 20, color: color),
+              Icon(item.icon, size: 20, color: color),
               const SizedBox(width: 12),
               Flexible(
                 child: Text(
-                  widget.item.label,
+                  item.label,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(
                     context,

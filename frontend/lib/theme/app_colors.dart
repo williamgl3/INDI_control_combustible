@@ -100,12 +100,12 @@ class AppColors extends ThemeExtension<AppColors> {
     warning: Color(0xFFC26A00),
     error: Color(0xFFD70015),
     info: Color(0xFF0A84FF),
-    sidebarBackground: Color(0xFFF2F2F7),
+    sidebarBackground: Color(0xFF0B1F3A),
     // Azul suave (systemBlue al ~12% sobre blanco) — misma fila
     // seleccionada que usa el sidebar de Ajustes en iPad.
-    sidebarSurfaceAlt: Color(0xFFDCE9FF),
-    sidebarText: Color(0xFF000000),
-    sidebarTextMuted: Color(0xFF6C6C70),
+    sidebarSurfaceAlt: Color(0xFF173A67),
+    sidebarText: Color(0xFFFFFFFF),
+    sidebarTextMuted: Color(0xFFC4D2E5),
     brandHeaderStart: Color(0xFF0A2A54),
     brandHeaderEnd: Color(0xFF1463FF),
     brandHeaderDot: Color(0xFF5B8AFF),

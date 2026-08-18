@@ -12,6 +12,7 @@ import '../../theme/app_breakpoints.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_section_colors.dart';
+import '../../theme/app_spacing.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/acerca_de_dialog.dart';
 import '../../widgets/ayuda_soporte_dialog.dart';
@@ -22,6 +23,7 @@ import '../../widgets/header_menu_button.dart';
 import '../../widgets/icon_badge.dart';
 import '../../widgets/notificaciones_bell.dart';
 import '../../widgets/selector_tema_dialog.dart';
+import '../chofer/mi_perfil_screen.dart';
 import 'tabs/auditoria_tab.dart';
 import 'tabs/autorizaciones_tab.dart';
 import 'tabs/choferes_tab.dart';
@@ -42,6 +44,7 @@ enum _SeccionAdmin {
   marimba,
   choferes,
   auditoria,
+  perfil,
 }
 
 class _Destino {
@@ -107,6 +110,12 @@ const _destinos = [
     'Auditoría',
     AppSectionColors.auditoria,
   ),
+  _Destino(
+    _SeccionAdmin.perfil,
+    Icons.person_outline,
+    'Mi perfil',
+    AppSectionColors.choferes,
+  ),
 ];
 
 /// Orden de navegación móvil: las 4 secciones que más se revisan quedan
@@ -121,14 +130,53 @@ const _seccionesPrincipalesMovil = [
   _SeccionAdmin.dashboard,
 ];
 
+const _descripcionSeccion = {
+  _SeccionAdmin.dashboard: 'Vista general de la operación disponible.',
+  _SeccionAdmin.autorizaciones: 'Revisa y atiende solicitudes de combustible.',
+  _SeccionAdmin.concentrado: 'Consulta cargas, cierres y rendimientos.',
+  _SeccionAdmin.finanzas: 'Consulta presupuesto y precios vigentes.',
+  _SeccionAdmin.vehiculos: 'Administra el catálogo de unidades.',
+  _SeccionAdmin.mantenimiento: 'Da seguimiento al estado de las unidades.',
+  _SeccionAdmin.marimba: 'Consulta inventarios y recorridos de campo.',
+  _SeccionAdmin.choferes: 'Consulta perfiles y actividad de choferes.',
+  _SeccionAdmin.auditoria: 'Revisa el historial de acciones registradas.',
+  _SeccionAdmin.perfil: 'Consulta tu cuenta y actualiza tu contraseña.',
+};
+
+const _gruposSidebar = <(String, List<_SeccionAdmin>)>[
+  (
+    'OPERACIÓN',
+    [
+      _SeccionAdmin.dashboard,
+      _SeccionAdmin.autorizaciones,
+      _SeccionAdmin.concentrado,
+    ],
+  ),
+  (
+    'CONTROL',
+    [
+      _SeccionAdmin.finanzas,
+      _SeccionAdmin.vehiculos,
+      _SeccionAdmin.mantenimiento,
+      _SeccionAdmin.marimba,
+    ],
+  ),
+  ('ADMINISTRACIÓN', [_SeccionAdmin.choferes, _SeccionAdmin.auditoria]),
+];
+
 /// Shell del panel administrativo: sidebar en escritorio/tablet
 /// (≥ [AppBreakpoints.tablet], con las 8 secciones) y bottom nav en móvil
 /// (4 principales + "Más", ver [_seccionesPrincipalesMovil]) — decisión de
 /// arquitectura confirmada por el usuario.
 class AdministrativoHomeScreen extends ConsumerStatefulWidget {
-  const AdministrativoHomeScreen({super.key, this.mostrarMarimba = false});
+  const AdministrativoHomeScreen({
+    super.key,
+    this.mostrarMarimba = false,
+    this.seccionInicial,
+  });
 
   final bool mostrarMarimba;
+  final String? seccionInicial;
 
   @override
   ConsumerState<AdministrativoHomeScreen> createState() =>
@@ -137,29 +185,51 @@ class AdministrativoHomeScreen extends ConsumerStatefulWidget {
 
 class _AdministrativoHomeScreenState
     extends ConsumerState<AdministrativoHomeScreen> {
-  late _SeccionAdmin _seccion = widget.mostrarMarimba
-      ? _SeccionAdmin.marimba
-      : _SeccionAdmin.autorizaciones;
+  bool? _sidebarContraida;
+  bool _cerrandoSesion = false;
+  bool _procesandoLogout = false;
+
+  _SeccionAdmin get _seccion {
+    if (widget.mostrarMarimba) return _SeccionAdmin.marimba;
+    return _SeccionAdmin.values.firstWhere(
+      (seccion) => seccion.name == widget.seccionInicial,
+      orElse: () => _SeccionAdmin.autorizaciones,
+    );
+  }
 
   void _seleccionar(_SeccionAdmin seccion) {
+    if (seccion == _SeccionAdmin.perfil) {
+      context.go(RoutePaths.administrativoPerfil);
+      return;
+    }
     if (seccion == _SeccionAdmin.marimba) {
       context.go(RoutePaths.administrativoMarimba);
       return;
     }
-    if (widget.mostrarMarimba) {
-      context.go(RoutePaths.administrativo);
-      return;
-    }
-    setState(() => _seccion = seccion);
+    context.go(RoutePaths.administrativoSeccion(seccion.name));
   }
 
   /// Mismo patrón que en el panel de chofer (`ChoferHomeScreen`,
   /// `MiPerfilScreen`): confirma antes de cerrar sesión — antes este botón
   /// llamaba `logout()` directo, sin aviso, a diferencia del resto de la app.
   Future<void> _cerrarSesion() async {
-    final confirmado = await confirmarCerrarSesion(context);
-    if (confirmado && mounted) {
-      await ref.read(authControllerProvider).logout();
+    if (_cerrandoSesion) return;
+    setState(() => _cerrandoSesion = true);
+    try {
+      final confirmado = await confirmarCerrarSesion(context);
+      if (confirmado && mounted) {
+        final router = GoRouter.of(context);
+        setState(() => _procesandoLogout = true);
+        await ref.read(authControllerProvider).logout();
+        router.go(RoutePaths.login);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _cerrandoSesion = false;
+          _procesandoLogout = false;
+        });
+      }
     }
   }
 
@@ -183,6 +253,11 @@ class _AdministrativoHomeScreenState
         return const ChoferesTab();
       case _SeccionAdmin.auditoria:
         return const AuditoriaTab();
+      case _SeccionAdmin.perfil:
+        return const MiPerfilScreen(
+          mostrarComoTab: true,
+          mostrarCerrarSesion: false,
+        );
     }
   }
 
@@ -204,14 +279,18 @@ class _AdministrativoHomeScreenState
         .where((s) => s.estado == EstadoSolicitud.pendiente)
         .length;
     final destinoActual = _destinos[indiceSeleccionado];
+    final sidebarContraida = _sidebarContraida ?? ancho < 1200;
 
     final contenido = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         BrandHeader(
-          padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xxl,
+            vertical: AppSpacing.lg,
+          ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: Column(
@@ -219,13 +298,25 @@ class _AdministrativoHomeScreenState
                   children: [
                     Text(
                       'Panel administrativo',
-                      style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: BrandHeader.onColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      destinoActual.etiqueta,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: BrandHeader.onColor,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: AppSpacing.xs),
                     Text(
-                      'INDI Combustible · Control de combustible en obra',
+                      _descripcionSeccion[destinoActual.seccion]!,
+                      maxLines: ancho < AppBreakpoints.tablet ? 1 : 2,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: BrandHeader.onColorMuted,
                       ),
@@ -249,8 +340,16 @@ class _AdministrativoHomeScreenState
               const SizedBox(width: 8),
               HeaderGlassButton(
                 tooltip: 'Cerrar sesión',
-                onPressed: _cerrarSesion,
-                icon: const Icon(Icons.logout, color: BrandHeader.onColor),
+                onPressed: _cerrandoSesion ? null : _cerrarSesion,
+                icon: _procesandoLogout
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: BrandHeader.onColor,
+                        ),
+                      )
+                    : const Icon(Icons.logout, color: BrandHeader.onColor),
               ),
               const SizedBox(width: 8),
               HeaderMenuButton(
@@ -270,14 +369,6 @@ class _AdministrativoHomeScreenState
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-          child: _ResumenSeccionAdmin(
-            destino: destinoActual,
-            pendientesAutorizaciones: pendientesAutorizaciones,
-          ),
-        ),
-        const SizedBox(height: 20),
         Expanded(
           child: AnimatedSwitcher(
             duration: AppMotion.base,
@@ -311,7 +402,12 @@ class _AdministrativoHomeScreenState
               _SidebarAdmin(
                 indiceSeleccionado: indiceSeleccionado,
                 pendientesAutorizaciones: pendientesAutorizaciones,
-                onSeleccionar: (i) => _seleccionar(_destinos[i].seccion),
+                compacto: sidebarContraida,
+                onCambiarModo: () =>
+                    setState(() => _sidebarContraida = !sidebarContraida),
+                onSeleccionar: _seleccionar,
+                perfilSeleccionado: _seccion == _SeccionAdmin.perfil,
+                onAbrirPerfil: () => _seleccionar(_SeccionAdmin.perfil),
               ),
               Expanded(child: contenido),
             ],
@@ -391,84 +487,7 @@ class _AdministrativoHomeScreenState
         ),
       ),
     );
-    if (seccion != null && mounted) setState(() => _seccion = seccion);
-  }
-}
-
-class _ResumenSeccionAdmin extends StatelessWidget {
-  const _ResumenSeccionAdmin({
-    required this.destino,
-    required this.pendientesAutorizaciones,
-  });
-
-  final _Destino destino;
-  final int pendientesAutorizaciones;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: AppRadii.cardRadius,
-        border: Border.all(color: colors.border),
-        boxShadow: context.shadows.card,
-      ),
-      child: Row(
-        children: [
-          IconBadge(icono: destino.icono, color: destino.color),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Sección activa',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: colors.textMuted,
-                    letterSpacing: 0.4,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  destino.etiqueta,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(color: colors.textPrimary),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Usa la navegación lateral para cambiar rápido entre módulos.',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                pendientesAutorizaciones.toString(),
-                style: Theme.of(
-                  context,
-                ).textTheme.headlineSmall?.copyWith(color: colors.textPrimary),
-              ),
-              Text(
-                'por revisar',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
+    if (seccion != null && mounted) _seleccionar(seccion);
   }
 }
 
@@ -479,12 +498,20 @@ class _SidebarAdmin extends ConsumerWidget {
   const _SidebarAdmin({
     required this.indiceSeleccionado,
     required this.pendientesAutorizaciones,
+    required this.compacto,
+    required this.onCambiarModo,
     required this.onSeleccionar,
+    required this.perfilSeleccionado,
+    required this.onAbrirPerfil,
   });
 
   final int indiceSeleccionado;
   final int pendientesAutorizaciones;
-  final ValueChanged<int> onSeleccionar;
+  final bool compacto;
+  final VoidCallback onCambiarModo;
+  final ValueChanged<_SeccionAdmin> onSeleccionar;
+  final bool perfilSeleccionado;
+  final VoidCallback onAbrirPerfil;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -492,36 +519,68 @@ class _SidebarAdmin extends ConsumerWidget {
     final admin = ref.watch(sessionProvider);
 
     return Container(
-      width: 240,
+      key: const ValueKey('sidebar-administrativo'),
+      width: compacto ? 76 : 240,
       color: colors.sidebarBackground,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: AppRadii.inputRadius,
-                  child: Image.asset(
-                    'assets/images/logo_indi.jpeg',
-                    width: 36,
-                    height: 36,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'INDI Combustible',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: colors.sidebarText,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
+            padding: EdgeInsets.fromLTRB(
+              compacto ? AppSpacing.sm : AppSpacing.lg,
+              AppSpacing.lg,
+              compacto ? AppSpacing.sm : AppSpacing.md,
+              AppSpacing.md,
             ),
+            child: compacto
+                ? Column(
+                    children: [
+                      ClipRRect(
+                        borderRadius: AppRadii.inputRadius,
+                        child: Image.asset(
+                          'assets/images/logo_indi.jpeg',
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      IconButton(
+                        tooltip: 'Expandir navegación',
+                        onPressed: onCambiarModo,
+                        icon: const Icon(Icons.chevron_right),
+                        color: colors.sidebarText,
+                      ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: AppRadii.inputRadius,
+                        child: Image.asset(
+                          'assets/images/logo_indi.jpeg',
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          'INDI Combustible',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(color: colors.sidebarText),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Contraer navegación',
+                        onPressed: onCambiarModo,
+                        icon: const Icon(Icons.chevron_left),
+                        color: colors.sidebarText,
+                      ),
+                    ],
+                  ),
           ),
           // `Expanded` + `ListView` en vez de una lista fija: con 8
           // secciones, una ventana baja (o el viewport chico de los
@@ -531,50 +590,175 @@ class _SidebarAdmin extends ConsumerWidget {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                for (var i = 0; i < _destinos.length; i++)
-                  _ItemSidebar(
-                    destino: _destinos[i],
-                    seleccionado: i == indiceSeleccionado,
-                    badge: _destinos[i].seccion == _SeccionAdmin.autorizaciones
-                        ? pendientesAutorizaciones
-                        : 0,
-                    onTap: () => onSeleccionar(i),
-                  ),
+                for (final grupo in _gruposSidebar) ...[
+                  if (compacto)
+                    const Divider(height: AppSpacing.lg)
+                  else
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.xxl,
+                        AppSpacing.lg,
+                        AppSpacing.md,
+                        AppSpacing.sm,
+                      ),
+                      child: Text(
+                        grupo.$1,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: colors.sidebarTextMuted,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                  for (final seccion in grupo.$2)
+                    _ItemSidebar(
+                      destino: _destinos.firstWhere(
+                        (destino) => destino.seccion == seccion,
+                      ),
+                      seleccionado:
+                          _destinos[indiceSeleccionado].seccion == seccion,
+                      compacto: compacto,
+                      badge: seccion == _SeccionAdmin.autorizaciones
+                          ? pendientesAutorizaciones
+                          : 0,
+                      onTap: () => onSeleccionar(seccion),
+                    ),
+                ],
               ],
             ),
           ),
           if (admin != null)
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: colors.sidebarSurfaceAlt,
-                    child: Text(
-                      admin.nombreCompleto.isNotEmpty
-                          ? admin.nombreCompleto[0]
-                          : '?',
-                      style: TextStyle(
-                        color: colors.sidebarText,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      admin.nombreCompleto,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colors.sidebarTextMuted,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
+            _AccesoPerfilAdmin(
+              nombreCompleto: admin.nombreCompleto,
+              compacto: compacto,
+              seleccionado: perfilSeleccionado,
+              onTap: onAbrirPerfil,
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _AccesoPerfilAdmin extends StatelessWidget {
+  const _AccesoPerfilAdmin({
+    required this.nombreCompleto,
+    required this.compacto,
+    required this.seleccionado,
+    required this.onTap,
+  });
+
+  final String nombreCompleto;
+  final bool compacto;
+  final bool seleccionado;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final scheme = Theme.of(context).colorScheme;
+    final nombre = nombreCompleto.trim();
+    final inicial = nombre.isEmpty
+        ? null
+        : nombre.substring(0, 1).toUpperCase();
+    final tooltip = nombre.isEmpty
+        ? 'Abrir perfil'
+        : 'Perfil de ${nombre.split(RegExp(r'\s+')).first}';
+    final avatar = Material(
+      key: const ValueKey('sidebar-admin-perfil-avatar'),
+      color: seleccionado ? scheme.primary : colors.sidebarSurfaceAlt,
+      shape: CircleBorder(
+        side: BorderSide(
+          color: seleccionado
+              ? scheme.onPrimary.withValues(alpha: 0.8)
+              : colors.sidebarTextMuted.withValues(alpha: 0.35),
+          width: seleccionado ? 2 : 1,
+        ),
+      ),
+      child: SizedBox.square(
+        dimension: 44,
+        child: Center(
+          child: inicial == null
+              ? Icon(
+                  Icons.person_outline,
+                  size: 24,
+                  color: seleccionado ? scheme.onPrimary : colors.sidebarText,
+                )
+              : Text(
+                  inicial,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: seleccionado ? scheme.onPrimary : colors.sidebarText,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+        ),
+      ),
+    );
+
+    final child = compacto
+        ? Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              customBorder: const CircleBorder(),
+              hoverColor: scheme.primary.withValues(alpha: 0.16),
+              focusColor: scheme.primary.withValues(alpha: 0.22),
+              child: avatar,
+            ),
+          )
+        : Material(
+            key: const ValueKey('sidebar-admin-perfil-fila'),
+            color: seleccionado
+                ? scheme.primary.withValues(alpha: 0.14)
+                : Colors.transparent,
+            borderRadius: AppRadii.navButtonRadius,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: AppRadii.navButtonRadius,
+              hoverColor: scheme.primary.withValues(alpha: 0.12),
+              focusColor: scheme.primary.withValues(alpha: 0.16),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                ),
+                child: Row(
+                  children: [
+                    avatar,
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        nombre.isEmpty ? 'Perfil' : nombre,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: seleccionado
+                              ? colors.sidebarText
+                              : colors.sidebarTextMuted,
+                          fontWeight: seleccionado
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+
+    return Semantics(
+      button: true,
+      selected: seleccionado,
+      label: 'Abrir perfil',
+      child: Tooltip(
+        message: tooltip,
+        child: Padding(
+          padding: EdgeInsets.all(compacto ? AppSpacing.md : AppSpacing.lg),
+          child: compacto ? Center(child: child) : child,
+        ),
       ),
     );
   }
@@ -585,12 +769,14 @@ class _ItemSidebar extends StatelessWidget {
     required this.destino,
     required this.seleccionado,
     required this.onTap,
+    required this.compacto,
     this.badge = 0,
   });
 
   final _Destino destino;
   final bool seleccionado;
   final VoidCallback onTap;
+  final bool compacto;
 
   /// Conteo a mostrar como badge junto a la etiqueta (ej. solicitudes por
   /// revisar) — `0` u otro valor no positivo no muestra nada.
@@ -601,62 +787,92 @@ class _ItemSidebar extends StatelessWidget {
     final colors = context.colors;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-      child: Material(
-        color: seleccionado
-            ? destino.color.withValues(alpha: 0.12)
-            : Colors.transparent,
-        borderRadius: AppRadii.navButtonRadius,
-        child: InkWell(
-          onTap: onTap,
+      padding: EdgeInsets.symmetric(
+        horizontal: compacto ? AppSpacing.sm : AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      child: Tooltip(
+        message: compacto ? destino.etiqueta : '',
+        child: Material(
+          key: ValueKey('admin-destino-${destino.seccion.name}'),
+          color: seleccionado ? colors.primary : Colors.transparent,
           borderRadius: AppRadii.navButtonRadius,
-          hoverColor: colors.sidebarSurfaceAlt.withValues(alpha: 0.6),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            child: Row(
-              children: [
-                IconBadge(
-                  icono: destino.icono,
-                  color: destino.color,
-                  size: 30,
-                  iconSize: 16,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: AppRadii.navButtonRadius,
+            hoverColor: colors.sidebarSurfaceAlt,
+            focusColor: colors.primary.withValues(alpha: 0.22),
+            child: Semantics(
+              selected: seleccionado,
+              button: true,
+              label: destino.etiqueta,
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 48),
+                padding: EdgeInsets.symmetric(
+                  horizontal: compacto ? AppSpacing.sm : AppSpacing.md,
+                  vertical: AppSpacing.sm,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    destino.etiqueta,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: seleccionado
-                          ? destino.color
-                          : colors.sidebarTextMuted,
-                      fontWeight: seleccionado
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                    ),
-                  ),
-                ),
-                if (badge > 0) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colors.error,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '$badge',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
+                child: Row(
+                  mainAxisAlignment: compacto
+                      ? MainAxisAlignment.center
+                      : MainAxisAlignment.start,
+                  children: [
+                    Badge(
+                      isLabelVisible: compacto && badge > 0,
+                      label: Text('$badge'),
+                      child: SizedBox.square(
+                        dimension: 30,
+                        child: Icon(
+                          destino.icono,
+                          size: 22,
+                          color: seleccionado
+                              ? colors.primaryOn
+                              : colors.sidebarTextMuted,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ],
+                    if (!compacto) ...[
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Text(
+                          destino.etiqueta,
+                          maxLines: 1,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: seleccionado
+                                    ? colors.primaryOn
+                                    : colors.sidebarText,
+                                fontWeight: seleccionado
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                              ),
+                        ),
+                      ),
+                      if (badge > 0) ...[
+                        const SizedBox(width: AppSpacing.sm),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colors.error,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '$badge',
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: colors.primaryOn,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
             ),
           ),
         ),

@@ -1,32 +1,38 @@
-import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-/// Genera un archivo (hoy: CSV, que Excel abre nativamente) y lo entrega
-/// al usuario — en el propio dispositivo, sin backend. Abstraído para
-/// poder sustituirse por un fake en widget tests (no hay filesystem ni
-/// hoja de compartir real disponibles ahí).
 abstract class ExportadorService {
-  Future<void> exportarCsv({
+  Future<void> exportarXlsx({
     required String nombreArchivo,
-    required String contenidoCsv,
+    required Uint8List contenido,
+    required String descripcion,
   });
 }
 
+/// Entrega el libro desde memoria. `XFile.fromData` funciona tanto en Android
+/// como en web y evita depender de `dart:io` o de rutas temporales que el
+/// navegador no puede usar.
 class ArchivoExportadorService implements ExportadorService {
   const ArchivoExportadorService();
 
   @override
-  Future<void> exportarCsv({
+  Future<void> exportarXlsx({
     required String nombreArchivo,
-    required String contenidoCsv,
+    required Uint8List contenido,
+    required String descripcion,
   }) async {
-    final directorio = await getTemporaryDirectory();
-    final archivo = File('${directorio.path}/$nombreArchivo');
-    await archivo.writeAsString(contenidoCsv);
-    await Share.shareXFiles([
-      XFile(archivo.path),
-    ], text: 'Concentrado de cargas de combustible — INDI Combustible');
+    await Share.shareXFiles(
+      [
+        XFile.fromData(
+          contenido,
+          name: nombreArchivo,
+          mimeType:
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ),
+      ],
+      text: '$descripcion — INDI Combustible',
+      fileNameOverrides: [nombreArchivo],
+    );
   }
 }

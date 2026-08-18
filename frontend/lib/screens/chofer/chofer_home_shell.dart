@@ -34,6 +34,7 @@ class ChoferHomeShell extends ConsumerWidget {
               SidebarChofer(
                 indiceSeleccionado: indice,
                 onSeleccionar: seleccionar,
+                compacto: ancho < AppBreakpoints.desktop,
               ),
               const Expanded(child: ChoferHomeScreen()),
             ],

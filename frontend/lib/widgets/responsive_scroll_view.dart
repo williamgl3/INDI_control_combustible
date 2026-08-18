@@ -30,6 +30,7 @@ class ResponsiveScrollView extends StatelessWidget {
     return SingleChildScrollView(
       primary: primary,
       physics: physics,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: padding,
       child: Center(
         child: ConstrainedBox(

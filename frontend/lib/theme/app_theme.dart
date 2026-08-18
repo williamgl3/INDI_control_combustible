@@ -5,6 +5,7 @@ import 'app_borders.dart';
 import 'app_colors.dart';
 import 'app_radii.dart';
 import 'app_shadows.dart';
+import 'app_status_colors.dart';
 import 'app_typography.dart';
 
 /// ThemeData completo de la app, construido a partir de los tokens de
@@ -26,17 +27,32 @@ class AppTheme {
     AppShadows shadows,
     Brightness brightness,
   ) {
-    final colorScheme = ColorScheme(
-      brightness: brightness,
-      primary: colors.primary,
-      onPrimary: colors.primaryOn,
-      secondary: colors.info,
-      onSecondary: colors.primaryOn,
-      error: colors.error,
-      onError: colors.primaryOn,
-      surface: colors.surface,
-      onSurface: colors.textPrimary,
-    );
+    final statusColors = brightness == Brightness.light
+        ? AppStatusColors.light
+        : AppStatusColors.dark;
+    final colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: colors.primary,
+          brightness: brightness,
+          primary: colors.primary,
+          surface: colors.surface,
+          error: colors.error,
+        ).copyWith(
+          onPrimary: colors.primaryOn,
+          primaryContainer: Color.alphaBlend(
+            colors.primary.withValues(alpha: 0.12),
+            colors.surface,
+          ),
+          onPrimaryContainer: brightness == Brightness.light
+              ? colors.primaryHover
+              : colors.textPrimary,
+          secondary: colors.info,
+          onSecondary: colors.primaryOn,
+          onError: colors.primaryOn,
+          onSurface: colors.textPrimary,
+          surfaceContainer: colors.surfaceAlt,
+          outline: colors.border,
+        );
 
     final textTheme = AppTypography.textTheme(colors.textPrimary);
 
@@ -46,7 +62,8 @@ class AppTheme {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: colors.background,
       textTheme: textTheme,
-      extensions: [colors, shadows],
+      extensions: [colors, shadows, statusColors],
+      visualDensity: VisualDensity.standard,
       // Transición de plataforma consistente estilo iOS (slide desde la
       // derecha) en todas las plataformas, no solo en iOS real — decisión
       // de marca, igual que `_conTransicion` en app_router.dart para el
@@ -147,12 +164,13 @@ class AppTheme {
               // criterio en vez de reutilizar el token literal. Antes era
               // negro al 35% con poca elevación (más dura/marcada que el
               // resto de la app).
-              elevation: 6,
+              elevation: 0,
               shadowColor: Colors.black.withValues(alpha: 0.2),
               shape: RoundedRectangleBorder(
                 borderRadius: AppRadii.buttonRadius,
               ),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+              minimumSize: const Size(48, 48),
               textStyle: textTheme.labelLarge,
             ).copyWith(
               overlayColor: WidgetStatePropertyAll(
@@ -174,6 +192,7 @@ class AppTheme {
                 borderRadius: AppRadii.navButtonRadius,
               ),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+              minimumSize: const Size(48, 48),
               textStyle: textTheme.labelLarge,
             ).copyWith(
               overlayColor: WidgetStatePropertyAll(
@@ -187,6 +206,7 @@ class AppTheme {
               foregroundColor: colors.primary,
               disabledForegroundColor: colors.textMuted,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              minimumSize: const Size(44, 44),
               textStyle: textTheme.labelLarge,
             ).copyWith(
               overlayColor: WidgetStatePropertyAll(
@@ -197,7 +217,89 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: colors.surface,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: AppRadii.cardRadius),
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadii.cardRadius,
+          side: BorderSide(color: colors.border.withValues(alpha: 0.7)),
+        ),
+      ),
+      dividerTheme: DividerThemeData(color: colors.border, thickness: 0.7),
+      iconTheme: IconThemeData(color: colors.textSecondary, size: 22),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          foregroundColor: colors.textSecondary,
+          minimumSize: const Size.square(44),
+          hoverColor: colors.primary.withValues(alpha: 0.08),
+          focusColor: colors.primary.withValues(alpha: 0.12),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: colors.surfaceAlt,
+        selectedColor: colorScheme.primaryContainer,
+        disabledColor: colors.surfaceAlt.withValues(alpha: 0.55),
+        labelStyle: textTheme.labelMedium,
+        side: BorderSide(color: colors.border),
+        shape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        height: 68,
+        backgroundColor: colors.surface,
+        indicatorColor: colorScheme.primary,
+        indicatorShape: const StadiumBorder(),
+        elevation: 0,
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? colorScheme.onPrimary
+                : colorScheme.onSurfaceVariant,
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return textTheme.labelMedium?.copyWith(
+            color: selected ? colorScheme.primary : colorScheme.onSurface,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          );
+        }),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: colors.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: AppRadii.floatingRadius,
+        ),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: colors.surface,
+        surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppRadii.floating),
+          ),
+        ),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: colors.textPrimary,
+        contentTextStyle: textTheme.bodyMedium?.copyWith(
+          color: colors.background,
+        ),
+        shape: const RoundedRectangleBorder(
+          borderRadius: AppRadii.buttonRadius,
+        ),
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: colors.primary,
+        linearTrackColor: colors.surfaceAlt,
+      ),
+      tooltipTheme: TooltipThemeData(
+        textStyle: textTheme.bodySmall?.copyWith(color: colors.background),
+        decoration: BoxDecoration(
+          color: colors.textPrimary,
+          borderRadius: AppRadii.inputRadius,
+        ),
       ),
     );
   }

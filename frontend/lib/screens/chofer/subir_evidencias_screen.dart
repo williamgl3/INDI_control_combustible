@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../core/catalogos_vehiculo.dart';
 import '../../core/connectivity_provider.dart';
@@ -25,6 +24,7 @@ import '../../widgets/app_card.dart';
 import '../../widgets/app_elevated_button.dart';
 import '../../widgets/brand_sub_header.dart';
 import '../../widgets/contenido_responsivo.dart';
+import '../../widgets/chofer_operation_scaffold.dart';
 import '../../widgets/estado_solicitud_badge.dart';
 import '../../widgets/fecha_formato.dart';
 import '../../widgets/grouped_section.dart';
@@ -679,7 +679,10 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
     // mismo patrón que `TipoOperacionScreen`.
     final contenidoStandalone = Column(
       children: [
-        BrandSubHeader(titulo: 'Subir evidencia', onBack: () => context.pop()),
+        BrandSubHeader(
+          titulo: 'Subir evidencia',
+          onBack: () => volverEnFlujoChofer(context),
+        ),
         Expanded(
           child: SafeArea(
             top: false,
@@ -772,7 +775,7 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
                   _tipoCombustibleCargado = null;
                   _tipo = _TipoEvidencia.comprobante;
                 })
-              : () => context.pop(),
+              : () => volverEnFlujoChofer(context),
           cargando: false,
           child: Text(
             widget.mostrarComoTab ? 'Subir otra evidencia' : 'Volver al inicio',

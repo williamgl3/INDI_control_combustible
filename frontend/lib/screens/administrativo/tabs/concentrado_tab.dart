@@ -20,7 +20,11 @@ import 'concentrado_csv.dart';
 
 enum _Periodo { dia, semana, mes, anio }
 
-typedef _Gasto = ({double? precioPorLitro, double? importe, FuenteGasto fuente});
+typedef _Gasto = ({
+  double? precioPorLitro,
+  double? importe,
+  FuenteGasto fuente,
+});
 
 /// Resuelve, para CADA carga, de dónde sale su gasto — jerarquía completa
 /// en [FuenteGasto]. Nunca recalcula contra el precio de HOY (ese era el
@@ -63,7 +67,8 @@ Map<String, _Gasto> _resolverGastoPorCarga({
   // evidencia para el folio" ya no basta para saber a CUÁL le pertenece.
   final cargasPorFolio = <String, int>{};
   for (final c in todasLasCargas) {
-    cargasPorFolio[c.folioAutorizacion] = (cargasPorFolio[c.folioAutorizacion] ?? 0) + 1;
+    cargasPorFolio[c.folioAutorizacion] =
+        (cargasPorFolio[c.folioAutorizacion] ?? 0) + 1;
   }
 
   return {
@@ -74,16 +79,25 @@ Map<String, _Gasto> _resolverGastoPorCarga({
         final porCarga = evidenciasPorCarga[carga.id];
         if (porCarga != null && porCarga.length == 1) {
           final e = porCarga.single;
-          return (precioPorLitro: e.precioPorLitro, importe: e.montoPagado, fuente: FuenteGasto.real);
+          return (
+            precioPorLitro: e.precioPorLitro,
+            importe: e.montoPagado,
+            fuente: FuenteGasto.real,
+          );
         }
 
         // 2. Exactamente una evidencia comprobante para el folio de esta
         //    carga, Y esta carga es la única con ese folio — se infiere
         //    que es la de esta carga.
         final solicitudId = solicitudIdPorFolio[carga.folioAutorizacion];
-        final porSolicitud = solicitudId == null ? null : evidenciasPorSolicitud[solicitudId];
-        final folioSinAmbiguedad = (cargasPorFolio[carga.folioAutorizacion] ?? 0) <= 1;
-        if (porSolicitud != null && porSolicitud.length == 1 && folioSinAmbiguedad) {
+        final porSolicitud = solicitudId == null
+            ? null
+            : evidenciasPorSolicitud[solicitudId];
+        final folioSinAmbiguedad =
+            (cargasPorFolio[carga.folioAutorizacion] ?? 0) <= 1;
+        if (porSolicitud != null &&
+            porSolicitud.length == 1 &&
+            folioSinAmbiguedad) {
           final e = porSolicitud.single;
           return (
             precioPorLitro: e.precioPorLitro,
@@ -105,7 +119,11 @@ Map<String, _Gasto> _resolverGastoPorCarga({
 
         // 4. Sin snapshot posible (vehículo sin tipoCombustible
         //    confirmado) — nunca 0, "—" en la UI.
-        return (precioPorLitro: null, importe: null, fuente: FuenteGasto.sinDato);
+        return (
+          precioPorLitro: null,
+          importe: null,
+          fuente: FuenteGasto.sinDato,
+        );
       }(),
   };
 }
@@ -154,16 +172,17 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
   ) async {
     final mensajero = ScaffoldMessenger.of(context);
     try {
-      final contenidoCsv = construirCsvConcentrado(
+      final contenido = construirXlsxConcentrado(
         filas,
         totalLitros: totalLitros,
         totalImporte: totalImporte,
       );
       await ref
           .read(exportadorServiceProvider)
-          .exportarCsv(
+          .exportarXlsx(
             nombreArchivo: nombreArchivoConcentrado(DateTime.now()),
-            contenidoCsv: contenidoCsv,
+            contenido: contenido,
+            descripcion: 'Concentrado de cargas de combustible',
           );
     } catch (_) {
       mensajero.showSnackBar(
@@ -202,7 +221,9 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
 
     final gastoPorCarga = _resolverGastoPorCarga(
       todasLasCargas: repo.todasLasCargas,
-      todasLasEvidencias: ref.watch(evidenciasRepositoryProvider).todasLasEvidencias,
+      todasLasEvidencias: ref
+          .watch(evidenciasRepositoryProvider)
+          .todasLasEvidencias,
       todasLasSolicitudes: repo.todasLasSolicitudes,
     );
 
@@ -472,16 +493,21 @@ class _TablaConcentrado extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final estiloEncabezado = Theme.of(
-      context,
-    ).textTheme.labelSmall?.copyWith(color: colors.textMuted, fontWeight: FontWeight.w700);
+    final estiloEncabezado = Theme.of(context).textTheme.labelSmall?.copyWith(
+      color: colors.textMuted,
+      fontWeight: FontWeight.w700,
+    );
 
     Widget encabezado(String texto, {Widget? filtro}) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Flexible(
-            child: Text(texto, style: estiloEncabezado, overflow: TextOverflow.ellipsis),
+            child: Text(
+              texto,
+              style: estiloEncabezado,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           ?filtro,
         ],
@@ -580,10 +606,7 @@ class _TablaConcentrado extends StatelessWidget {
                       context,
                       fila.vehiculo?.modelo ?? fila.vehiculo?.tipoUnidad ?? '—',
                     ),
-                    _celdaTexto(
-                      context,
-                      fila.vehiculo?.etiquetaUnidad ?? '—',
-                    ),
+                    _celdaTexto(context, fila.vehiculo?.etiquetaUnidad ?? '—'),
                     CeldaEditable(
                       valor: fila.carga.kmAlCargar,
                       decimales: 0,

@@ -11,9 +11,12 @@ import '../../models/despacho_marimba.dart';
 import '../../models/recorrido_marimba.dart';
 import '../../models/vehiculo.dart';
 import '../../router/route_paths.dart';
+import '../../theme/app_breakpoints.dart';
+import '../../theme/app_status_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_elevated_button.dart';
+import '../../widgets/app_status_chip.dart';
 import '../../widgets/aviso_error.dart';
 import '../../widgets/captura_foto_field.dart';
 import '../../widgets/chofer_operation_scaffold.dart';
@@ -782,33 +785,39 @@ class _TarjetaTotales extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final esMovil = AppBreakpoints.isMobile(MediaQuery.sizeOf(context).width);
+    final datos = [
+      _Dato(
+        etiqueta: 'Salió con',
+        valor: '${litrosIniciales.toStringAsFixed(0)} L',
+      ),
+      _Dato(
+        etiqueta: 'Despachado',
+        valor: '${litrosDespachados.toStringAsFixed(0)} L',
+      ),
+      _Dato(
+        etiqueta: 'Existencia estimada',
+        valor: '${existenciaEstimada.toStringAsFixed(0)} L',
+        destacado: true,
+      ),
+    ];
     return AppCard(
       floating: true,
       color: colors.info.withValues(alpha: 0.08),
       padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Expanded(
-            child: _Dato(
-              etiqueta: 'Salió con',
-              valor: '${litrosIniciales.toStringAsFixed(0)} L',
+      child: esMovil
+          ? Wrap(
+              spacing: 24,
+              runSpacing: 16,
+              children: datos
+                  .map((dato) => SizedBox(width: 132, child: dato))
+                  .toList(growable: false),
+            )
+          : Row(
+              children: datos
+                  .map((dato) => Expanded(child: dato))
+                  .toList(growable: false),
             ),
-          ),
-          Expanded(
-            child: _Dato(
-              etiqueta: 'Despachado',
-              valor: '${litrosDespachados.toStringAsFixed(0)} L',
-            ),
-          ),
-          Expanded(
-            child: _Dato(
-              etiqueta: 'Existencia estimada',
-              valor: '${existenciaEstimada.toStringAsFixed(0)} L',
-              destacado: true,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -857,11 +866,32 @@ class _TarjetaDespacho extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final clasificacion = despacho.cantidadDeclarada;
+    final etiqueta = clasificacion == true
+        ? 'Cantidad declarada'
+        : clasificacion == false
+        ? 'Cantidad medida'
+        : 'Registro histórico';
+    final icono = clasificacion == true
+        ? Icons.edit_note_outlined
+        : clasificacion == false
+        ? Icons.speed_outlined
+        : Icons.history_outlined;
+    final color = clasificacion == true
+        ? context.statusColors.declared
+        : clasificacion == false
+        ? context.statusColors.measured
+        : context.statusColors.unconfigured;
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 16,
+        runSpacing: 12,
         children: [
-          Expanded(
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 180, maxWidth: 420),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -879,6 +909,7 @@ class _TarjetaDespacho extends StatelessWidget {
               ],
             ),
           ),
+          AppStatusChip(label: etiqueta, icon: icono, color: color),
           Text(
             '${despacho.litrosSuministrados.toStringAsFixed(0)} L',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(

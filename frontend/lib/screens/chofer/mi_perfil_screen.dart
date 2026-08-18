@@ -7,6 +7,7 @@ import '../../core/session_provider.dart';
 import '../../core/theme_mode_provider.dart';
 import '../../core/validators.dart';
 import '../../data/auth_repository.dart';
+import '../../router/route_paths.dart';
 import '../../theme/app_breakpoints.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_theme.dart';
@@ -15,18 +16,26 @@ import '../../widgets/aviso_error.dart';
 import '../../widgets/confirmar_cerrar_sesion_dialog.dart';
 import '../../widgets/contenido_responsivo.dart';
 import '../../widgets/grouped_section.dart';
+import '../../widgets/chofer_operation_scaffold.dart';
 import '../../widgets/selector_tema_dialog.dart';
 import '../../widgets/sidebar_chofer.dart';
 
 /// Datos personales del usuario en sesión (chofer o administrativo) +
 /// cambiar contraseña + configuración de tema + cerrar sesión.
 class MiPerfilScreen extends ConsumerStatefulWidget {
-  const MiPerfilScreen({super.key, this.mostrarComoTab = false});
+  const MiPerfilScreen({
+    super.key,
+    this.mostrarComoTab = false,
+    this.mostrarCerrarSesion = true,
+  });
 
   /// `true` cuando esta pantalla vive embebida como una pestaña de
   /// [ChoferHomeShell] (sin `AppBar`/botón de volver propios, ya los
   /// da el shell) en vez de empujada como ruta independiente.
   final bool mostrarComoTab;
+
+  /// El shell administrativo ya presenta esta acción en su encabezado.
+  final bool mostrarCerrarSesion;
 
   @override
   ConsumerState<MiPerfilScreen> createState() => _MiPerfilScreenState();
@@ -45,6 +54,7 @@ class _MiPerfilScreenState extends ConsumerState<MiPerfilScreen> {
   bool _actualVisible = false;
   bool _nuevaVisible = false;
   bool _cargando = false;
+  bool _cerrandoSesion = false;
   String? _errorGeneral;
   bool _exito = false;
 
@@ -82,9 +92,17 @@ class _MiPerfilScreenState extends ConsumerState<MiPerfilScreen> {
   }
 
   Future<void> _cerrarSesion() async {
-    final confirmado = await confirmarCerrarSesion(context);
-    if (confirmado && context.mounted) {
-      await ref.read(authControllerProvider).logout();
+    if (_cerrandoSesion) return;
+    setState(() => _cerrandoSesion = true);
+    try {
+      final confirmado = await confirmarCerrarSesion(context);
+      if (confirmado && mounted) {
+        final router = GoRouter.of(context);
+        await ref.read(authControllerProvider).logout();
+        router.go(RoutePaths.login);
+      }
+    } finally {
+      if (mounted) setState(() => _cerrandoSesion = false);
     }
   }
 
@@ -97,7 +115,7 @@ class _MiPerfilScreenState extends ConsumerState<MiPerfilScreen> {
     final apellidoPaterno = perfil.apellidoPaterno;
     final iniciales =
         '${perfil.nombre.isNotEmpty ? perfil.nombre[0] : ''}'
-        '${apellidoPaterno != null && apellidoPaterno.isNotEmpty ? apellidoPaterno[0] : ''}'
+                '${apellidoPaterno != null && apellidoPaterno.isNotEmpty ? apellidoPaterno[0] : ''}'
             .toUpperCase();
 
     final bodyContent = Column(
@@ -124,9 +142,9 @@ class _MiPerfilScreenState extends ConsumerState<MiPerfilScreen> {
               ),
               Text(
                 perfil.esChofer ? 'Chofer' : 'Administrativo',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colors.textSecondary,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
               ),
             ],
           ),
@@ -148,12 +166,7 @@ class _MiPerfilScreenState extends ConsumerState<MiPerfilScreen> {
           ],
         ),
         const SizedBox(height: 24),
-        GroupedSection(
-          header: 'Configuración',
-          children: [
-            _TemaRow(),
-          ],
-        ),
+        GroupedSection(header: 'Configuración', children: [_TemaRow()]),
         const SizedBox(height: 24),
         Text(
           'Cambiar contraseña',
@@ -189,8 +202,9 @@ class _MiPerfilScreenState extends ConsumerState<MiPerfilScreen> {
                   ),
                 ),
                 obscureText: !_actualVisible,
-                validator: (v) =>
-                    (v == null || v.isEmpty) ? 'Ingresa tu contraseña actual.' : null,
+                validator: (v) => (v == null || v.isEmpty)
+                    ? 'Ingresa tu contraseña actual.'
+                    : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -226,10 +240,8 @@ class _MiPerfilScreenState extends ConsumerState<MiPerfilScreen> {
                   prefixIcon: Icon(Icons.lock_reset_outlined),
                 ),
                 obscureText: !_nuevaVisible,
-                validator: (v) => Validators.confirmarPassword(
-                  v,
-                  _nuevaController.text,
-                ),
+                validator: (v) =>
+                    Validators.confirmarPassword(v, _nuevaController.text),
                 onFieldSubmitted: (_) => _cambiarPassword(),
               ),
               if (_errorGeneral != null) ...[
@@ -248,9 +260,9 @@ class _MiPerfilScreenState extends ConsumerState<MiPerfilScreen> {
                     const SizedBox(width: 6),
                     Text(
                       'Contraseña actualizada.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colors.success,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: colors.success),
                     ),
                   ],
                 ),
@@ -264,23 +276,23 @@ class _MiPerfilScreenState extends ConsumerState<MiPerfilScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 32),
-        OutlinedButton.icon(
-          onPressed: _cerrarSesion,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: colors.error,
-            side: BorderSide(color: colors.error),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadii.inputRadius,
+        if (widget.mostrarCerrarSesion) ...[
+          const SizedBox(height: 32),
+          OutlinedButton.icon(
+            onPressed: _cerrandoSesion ? null : _cerrarSesion,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: colors.error,
+              side: BorderSide(color: colors.error),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: AppRadii.inputRadius),
+            ),
+            icon: const Icon(Icons.logout),
+            label: const Text(
+              'Cerrar sesión',
+              style: TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
-          icon: const Icon(Icons.logout),
-          label: const Text(
-            'Cerrar sesión',
-            style: TextStyle(fontWeight: FontWeight.w600),
-          ),
-        ),
+        ],
         const SizedBox(height: 40),
       ],
     );
@@ -300,7 +312,7 @@ class _MiPerfilScreenState extends ConsumerState<MiPerfilScreen> {
 
     final appBar = AppBar(
       title: const Text('Mi perfil'),
-      leading: BackButton(onPressed: () => context.pop()),
+      leading: BackButton(onPressed: () => volverEnFlujoChofer(context)),
     );
     // Antes 480px aquí vs. 900px en modo pestaña — misma pantalla, dos
     // anchos máximos distintos según la ruta. Unificado a
@@ -331,7 +343,10 @@ class _MiPerfilScreenState extends ConsumerState<MiPerfilScreen> {
       );
     }
 
-    return Scaffold(appBar: appBar, body: SafeArea(child: contenidoForm));
+    return Scaffold(
+      appBar: appBar,
+      body: SafeArea(child: contenidoForm),
+    );
   }
 }
 
@@ -344,7 +359,10 @@ class _TemaRow extends ConsumerWidget {
     final (icono, etiqueta) = switch (themeMode) {
       ThemeMode.light => (Icons.light_mode_outlined, 'Claro'),
       ThemeMode.dark => (Icons.dark_mode_outlined, 'Oscuro'),
-      ThemeMode.system => (Icons.brightness_auto_outlined, 'Predeterminado del sistema'),
+      ThemeMode.system => (
+        Icons.brightness_auto_outlined,
+        'Predeterminado del sistema',
+      ),
     };
 
     return Material(
@@ -361,24 +379,17 @@ class _TemaRow extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Tema',
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
+                    Text('Tema', style: Theme.of(context).textTheme.bodyLarge),
                     Text(
                       etiqueta,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colors.textMuted,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
                     ),
                   ],
                 ),
               ),
-              Icon(
-                Icons.chevron_right,
-                size: 20,
-                color: colors.textMuted,
-              ),
+              Icon(Icons.chevron_right, size: 20, color: colors.textMuted),
             ],
           ),
         ),

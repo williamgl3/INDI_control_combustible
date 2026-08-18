@@ -87,6 +87,7 @@ class ContenidoResponsivo extends StatelessWidget {
     return SingleChildScrollView(
       primary: primary,
       physics: physics,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: contenido,
     );
   }

@@ -15,6 +15,7 @@ import '../../widgets/brand_sub_header.dart';
 import '../../widgets/estado_vacio.dart';
 import '../../widgets/ios_segmented_control.dart';
 import '../../widgets/contenido_responsivo.dart';
+import '../../widgets/chofer_operation_scaffold.dart';
 import '../../widgets/stat_tile.dart';
 import '../../widgets/stat_tile_row.dart';
 import '../../router/route_paths.dart';
@@ -162,7 +163,7 @@ class _ChoferDashboardScreenState extends ConsumerState<ChoferDashboardScreen> {
                   icono: Icons.bar_chart_outlined,
                   mensaje: 'Todavía no registras cargas en este periodo.',
                   textoAccion: 'Solicitar carga',
-                  onAccion: () => context.push(RoutePaths.choferTipoOperacion),
+                  onAccion: () => context.go(RoutePaths.choferTipoOperacion),
                 )
               else ...[
                 if (serie.isNotEmpty) ...[
@@ -183,7 +184,7 @@ class _ChoferDashboardScreenState extends ConsumerState<ChoferDashboardScreen> {
 
     final encabezado = BrandSubHeader(
       titulo: 'Mi consumo',
-      onBack: widget.mostrarComoTab ? null : () => context.pop(),
+      onBack: widget.mostrarComoTab ? null : () => volverEnFlujoChofer(context),
     );
 
     if (widget.mostrarComoTab) {

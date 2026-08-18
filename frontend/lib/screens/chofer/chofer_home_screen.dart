@@ -13,17 +13,20 @@ import '../../models/vehiculo.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_breakpoints.dart';
 import '../../theme/app_motion.dart';
+import '../../theme/app_radii.dart';
 import '../../theme/app_sizes.dart';
+import '../../theme/app_status_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/acerca_de_dialog.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_status_chip.dart';
 import '../../widgets/ayuda_soporte_dialog.dart';
 import '../../widgets/brand_header.dart';
 import '../../widgets/confirmar_cerrar_sesion_dialog.dart';
 import '../../widgets/contenido_responsivo.dart';
-import '../../widgets/estado_vacio.dart';
 import '../../widgets/fecha_formato.dart';
 import '../../widgets/header_menu_button.dart';
+import '../../widgets/header_glass_button.dart';
 import '../../widgets/logo_glass.dart';
 import '../../widgets/section_label.dart';
 import '../../widgets/tarjeta_accion_sugerida.dart';
@@ -38,6 +41,8 @@ class ChoferHomeScreen extends ConsumerStatefulWidget {
 
 class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
   int _refreshKey = 0;
+  bool _cerrandoSesion = false;
+  bool _procesandoLogout = false;
 
   Future<void> _refrescarAlVolver(Future<void> Function() accion) async {
     await accion();
@@ -50,9 +55,23 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
   /// para redirigir a login cuando expira la sesión (401), sin duplicar
   /// lógica aquí.
   Future<void> _cerrarSesion() async {
-    final confirmado = await confirmarCerrarSesion(context);
-    if (confirmado && mounted) {
-      await ref.read(authControllerProvider).logout();
+    if (_cerrandoSesion) return;
+    setState(() => _cerrandoSesion = true);
+    try {
+      final confirmado = await confirmarCerrarSesion(context);
+      if (confirmado && mounted) {
+        final router = GoRouter.of(context);
+        setState(() => _procesandoLogout = true);
+        await ref.read(authControllerProvider).logout();
+        router.go(RoutePaths.login);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _cerrandoSesion = false;
+          _procesandoLogout = false;
+        });
+      }
     }
   }
 
@@ -83,6 +102,7 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
         ? null
         : vehiculosRepo.porId(cargaAbiertaDeHoy.vehiculoId);
 
+    final sinSolicitudes = solicitudes.isEmpty;
     return Scaffold(
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       // Mismo padding/maxWidth que `ContenidoResponsivo` (ver
@@ -92,23 +112,23 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
       // tamaño intrínseco de su hijo para la animación de entrada del FAB
       // — algo que el `LayoutBuilder` interno de `ContenidoResponsivo` no
       // soporta bien (rompía el hit-test de tarjetas cercanas).
-      floatingActionButton: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: ContenidoResponsivo.paddingHorizontalPara(
-            MediaQuery.sizeOf(context).width,
-          ),
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: AppBreakpoints.wideContentMaxWidth,
-          ),
-          child: _FabSolicitar(
-            onPressed: () => _refrescarAlVolver(
-              () => context.push(RoutePaths.choferTipoOperacion),
+      floatingActionButton: sinSolicitudes
+          ? null
+          : Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: ContenidoResponsivo.paddingHorizontalPara(
+                  MediaQuery.sizeOf(context).width,
+                ),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: AppBreakpoints.wideContentMaxWidth,
+                ),
+                child: _FabSolicitar(
+                  onPressed: () => context.go(RoutePaths.choferTipoOperacion),
+                ),
+              ),
             ),
-          ),
-        ),
-      ),
       body: SafeArea(
         child: _buildMovil(
           perfil: perfil,
@@ -125,7 +145,7 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
   Widget _buildHeader(BuildContext context, Perfil perfil) {
     return BrandHeader(
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           LogoGlass(size: AppSizes.logoHeaderSize),
           const SizedBox(width: 12),
@@ -149,6 +169,20 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
               ],
             ),
           ),
+          HeaderGlassButton(
+            tooltip: 'Cerrar sesión',
+            onPressed: _cerrandoSesion ? null : _cerrarSesion,
+            icon: _procesandoLogout
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: BrandHeader.onColor,
+                    ),
+                  )
+                : const Icon(Icons.logout, color: BrandHeader.onColor),
+          ),
+          const SizedBox(width: 12),
           HeaderMenuButton(
             items: [
               HeaderMenuItem(
@@ -160,12 +194,6 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
                 icon: Icons.help_outline,
                 label: 'Ayuda y soporte',
                 onTap: () => AyudaSoporteDialog.show(context),
-              ),
-              HeaderMenuItem(
-                icon: Icons.logout,
-                label: 'Cerrar sesión',
-                destructive: true,
-                onTap: _cerrarSesion,
               ),
             ],
           ),
@@ -255,11 +283,10 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
         ),
         const SizedBox(height: 12),
         if (solicitudes.isEmpty)
-          const EstadoVacio(
-            icono: Icons.receipt_long_outlined,
-            mensaje: 'Aún no tienes solicitudes de carga.',
+          _EstadoVacioSolicitudes(
+            onSolicitar: () => context.go(RoutePaths.choferTipoOperacion),
           )
-        else
+        else ...[
           for (final grupo in agruparPorFecha(
             solicitudes.take(5).toList(),
             (s) => s.creadaEn,
@@ -281,6 +308,15 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
                 ],
               ),
             ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => context.go(RoutePaths.choferSolicitudes),
+              icon: const Icon(Icons.history_rounded, size: 18),
+              label: const Text('Ver historial'),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -335,27 +371,99 @@ class _FabSolicitar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final esEscritorio = AppBreakpoints.isTabletOrDesktop(
+      MediaQuery.sizeOf(context).width,
+    );
     // Sin `Padding` horizontal propio: el ancho/margen lateral ya lo da
     // `ContenidoResponsivo` en el `build()` de `ChoferHomeScreen`, igual
     // que a las tarjetas de arriba — duplicarlo aquí las desalineaba.
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: FloatingActionButton.extended(
-        onPressed: onPressed,
-        backgroundColor: colors.primary,
-        foregroundColor: colors.primaryOn,
-        // Mismo nivel de elevación que `AppElevatedButton` (más suave que
-        // antes) — `FloatingActionButton` no expone `shadowColor` como
-        // `ElevatedButton`, así que aquí solo se pareja la elevación, no
-        // el tinte de color de la sombra.
-        elevation: 8,
-        focusElevation: 10,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        icon: const Icon(Icons.local_gas_station_rounded, size: 24),
-        label: const Text(
-          'Solicitar carga',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+    return Align(
+      alignment: esEscritorio ? Alignment.centerRight : Alignment.center,
+      child: SizedBox(
+        width: esEscritorio ? 280 : double.infinity,
+        height: 52,
+        child: FloatingActionButton.extended(
+          onPressed: onPressed,
+          backgroundColor: colors.primary,
+          foregroundColor: colors.primaryOn,
+          // Mismo nivel de elevación que `AppElevatedButton` (más suave que
+          // antes) — `FloatingActionButton` no expone `shadowColor` como
+          // `ElevatedButton`, así que aquí solo se pareja la elevación, no
+          // el tinte de color de la sombra.
+          elevation: 2,
+          focusElevation: 4,
+          shape: const RoundedRectangleBorder(
+            borderRadius: AppRadii.buttonRadius,
+          ),
+          icon: const Icon(Icons.local_gas_station_rounded, size: 24),
+          label: const Text(
+            'Solicitar carga',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EstadoVacioSolicitudes extends StatelessWidget {
+  const _EstadoVacioSolicitudes({required this.onSolicitar});
+
+  final VoidCallback onSolicitar;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Semantics(
+      container: true,
+      label: 'Sin solicitudes de carga',
+      child: Container(
+        key: const ValueKey('estado-vacio-solicitudes-chofer'),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        alignment: Alignment.center,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: colors.primary.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.local_gas_station_outlined,
+                  size: 30,
+                  color: colors.primary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Aún no tienes solicitudes de carga.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Crea tu primera solicitud para comenzar.',
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: colors.textMuted),
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                key: const ValueKey('solicitar-desde-estado-vacio'),
+                onPressed: onSolicitar,
+                icon: const Icon(Icons.local_gas_station_rounded),
+                label: const Text('Solicitar carga'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -595,14 +703,19 @@ class _BannerPendientesOffline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final offline = context.statusColors.offline;
     return AppCard(
       floating: true,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      color: colors.warning.withValues(alpha: 0.1),
+      color: offline.withValues(alpha: 0.08),
       child: Row(
         children: [
-          Icon(Icons.cloud_off_outlined, size: 18, color: colors.warning),
-          const SizedBox(width: 8),
+          AppStatusChip(
+            label: 'Pendiente',
+            icon: Icons.cloud_off_outlined,
+            color: offline,
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               cantidad == 1

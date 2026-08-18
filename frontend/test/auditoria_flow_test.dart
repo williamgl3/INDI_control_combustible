@@ -16,10 +16,7 @@ Future<void> _loginComoAdmin(WidgetTester tester) async {
   await tester.enterText(
     find.descendant(
       of: dialog,
-      matching: find.widgetWithText(
-        TextFormField,
-        'Usuario del administrador',
-      ),
+      matching: find.widgetWithText(TextFormField, 'Usuario del administrador'),
     ),
     'admin1',
   );
@@ -37,6 +34,21 @@ Future<void> _loginComoAdmin(WidgetTester tester) async {
 }
 
 Future<void> _irASeccion(WidgetTester tester, String etiqueta) async {
+  if (find.text(etiqueta).evaluate().isEmpty &&
+      find.byTooltip('Expandir navegación').evaluate().isNotEmpty) {
+    await tester.tap(find.byTooltip('Expandir navegación'));
+    await tester.pumpAndSettle();
+  }
+  if (find.text(etiqueta).evaluate().isEmpty) {
+    await tester.scrollUntilVisible(
+      find.text(etiqueta),
+      180,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('sidebar-administrativo')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+  }
   await tester.ensureVisible(find.text(etiqueta));
   await tester.tap(find.text(etiqueta));
   await tester.pumpAndSettle();

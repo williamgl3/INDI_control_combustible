@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -120,18 +121,21 @@ class FakeRecordatorioService implements RecordatorioService {
 }
 
 /// No escribe archivos ni abre la hoja de compartir — solo registra el
-/// último CSV generado, para poder verificar su contenido en las pruebas.
+/// último XLSX generado, para poder verificar su contenido en las pruebas.
 class FakeExportadorService implements ExportadorService {
   String? ultimoNombreArchivo;
-  String? ultimoContenidoCsv;
+  Uint8List? ultimoContenidoXlsx;
+  String? ultimaDescripcion;
 
   @override
-  Future<void> exportarCsv({
+  Future<void> exportarXlsx({
     required String nombreArchivo,
-    required String contenidoCsv,
+    required Uint8List contenido,
+    required String descripcion,
   }) async {
     ultimoNombreArchivo = nombreArchivo;
-    ultimoContenidoCsv = contenidoCsv;
+    ultimoContenidoXlsx = contenido;
+    ultimaDescripcion = descripcion;
   }
 }
 
@@ -151,7 +155,9 @@ ProviderContainer makeTestContainer({
       recordatorioServiceProvider.overrideWithValue(FakeRecordatorioService()),
       exportadorServiceProvider.overrideWithValue(FakeExportadorService()),
       authRepositoryProvider.overrideWithValue(MockAuthRepository()),
-      evidenciasRepositoryProvider.overrideWithValue(MockEvidenciasRepository()),
+      evidenciasRepositoryProvider.overrideWithValue(
+        MockEvidenciasRepository(),
+      ),
       operacionesRepositoryProvider.overrideWithValue(
         MockOperacionesRepository(),
       ),
@@ -159,9 +165,7 @@ ProviderContainer makeTestContainer({
       incidenciasRepositoryProvider.overrideWithValue(
         MockIncidenciasRepository(),
       ),
-      auditoriaRepositoryProvider.overrideWithValue(
-        MockAuditoriaRepository(),
-      ),
+      auditoriaRepositoryProvider.overrideWithValue(MockAuditoriaRepository()),
       ...overridesExtra,
     ],
   );
@@ -171,6 +175,7 @@ Future<GoRouter> pumpTestApp(
   WidgetTester tester, {
   required ProviderContainer container,
   ScrollBehavior? scrollBehavior,
+  ThemeMode themeMode = ThemeMode.light,
 }) async {
   final router = container.read(appRouterProvider);
   await tester.pumpWidget(
@@ -179,6 +184,8 @@ Future<GoRouter> pumpTestApp(
       child: MaterialApp.router(
         routerConfig: router,
         theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: themeMode,
         scrollBehavior: scrollBehavior,
       ),
     ),

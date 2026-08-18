@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:csv/csv.dart';
 
+import '../../../core/xlsx_document.dart';
 import '../../../models/carga.dart';
 import '../../../models/cierre_dia.dart';
 import '../../../models/perfil.dart';
@@ -118,14 +121,75 @@ String construirCsvConcentrado(
   return const ListToCsvConverter().convert(filasCsv);
 }
 
+Uint8List construirXlsxConcentrado(
+  List<FilaConcentrado> filas, {
+  required double totalLitros,
+  required double totalImporte,
+}) {
+  return construirXlsx(
+    nombreHoja: 'Concentrado',
+    encabezados: const [
+      'Fecha',
+      'Responsable',
+      'Vehículo',
+      'Placas / Económico',
+      'Km',
+      'Litros',
+      'Km/L',
+      r'$/L',
+      'Combustible',
+      'Importe',
+      'Ticket',
+    ],
+    anchos: const [19, 28, 24, 21, 13, 13, 12, 13, 16, 16, 14],
+    filas: [
+      for (final fila in filas)
+        [
+          XlsxCell.dateTime(fila.carga.creadaEn),
+          XlsxCell.text(fila.chofer?.nombreCompleto ?? fila.carga.choferId),
+          XlsxCell.text(
+            fila.vehiculo?.modelo ?? fila.vehiculo?.tipoUnidad ?? '',
+          ),
+          XlsxCell.text(fila.vehiculo?.etiquetaUnidad ?? ''),
+          XlsxCell.number(
+            fila.rendimiento?.kmRecorridos,
+            style: XlsxCellStyle.oneDecimal,
+          ),
+          XlsxCell.number(
+            fila.carga.litrosCargados,
+            style: XlsxCellStyle.oneDecimal,
+          ),
+          XlsxCell.number(
+            fila.rendimiento?.rendimiento,
+            style: XlsxCellStyle.oneDecimal,
+          ),
+          XlsxCell.number(fila.precioPorLitro, style: XlsxCellStyle.currency),
+          XlsxCell.text(fila.vehiculo?.tipoCombustible ?? ''),
+          XlsxCell.number(fila.importe, style: XlsxCellStyle.currency),
+          XlsxCell.text(fila.ticketPendiente ? 'Pendiente' : 'OK'),
+        ],
+      [
+        const XlsxCell.text('TOTALES', style: XlsxCellStyle.total),
+        for (var i = 0; i < 4; i++) const XlsxCell.text(''),
+        XlsxCell.number(totalLitros, style: XlsxCellStyle.oneDecimal),
+        const XlsxCell.text(''),
+        const XlsxCell.text(''),
+        const XlsxCell.text(''),
+        XlsxCell.number(totalImporte, style: XlsxCellStyle.currency),
+        const XlsxCell.text(''),
+      ],
+    ],
+  );
+}
+
 String _dosDigitos(int numero) => numero.toString().padLeft(2, '0');
 
-/// Ej. "concentrado_20260715_143205.csv" — nombre de archivo con marca de
+/// Ej. "concentrado_20260715_143205.xlsx" — nombre de archivo con marca de
 /// tiempo para no pisar exportaciones anteriores.
 String nombreArchivoConcentrado(DateTime momento) {
   final fecha =
       '${momento.year}${_dosDigitos(momento.month)}${_dosDigitos(momento.day)}';
   final hora =
       '${_dosDigitos(momento.hour)}${_dosDigitos(momento.minute)}${_dosDigitos(momento.second)}';
-  return 'concentrado_${fecha}_$hora.csv';
+  return 'concentrado_${fecha}_$hora.xlsx';
 }

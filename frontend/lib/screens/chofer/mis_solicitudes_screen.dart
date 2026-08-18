@@ -17,6 +17,7 @@ import '../../widgets/estado_vacio.dart';
 import '../../widgets/fecha_formato.dart';
 import '../../widgets/contenido_responsivo.dart';
 import '../../widgets/ios_segmented_control.dart';
+import '../../widgets/chofer_operation_scaffold.dart';
 import '../../widgets/section_label.dart';
 import '../../widgets/sidebar_chofer.dart';
 import '../../widgets/stat_tile.dart';
@@ -138,7 +139,7 @@ class _MisSolicitudesScreenState extends ConsumerState<MisSolicitudesScreen> {
                 : 'No hay solicitudes con este filtro.',
             textoAccion: _filtro == null ? 'Solicitar carga' : null,
             onAccion: _filtro == null
-                ? () => context.push(RoutePaths.choferTipoOperacion)
+                ? () => context.go(RoutePaths.choferTipoOperacion)
                 : null,
           )
         else
@@ -169,7 +170,7 @@ class _MisSolicitudesScreenState extends ConsumerState<MisSolicitudesScreen> {
     // de vista al filtrar una lista larga.
     final encabezado = BrandSubHeader(
       titulo: 'Mis solicitudes',
-      onBack: widget.mostrarComoTab ? null : () => context.pop(),
+      onBack: widget.mostrarComoTab ? null : () => volverEnFlujoChofer(context),
     );
 
     if (widget.mostrarComoTab) {
@@ -182,9 +183,7 @@ class _MisSolicitudesScreenState extends ConsumerState<MisSolicitudesScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             encabezado,
-            Expanded(
-              child: ContenidoResponsivo(child: listaSolicitudes),
-            ),
+            Expanded(child: ContenidoResponsivo(child: listaSolicitudes)),
           ],
         ),
       );

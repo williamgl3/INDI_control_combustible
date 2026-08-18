@@ -116,12 +116,13 @@ class _MantenimientoTabState extends ConsumerState<MantenimientoTab> {
   Future<void> _exportar(List<DiagnosticoMantenimiento> diagnosticos) async {
     final mensajero = ScaffoldMessenger.of(context);
     try {
-      final contenidoCsv = construirCsvMantenimiento(diagnosticos);
+      final contenido = construirXlsxMantenimiento(diagnosticos);
       await ref
           .read(exportadorServiceProvider)
-          .exportarCsv(
+          .exportarXlsx(
             nombreArchivo: nombreArchivoMantenimiento(DateTime.now()),
-            contenidoCsv: contenidoCsv,
+            contenido: contenido,
+            descripcion: 'Reporte de mantenimiento',
           );
     } catch (_) {
       mensajero.showSnackBar(

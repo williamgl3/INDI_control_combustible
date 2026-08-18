@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:indi_combustible/models/vehiculo.dart';
@@ -136,6 +139,15 @@ void main() {
       expect(lineas.first, contains('Unidad'));
       expect(lineas[1], contains('ABC-123'));
       expect(lineas[1], contains('Al día'));
+
+      final xlsx = construirXlsxMantenimiento([diagnostico]);
+      final archive = ZipDecoder().decodeBytes(xlsx);
+      final sheet = utf8.decode(
+        archive.findFile('xl/worksheets/sheet1.xml')!.content,
+      );
+      expect(sheet, contains('ABC-123'));
+      expect(sheet, contains('Al día'));
+      expect(sheet, contains('<autoFilter ref="A1:H2"/>'));
     },
   );
 

@@ -26,8 +26,8 @@ void main() {
     await pumpTestApp(tester, container: container);
     await _loginComoChofer1(tester);
 
-    // Perfil es la pestaña #3 del bottom nav.
-    await tester.tap(find.text('Perfil'));
+    // En escritorio, el avatar inferior es el acceso principal a Perfil.
+    await tester.tap(find.byKey(const ValueKey('sidebar-chofer-perfil')));
     await tester.pumpAndSettle();
 
     // `findsWidgets` (no `findsOneWidget`): en viewports anchos aparece el
@@ -62,7 +62,7 @@ void main() {
       await pumpTestApp(tester, container: container);
       await _loginComoChofer1(tester);
 
-      await tester.tap(find.text('Perfil'));
+      await tester.tap(find.byKey(const ValueKey('sidebar-chofer-perfil')));
       await tester.pumpAndSettle();
 
       await tester.enterText(
@@ -81,10 +81,7 @@ void main() {
       await tester.tap(find.text('Guardar nueva contraseña'));
       await tester.pumpAndSettle();
 
-      expect(
-        find.text('La contraseña actual no es correcta.'),
-        findsOneWidget,
-      );
+      expect(find.text('La contraseña actual no es correcta.'), findsOneWidget);
       expect(find.text('Contraseña actualizada.'), findsNothing);
     },
   );

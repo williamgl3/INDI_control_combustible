@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:csv/csv.dart';
 
+import '../../../core/xlsx_document.dart';
 import '../../../core/intervalo_mantenimiento.dart';
 import '../../../models/vehiculo.dart';
 import '../../../widgets/fecha_formato.dart';
@@ -171,6 +174,47 @@ String construirCsvMantenimiento(List<DiagnosticoMantenimiento> diagnosticos) {
   return const ListToCsvConverter().convert(filasCsv);
 }
 
+Uint8List construirXlsxMantenimiento(
+  List<DiagnosticoMantenimiento> diagnosticos,
+) {
+  return construirXlsx(
+    nombreHoja: 'Mantenimiento',
+    encabezados: const [
+      'Unidad',
+      'Tipo',
+      'Lectura actual',
+      'Uso desde último servicio',
+      'Intervalo de servicio',
+      'Restante',
+      'Fecha proyectada',
+      'Estado',
+    ],
+    anchos: const [22, 18, 17, 25, 23, 15, 20, 22],
+    filas: [
+      for (final d in diagnosticos)
+        [
+          XlsxCell.text(d.vehiculo.etiquetaUnidad),
+          XlsxCell.text(d.vehiculo.tipoUnidad),
+          XlsxCell.number(d.lecturaActual, style: XlsxCellStyle.oneDecimal),
+          XlsxCell.number(d.usoDesdeServicio, style: XlsxCellStyle.oneDecimal),
+          intervaloMantenimientoConfigurado(d.vehiculo.intervaloServicio)
+              ? XlsxCell.number(
+                  d.vehiculo.intervaloServicio,
+                  style: XlsxCellStyle.oneDecimal,
+                )
+              : const XlsxCell.text('No configurado'),
+          d.estado == EstadoMantenimiento.noConfigurado
+              ? const XlsxCell.text('No aplica')
+              : XlsxCell.number(d.restante, style: XlsxCellStyle.oneDecimal),
+          d.fechaProyectada == null
+              ? const XlsxCell.text('')
+              : XlsxCell.dateTime(d.fechaProyectada!),
+          XlsxCell.text(_etiquetaEstado(d.estado)),
+        ],
+    ],
+  );
+}
+
 String _etiquetaEstado(EstadoMantenimiento estado) {
   switch (estado) {
     case EstadoMantenimiento.noConfigurado:
@@ -188,11 +232,11 @@ String _etiquetaEstado(EstadoMantenimiento estado) {
 
 String _dosDigitos(int numero) => numero.toString().padLeft(2, '0');
 
-/// Ej. "mantenimiento_20260715_143205.csv".
+/// Ej. "mantenimiento_20260715_143205.xlsx".
 String nombreArchivoMantenimiento(DateTime momento) {
   final fecha =
       '${momento.year}${_dosDigitos(momento.month)}${_dosDigitos(momento.day)}';
   final hora =
       '${_dosDigitos(momento.hour)}${_dosDigitos(momento.minute)}${_dosDigitos(momento.second)}';
-  return 'mantenimiento_${fecha}_$hora.csv';
+  return 'mantenimiento_${fecha}_$hora.xlsx';
 }

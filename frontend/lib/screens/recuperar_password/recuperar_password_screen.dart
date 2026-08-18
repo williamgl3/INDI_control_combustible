@@ -65,11 +65,16 @@ class _RecuperarPasswordScreenState
   Widget build(BuildContext context) {
     return AuthScreenShell(
       onBack: () => context.go(RoutePaths.login),
-      titulo: _enviado ? null : 'Recuperar contraseña',
-      subtitulo: _enviado
-          ? null
-          : 'Ingresa tu usuario o correo y te enviaremos instrucciones '
-                'para restablecer tu contraseña.',
+      titulo: 'Recuperar contraseña',
+      subtitulo:
+          'Ingresa tu usuario o correo y te enviaremos instrucciones '
+          'para restablecer tu contraseña.',
+      mostrarMarca: false,
+      logoSize: 48,
+      compactLogoSize: 36,
+      waveLeftHeightFactor: 0.96,
+      waveRightHeightFactor: 0.78,
+      centrarContenido: false,
       child: _enviado ? _buildConfirmacion(context) : _buildFormulario(context),
     );
   }

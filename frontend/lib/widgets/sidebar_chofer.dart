@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/session_provider.dart';
+import '../models/perfil.dart';
 import '../router/route_paths.dart';
 import '../theme/app_radii.dart';
 import '../theme/app_theme.dart';
@@ -21,11 +22,8 @@ class DestinoChofer {
   final String etiqueta;
 }
 
-/// Los 5 destinos del panel de chofer, en el mismo orden que la barra
-/// inferior móvil — índice 1 ("Solicitar") es navegación directa, no un
-/// tab, tanto en `ChoferHomeShell` como en cualquier pantalla que use este
-/// sidebar fuera del shell.
-const destinosChofer = [
+/// Destinos operativos compartidos entre la navegación lateral y móvil.
+const destinosOperativosChofer = [
   DestinoChofer(
     icono: Icons.home_outlined,
     iconoSeleccionado: Icons.home_rounded,
@@ -46,6 +44,12 @@ const destinosChofer = [
     iconoSeleccionado: Icons.camera_alt_rounded,
     etiqueta: 'Evidencias',
   ),
+];
+
+/// La barra móvil conserva Perfil como quinto destino. En escritorio y
+/// tablet el avatar de cuenta ocupa ese papel sin duplicarlo en la lista.
+const destinosChofer = [
+  ...destinosOperativosChofer,
   DestinoChofer(
     icono: Icons.person_outline,
     iconoSeleccionado: Icons.person_rounded,
@@ -89,10 +93,12 @@ class SidebarChofer extends ConsumerWidget {
     super.key,
     required this.indiceSeleccionado,
     required this.onSeleccionar,
+    this.compacto = false,
   });
 
   final int indiceSeleccionado;
   final ValueChanged<int> onSeleccionar;
+  final bool compacto;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -100,7 +106,7 @@ class SidebarChofer extends ConsumerWidget {
     final perfil = ref.watch(sessionProvider);
 
     return Container(
-      width: 240,
+      width: compacto ? 88 : 240,
       color: colors.sidebarBackground,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -118,16 +124,18 @@ class SidebarChofer extends ConsumerWidget {
                     fit: BoxFit.cover,
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'INDI Combustible',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: colors.sidebarText,
+                if (!compacto) ...[
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'INDI Combustible',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: colors.sidebarText,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -135,48 +143,147 @@ class SidebarChofer extends ConsumerWidget {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                for (var i = 0; i < destinosChofer.length; i++)
+                for (var i = 0; i < destinosOperativosChofer.length; i++)
                   _ItemSidebarChofer(
                     key: ValueKey('sidebar-chofer-destino-$i'),
-                    destino: destinosChofer[i],
+                    destino: destinosOperativosChofer[i],
                     seleccionado: i == indiceSeleccionado,
+                    compacto: compacto,
                     onTap: () => onSeleccionar(i),
                   ),
               ],
             ),
           ),
           if (perfil != null)
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: colors.sidebarSurfaceAlt,
-                    child: Text(
-                      perfil.nombreCompleto.isNotEmpty
-                          ? perfil.nombreCompleto[0]
-                          : '?',
-                      style: TextStyle(
-                        color: colors.sidebarText,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      perfil.nombreCompleto,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colors.sidebarTextMuted,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
+            _AccesoPerfilChofer(
+              perfil: perfil,
+              seleccionado: indiceSeleccionado == 4,
+              compacto: compacto,
+              onTap: () => onSeleccionar(4),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _AccesoPerfilChofer extends StatelessWidget {
+  const _AccesoPerfilChofer({
+    required this.perfil,
+    required this.seleccionado,
+    required this.compacto,
+    required this.onTap,
+  });
+
+  final Perfil perfil;
+  final bool seleccionado;
+  final bool compacto;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final scheme = Theme.of(context).colorScheme;
+    final nombre = perfil.nombreCompleto.trim();
+    final inicial = nombre.isEmpty
+        ? null
+        : nombre.substring(0, 1).toUpperCase();
+    final tooltip = nombre.isEmpty
+        ? 'Abrir perfil'
+        : 'Perfil de ${nombre.split(RegExp(r'\s+')).first}';
+
+    final avatar = Material(
+      key: const ValueKey('sidebar-chofer-perfil'),
+      color: seleccionado ? scheme.primary : colors.sidebarSurfaceAlt,
+      shape: CircleBorder(
+        side: BorderSide(
+          color: seleccionado
+              ? scheme.onPrimary.withValues(alpha: 0.8)
+              : colors.sidebarTextMuted.withValues(alpha: 0.35),
+          width: seleccionado ? 2 : 1,
+        ),
+      ),
+      child: SizedBox.square(
+        dimension: 44,
+        child: Center(
+          child: inicial == null
+              ? Icon(
+                  Icons.person_outline,
+                  size: 24,
+                  color: seleccionado ? scheme.onPrimary : colors.sidebarText,
+                )
+              : Text(
+                  inicial,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: seleccionado ? scheme.onPrimary : colors.sidebarText,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+        ),
+      ),
+    );
+
+    final contenido = compacto
+        ? Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              customBorder: const CircleBorder(),
+              hoverColor: scheme.primary.withValues(alpha: 0.16),
+              focusColor: scheme.primary.withValues(alpha: 0.22),
+              child: avatar,
+            ),
+          )
+        : Material(
+            key: const ValueKey('sidebar-chofer-perfil-fila'),
+            color: seleccionado
+                ? scheme.primary.withValues(alpha: 0.14)
+                : Colors.transparent,
+            borderRadius: AppRadii.navButtonRadius,
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: AppRadii.navButtonRadius,
+              hoverColor: scheme.primary.withValues(alpha: 0.12),
+              focusColor: scheme.primary.withValues(alpha: 0.16),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  children: [
+                    avatar,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        nombre.isEmpty ? 'Perfil' : nombre,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: seleccionado
+                              ? colors.sidebarText
+                              : colors.sidebarTextMuted,
+                          fontWeight: seleccionado
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+
+    return Semantics(
+      button: true,
+      selected: seleccionado,
+      label: 'Abrir perfil',
+      child: Tooltip(
+        message: tooltip,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: compacto ? Center(child: contenido) : contenido,
+        ),
       ),
     );
   }
@@ -187,16 +294,56 @@ class _ItemSidebarChofer extends StatelessWidget {
     super.key,
     required this.destino,
     required this.seleccionado,
+    required this.compacto,
     required this.onTap,
   });
 
   final DestinoChofer destino;
   final bool seleccionado;
+  final bool compacto;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final colorContenido = seleccionado
+        ? colorScheme.onPrimary
+        : context.colors.sidebarTextMuted;
+    final icono = Icon(
+      seleccionado ? destino.iconoSeleccionado : destino.icono,
+      color: colorContenido,
+      size: 22,
+    );
+
+    final contenido = Container(
+      constraints: const BoxConstraints(minHeight: 48),
+      padding: EdgeInsets.symmetric(
+        horizontal: compacto ? 4 : 12,
+        vertical: compacto ? 8 : 10,
+      ),
+      child: compacto
+          ? Center(child: SizedBox.square(dimension: 26, child: icono))
+          : Row(
+              children: [
+                SizedBox.square(dimension: 30, child: icono),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    destino.etiqueta,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: seleccionado
+                          ? colorScheme.onPrimary
+                          : context.colors.sidebarText,
+                      fontWeight: seleccionado
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
@@ -208,38 +355,9 @@ class _ItemSidebarChofer extends StatelessWidget {
           borderRadius: AppRadii.navButtonRadius,
           hoverColor: colorScheme.primary.withValues(alpha: 0.08),
           focusColor: colorScheme.primary.withValues(alpha: 0.12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            child: Row(
-              children: [
-                SizedBox.square(
-                  dimension: 30,
-                  child: Icon(
-                    seleccionado ? destino.iconoSeleccionado : destino.icono,
-                    color: seleccionado
-                        ? colorScheme.onPrimary
-                        : colorScheme.onSurfaceVariant,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    destino.etiqueta,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: seleccionado
-                          ? colorScheme.onPrimary
-                          : colorScheme.onSurface,
-                      fontWeight: seleccionado
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          child: compacto
+              ? Tooltip(message: destino.etiqueta, child: contenido)
+              : contenido,
         ),
       ),
     );
@@ -251,12 +369,9 @@ class _ItemSidebarChofer extends StatelessWidget {
 /// `SubirEvidenciasScreen` en su ruta standalone) hacia el destino
 /// tocado.
 ///
-/// `push`, no `go`, para todo excepto "Inicio": esas pantallas standalone
-/// usan `context.pop()` en su propio botón de atrás — con `go` no queda
-/// nada en el stack para hacer pop y truena con
-/// `GoError: There is nothing to pop`. "Inicio" sí es la raíz del flujo
-/// de chofer, así que usa `go` para no acumular pantallas en el stack.
-/// Si ya se está en el destino tocado, no hace nada.
+/// Los destinos principales usan `go`: cambiar de sección no debe apilar
+/// copias de Historial, Evidencias o Perfil. Las pantallas secundarias son
+/// las que usan `push` y conservan un regreso jerárquico.
 void navegarDesdeSidebarChofer(
   BuildContext context,
   int indiceActual,
@@ -267,12 +382,12 @@ void navegarDesdeSidebarChofer(
     case 0:
       context.go(RoutePaths.chofer);
     case 1:
-      context.push(RoutePaths.choferTipoOperacion);
+      context.go(RoutePaths.choferTipoOperacion);
     case 2:
-      context.push(RoutePaths.choferSolicitudes);
+      context.go(RoutePaths.choferSolicitudes);
     case 3:
-      context.push(RoutePaths.choferSubirEvidencias);
+      context.go(RoutePaths.choferSubirEvidencias);
     case 4:
-      context.push(RoutePaths.choferPerfil);
+      context.go(RoutePaths.choferPerfil);
   }
 }

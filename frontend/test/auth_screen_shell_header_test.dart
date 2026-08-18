@@ -69,10 +69,13 @@ void main() {
     },
   );
 
-
   testWidgets(
     'el header crece con el contenido y no hay overflow con subtítulos largos',
     (tester) async {
+      tester.view.physicalSize = const Size(800, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.light(),
@@ -82,6 +85,11 @@ void main() {
                 'Primero tus datos personales, esto puede tomar un par de '
                 'minutos nada más, así que no te preocupes por la extensión '
                 'de este texto de prueba.',
+            mostrarMarca: false,
+            logoSize: 48,
+            compactLogoSize: 36,
+            waveLeftHeightFactor: 0.96,
+            waveRightHeightFactor: 0.78,
             child: const SizedBox(height: 400, child: Text('formulario')),
           ),
         ),
@@ -90,9 +98,11 @@ void main() {
 
       expect(tester.takeException(), isNull);
 
-      final subtituloRect = tester.getRect(find.textContaining('Primero tus datos'));
+      final subtituloRect = tester.getRect(
+        find.textContaining('Primero tus datos'),
+      );
       final waveFinder = find.byWidgetPredicate(
-        (w) => w is ClipPath && w.clipper is WaveBottomClipper,
+        (w) => w is ClipPath && w.clipper is SShapeHeaderClipper,
       );
       final headerBackground = tester.widget<ClipPath>(waveFinder);
       final headerRect = tester.getRect(waveFinder);
@@ -104,7 +114,7 @@ void main() {
       // el "convex hull" de sus puntos de control, así que ese mínimo es
       // el punto más alto real de la curva), o el bug reportado (texto
       // tapado por la curva) sigue presente.
-      final clipper = headerBackground.clipper as WaveBottomClipper;
+      final clipper = headerBackground.clipper as SShapeHeaderClipper;
       final menorFactor = clipper.leftHeightFactor < clipper.rightHeightFactor
           ? clipper.leftHeightFactor
           : clipper.rightHeightFactor;

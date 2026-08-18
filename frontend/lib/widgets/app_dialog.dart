@@ -35,7 +35,10 @@ class AppDialogShell extends StatelessWidget {
     // varios campos (ej. EditarVehiculoDialog) se desborda en pantallas
     // cortas (teléfono en horizontal, o ventanas de escritorio bajas) en
     // vez de hacer scroll.
-    final alturaMaxima = MediaQuery.sizeOf(context).height * 0.9;
+    final mediaQuery = MediaQuery.of(context);
+    final alturaDisponible =
+        mediaQuery.size.height - mediaQuery.viewInsets.bottom;
+    final alturaMaxima = alturaDisponible * 0.9;
 
     return Dialog(
       // `Dialog` sigue siendo el widget raíz (algunos tests lo ubican por
@@ -64,6 +67,8 @@ class AppDialogShell extends StatelessWidget {
               ?header,
               Flexible(
                 child: SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.all(AppSpacing.xxl),
                   child: child,
                 ),

@@ -32,10 +32,7 @@ Future<void> _loginComoAdmin(
   await tester.enterText(
     find.descendant(
       of: dialog,
-      matching: find.widgetWithText(
-        TextFormField,
-        'Usuario del administrador',
-      ),
+      matching: find.widgetWithText(TextFormField, 'Usuario del administrador'),
     ),
     usuario,
   );
@@ -53,6 +50,21 @@ Future<void> _loginComoAdmin(
 }
 
 Future<void> _irASeccion(WidgetTester tester, String etiqueta) async {
+  if (find.text(etiqueta).evaluate().isEmpty &&
+      find.byTooltip('Expandir navegación').evaluate().isNotEmpty) {
+    await tester.tap(find.byTooltip('Expandir navegación'));
+    await tester.pumpAndSettle();
+  }
+  if (find.text(etiqueta).evaluate().isEmpty) {
+    await tester.scrollUntilVisible(
+      find.text(etiqueta),
+      180,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('sidebar-administrativo')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+  }
   await tester.ensureVisible(find.text(etiqueta));
   await tester.tap(find.text(etiqueta));
   await tester.pumpAndSettle();
@@ -238,22 +250,21 @@ void main() {
     },
   );
 
-  testWidgets(
-    'un administrativo normal no ve el botón "Crear administrador"',
-    (tester) async {
-      tester.view.physicalSize = const Size(1600, 1000);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
+  testWidgets('un administrativo normal no ve el botón "Crear administrador"', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
 
-      final container = makeTestContainer();
-      addTearDown(container.dispose);
-      await pumpTestApp(tester, container: container);
-      await _loginComoAdmin(tester);
-      await _irASeccion(tester, 'Choferes');
+    final container = makeTestContainer();
+    addTearDown(container.dispose);
+    await pumpTestApp(tester, container: container);
+    await _loginComoAdmin(tester);
+    await _irASeccion(tester, 'Choferes');
 
-      expect(find.text('Crear administrador'), findsNothing);
-    },
-  );
+    expect(find.text('Crear administrador'), findsNothing);
+  });
 
   testWidgets(
     'el menú de acciones no ofrece Desactivar para el usuario en sesión actual',

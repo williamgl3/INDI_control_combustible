@@ -111,7 +111,7 @@ void main() {
     await tester.pump();
 
     await tester.tap(
-      find.widgetWithText(FloatingActionButton, 'Solicitar carga'),
+      find.byKey(const ValueKey('solicitar-desde-estado-vacio')),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Vehículo Ligero'));

@@ -27,8 +27,16 @@ class RoutePaths {
   static const choferSubirEvidencias = '/chofer/subir-evidencias';
 
   static const administrativo = '/administrativo';
+  static const administrativoPerfil = '/administrativo/perfil';
   static const administrativoMarimba = '/administrativo/marimba-pipa';
   static const administrativoChoferDetalle = '/administrativo/chofer';
+
+  /// Conserva en la URL la sección activa del shell administrativo sin
+  /// crear rutas paralelas ni apilar destinos principales.
+  static String administrativoSeccion(String seccion) => Uri(
+    path: administrativo,
+    queryParameters: {'seccion': seccion},
+  ).toString();
 
   /// Rutas accesibles sin sesión iniciada.
   static const publicas = {

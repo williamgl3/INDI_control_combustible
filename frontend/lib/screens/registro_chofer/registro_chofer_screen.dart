@@ -132,14 +132,22 @@ class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
     return AuthScreenShell(
       onBack: () => context.go(RoutePaths.login),
       titulo: 'Regístrate',
-      subtitulo: _paso == 0
-          ? 'Primero tus datos personales.'
-          : 'Ahora los datos de tu cuenta.',
+      subtitulo: 'Primero tus datos personales.',
+      mostrarMarca: false,
+      logoSize: 48,
+      compactLogoSize: 36,
+      waveLeftHeightFactor: 0.96,
+      waveRightHeightFactor: 0.78,
+      centrarContenido: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          _IndicadorDePasos(pasoActual: _paso, totalPasos: 2),
+          _IndicadorDePasos(
+            key: const Key('registro-indicador-pasos'),
+            pasoActual: _paso,
+            totalPasos: 2,
+          ),
           const SizedBox(height: 20),
           AnimatedSwitcher(
             duration: AppMotion.base,
@@ -153,9 +161,7 @@ class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
                 child: child,
               ),
             ),
-            child: _paso == 0
-                ? _buildPaso1(context)
-                : _buildPaso2(context),
+            child: _paso == 0 ? _buildPaso1(context) : _buildPaso2(context),
           ),
         ],
       ),
@@ -292,8 +298,8 @@ class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
                   ),
                   tooltip: _confirmarPasswordVisible ? 'Ocultar' : 'Ver',
                   onPressed: () => setState(
-                    () => _confirmarPasswordVisible =
-                        !_confirmarPasswordVisible,
+                    () =>
+                        _confirmarPasswordVisible = !_confirmarPasswordVisible,
                   ),
                 ),
               ),
@@ -337,7 +343,11 @@ class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
 /// Barra de progreso de 2 segmentos — el paso actual y los ya
 /// completados se pintan con el azul de marca, el resto queda apagado.
 class _IndicadorDePasos extends StatelessWidget {
-  const _IndicadorDePasos({required this.pasoActual, required this.totalPasos});
+  const _IndicadorDePasos({
+    super.key,
+    required this.pasoActual,
+    required this.totalPasos,
+  });
 
   final int pasoActual;
   final int totalPasos;
@@ -403,9 +413,10 @@ class _MedidorFuerzaPassword extends StatelessWidget {
         const SizedBox(width: 10),
         Text(
           fuerza,
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: color, fontWeight: FontWeight.w700),
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: color,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ],
     );
