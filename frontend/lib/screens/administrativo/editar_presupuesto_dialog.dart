@@ -17,7 +17,10 @@ class EditarPresupuestoDialog extends ConsumerStatefulWidget {
 
   final double valorActual;
 
-  static Future<bool?> show(BuildContext context, {required double valorActual}) {
+  static Future<bool?> show(
+    BuildContext context, {
+    required double valorActual,
+  }) {
     return mostrarDialogoApp<bool>(
       context,
       builder: (_) => EditarPresupuestoDialog(valorActual: valorActual),
@@ -100,19 +103,17 @@ class _EditarPresupuestoDialogState
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              validator: (v) => Validators.numeroPositivo(
-                v,
-                etiqueta: 'El presupuesto',
-              ),
+              validator: (v) =>
+                  Validators.numeroPositivo(v, etiqueta: 'El presupuesto'),
               onFieldSubmitted: (_) => _guardar(),
             ),
             if (_errorGeneral != null) ...[
               const SizedBox(height: 12),
               Text(
                 _errorGeneral!,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: context.colors.error,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: context.colors.error),
               ),
             ],
             const SizedBox(height: 20),

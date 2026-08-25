@@ -71,8 +71,8 @@ const seleccionarPartidas = `
   GROUP BY sp.id
   ORDER BY sp.tipo`;
 
-export async function listarPartidas(solicitudId: string): Promise<SolicitudPartida[]> {
-  const { rows } = await pool.query<FilaPartida>(seleccionarPartidas, [solicitudId]);
+export async function listarPartidas(solicitudId: string, cliente?: PoolClient): Promise<SolicitudPartida[]> {
+  const { rows } = await (cliente ?? pool).query<FilaPartida>(seleccionarPartidas, [solicitudId]);
   return rows.map(aPartida);
 }
 
@@ -101,7 +101,9 @@ export async function crearSolicitudConPartidas(datos: {
   esUrgente: boolean;
   motivoChofer?: string | null | undefined;
   fotoTableroPath?: string | null | undefined;
-}): Promise<SolicitudAutorizacion> {
+  idempotencyKey: string;
+  payloadFingerprint: string;
+}, clienteExterno?: PoolClient): Promise<SolicitudAutorizacion & { replayed: boolean }> {
   validarPartidas(datos.partidas);
   if (datos.rol !== 'supervisor') {
     throw new ApiError(403, 'El flujo de unidad abastecedora requiere un supervisor.');
@@ -110,9 +112,50 @@ export async function crearSolicitudConPartidas(datos: {
     (suma, partida) => suma.plus(partida.litros),
     new Decimal(0),
   );
-  const cliente = await pool.connect();
+  const cliente = clienteExterno ?? await pool.connect();
+  const transaccionPropia = clienteExterno === undefined;
   try {
-    await cliente.query('BEGIN');
+    if (transaccionPropia) await cliente.query('BEGIN');
+    const { rows: historicas } = await cliente.query<Record<string, unknown>>(
+      'SELECT * FROM solicitudes_autorizacion WHERE chofer_id=$1 AND idempotency_key=$2 FOR UPDATE',
+      [datos.solicitanteId, datos.idempotencyKey],
+    );
+    if (historicas[0]) {
+      const original = historicas[0];
+      if (original.payload_fingerprint !== datos.payloadFingerprint) {
+        throw new ApiError(409, 'La clave idempotente ya fue usada con otros datos.', {
+          codigo: 'IDEMPOTENCY_KEY_PAYLOAD_MISMATCH',
+        });
+      }
+      const respuesta = {
+        id: original.id as string, choferId: original.chofer_id as string,
+        vehiculoId: original.vehiculo_id as string, litrosSolicitados: Number(original.litros_solicitados),
+        litrosAutorizados: original.litros_autorizados === null ? null : Number(original.litros_autorizados),
+        costoEstimado: original.costo_estimado === null ? null : Number(original.costo_estimado),
+        esUrgente: original.es_urgente as boolean, motivoChofer: original.motivo_chofer as string | null,
+        actividad: original.actividad as string, fechaProgramada: (original.fecha_programada as Date).toISOString(),
+        estado: original.estado as 'pendiente', aprobadaPor: null, folioAutorizacion: original.folio_autorizacion as string | null,
+        comentario: original.comentario as string | null, creadaEn: (original.creada_en as Date).toISOString(),
+        fotoTableroPath: original.foto_tablero_path as string | null,
+        partidas: await listarPartidas(original.id as string, cliente), replayed: true,
+      };
+      if (transaccionPropia) await cliente.query('COMMIT');
+      return respuesta;
+    }
+    const { rows: pendientes } = await cliente.query<{ id: string }>(
+      `SELECT id FROM solicitudes_autorizacion
+       WHERE chofer_id=$1 AND vehiculo_id=$2
+         AND (fecha_programada AT TIME ZONE 'America/Mexico_City')::date =
+             ($3::timestamptz AT TIME ZONE 'America/Mexico_City')::date
+         AND estado='pendiente' LIMIT 1 FOR UPDATE`,
+      [datos.solicitanteId, datos.vehiculoId, datos.fechaProgramada],
+    );
+    if (pendientes[0]) {
+      throw new ApiError(409, 'Ya existe una solicitud pendiente para esta unidad y fecha.', {
+        codigo: 'SOLICITUD_PENDIENTE_EXISTENTE',
+        detalles: { solicitudId: pendientes[0].id },
+      });
+    }
     const { rows: unidades } = await cliente.query<{
       tipo_unidad: string;
       activo: boolean;
@@ -138,13 +181,13 @@ export async function crearSolicitudConPartidas(datos: {
       `INSERT INTO solicitudes_autorizacion
          (chofer_id, vehiculo_id, litros_solicitados, litros_autorizados, costo_estimado,
           es_urgente, motivo_chofer, actividad, fecha_programada, estado, comentario,
-          foto_tablero_path)
-       VALUES ($1,$2,$3,NULL,NULL,$4,$5,$6,$7,'pendiente',$8,$9)
+          foto_tablero_path,idempotency_key,payload_fingerprint)
+       VALUES ($1,$2,$3,NULL,NULL,$4,$5,$6,$7,'pendiente',$8,$9,$10,$11)
        RETURNING *`,
       [datos.solicitanteId, datos.vehiculoId, total.toString(), datos.esUrgente,
        datos.motivoChofer ?? null, datos.actividad, datos.fechaProgramada,
        'Solicitud de unidad abastecedora pendiente de autorización por concepto.',
-       datos.fotoTableroPath ?? null],
+       datos.fotoTableroPath ?? null, datos.idempotencyKey, datos.payloadFingerprint],
     );
     const solicitud = rows[0]!;
     for (const partida of datos.partidas) {
@@ -157,7 +200,7 @@ export async function crearSolicitudConPartidas(datos: {
          partida.observaciones?.trim() || null],
       );
     }
-    await cliente.query('COMMIT');
+    if (transaccionPropia) await cliente.query('COMMIT');
     return {
       id: solicitud.id as string,
       choferId: solicitud.chofer_id as string,
@@ -175,13 +218,29 @@ export async function crearSolicitudConPartidas(datos: {
       comentario: solicitud.comentario as string,
       creadaEn: (solicitud.creada_en as Date).toISOString(),
       fotoTableroPath: solicitud.foto_tablero_path as string | null,
-      partidas: await listarPartidas(solicitud.id as string),
+      partidas: await listarPartidas(solicitud.id as string, cliente),
+      replayed: false,
     };
   } catch (error) {
-    await cliente.query('ROLLBACK');
+    if (transaccionPropia) await cliente.query('ROLLBACK');
+    const pg = error as { code?: string; constraint?: string };
+    if (pg.code === '23505' && pg.constraint === 'uq_solicitudes_pendiente_negocio') {
+      const { rows } = await pool.query<{ id: string }>(
+        `SELECT id FROM solicitudes_autorizacion
+         WHERE chofer_id=$1 AND vehiculo_id=$2
+           AND (fecha_programada AT TIME ZONE 'America/Mexico_City')::date =
+               ($3::timestamptz AT TIME ZONE 'America/Mexico_City')::date
+           AND estado='pendiente' ORDER BY creada_en LIMIT 1`,
+        [datos.solicitanteId, datos.vehiculoId, datos.fechaProgramada],
+      );
+      throw new ApiError(409, 'Ya existe una solicitud pendiente para esta unidad y fecha.', {
+        codigo: 'SOLICITUD_PENDIENTE_EXISTENTE',
+        ...(rows[0] ? { detalles: { solicitudId: rows[0].id } } : {}),
+      });
+    }
     throw error;
   } finally {
-    cliente.release();
+    if (transaccionPropia) cliente.release();
   }
 }
 
@@ -296,7 +355,7 @@ export async function registrarCargaConPartidas(datos: {
   fotoTicketPath?: string | null | undefined;
   fotoTableroPath?: string | null | undefined;
   litrosDetectadosOcr?: number | null | undefined;
-}): Promise<{
+}, clienteExterno?: PoolClient): Promise<{
   carga: Record<string, unknown>;
   litrosAutorizados: string;
   litrosConsumidos: string;
@@ -310,9 +369,10 @@ export async function registrarCargaConPartidas(datos: {
   if (folios.some((f) => !f || f.length > 100) || new Set(folios).size !== folios.length || folios.length > 20) {
     throw new ApiError(400, 'Los comprobantes contienen folios inválidos o duplicados.');
   }
-  const cliente = await pool.connect();
+  const cliente = clienteExterno ?? await pool.connect();
+  const transaccionPropia = clienteExterno === undefined;
   try {
-    await cliente.query('BEGIN');
+    if (transaccionPropia) await cliente.query('BEGIN');
     const { rows: solicitudRows } = await cliente.query<{
       id: string; chofer_id: string; vehiculo_id: string; estado: string;
     }>('SELECT id,chofer_id,vehiculo_id,estado FROM solicitudes_autorizacion WHERE folio_autorizacion=$1 FOR UPDATE', [datos.folioAutorizacion]);
@@ -439,14 +499,14 @@ export async function registrarCargaConPartidas(datos: {
       [solicitud.id],
     );
     const totalConsumido = new Decimal(totalConsumidoRows[0]!.total);
-    await cliente.query('COMMIT');
-    void registrarAuditoria({
+    await registrarAuditoria({
       usuarioId: datos.usuarioId,
       accion: 'registrar_carga_partidas',
       entidad: 'carga',
       entidadId: cargaId,
       detalle: { tipos: datos.partidas.map((partida) => partida.tipo) },
-    });
+    }, cliente);
+    if (transaccionPropia) await cliente.query('COMMIT');
     return {
       carga: {
         id: cargaId,
@@ -470,9 +530,9 @@ export async function registrarCargaConPartidas(datos: {
       saldosGranel,
     };
   } catch (error) {
-    await cliente.query('ROLLBACK');
+    if (transaccionPropia) await cliente.query('ROLLBACK');
     throw error;
   } finally {
-    cliente.release();
+    if (transaccionPropia) cliente.release();
   }
 }

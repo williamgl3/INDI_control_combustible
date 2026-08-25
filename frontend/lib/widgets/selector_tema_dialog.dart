@@ -17,7 +17,11 @@ class SelectorTemaDialog extends ConsumerWidget {
   }
 
   static const _opciones = [
-    (modo: ThemeMode.light, etiqueta: 'Claro', icono: Icons.light_mode_outlined),
+    (
+      modo: ThemeMode.light,
+      etiqueta: 'Claro',
+      icono: Icons.light_mode_outlined,
+    ),
     (modo: ThemeMode.dark, etiqueta: 'Oscuro', icono: Icons.dark_mode_outlined),
     (
       modo: ThemeMode.system,
@@ -49,20 +53,23 @@ class SelectorTemaDialog extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 for (final opcion in _opciones)
-                  RadioListTile<ThemeMode>(
-                    contentPadding: EdgeInsets.zero,
-                    value: opcion.modo,
-                    title: Row(
-                      children: [
-                        Icon(opcion.icono, size: 20),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            opcion.etiqueta,
-                            overflow: TextOverflow.ellipsis,
+                  Material(
+                    color: Colors.transparent,
+                    child: RadioListTile<ThemeMode>(
+                      contentPadding: EdgeInsets.zero,
+                      value: opcion.modo,
+                      title: Row(
+                        children: [
+                          Icon(opcion.icono, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              opcion.etiqueta,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
               ],

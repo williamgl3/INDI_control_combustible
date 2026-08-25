@@ -2,10 +2,18 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, ApiError } from '../utils/asyncHandler';
 import { requireAuth, requireRole, type AuthRequest } from '../middleware/auth';
-import { upload, rutaPublicaDeArchivo, verificarMagicBytes } from '../middleware/upload';
+import {
+  limpiarArchivosAnteError,
+  eliminarArchivosNuevos,
+  upload,
+  rutaPublicaDeArchivo,
+  verificarMagicBytes,
+} from '../middleware/upload';
 import * as solicitudesService from '../services/solicitudesService';
 import * as preciosService from '../services/preciosService';
 import * as marimbaPartidasService from '../services/marimbaPartidasService';
+import { fingerprintSolicitud, sha256Archivo } from '../utils/idempotenciaSolicitud';
+import { ejecutarIdempotente, leerIdempotencyKey, OPERACIONES_IDEMPOTENTES, requestIdDe } from '../services/idempotenciaService';
 
 export const solicitudesRouter = Router();
 solicitudesRouter.use(requireAuth as never);
@@ -69,6 +77,7 @@ const enviarSolicitudSchema = z.object({
   motivoChofer: z.string().trim().nullish(),
   actividad: z.string().trim().min(1),
   fechaProgramada: fechaIsoSchema,
+  payloadFingerprint: z.string().regex(/^[0-9a-f]{64}$/),
 }).refine((datos) => datos.partidas !== undefined || datos.litrosSolicitados !== undefined, {
   message: 'Indica los litros o las partidas de la solicitud.',
 });
@@ -76,6 +85,7 @@ const enviarSolicitudSchema = z.object({
 solicitudesRouter.post('/', requireRole('chofer', 'supervisor') as never,
   upload.fields([{ name: 'fotoTablero', maxCount: 1 }]), verificarMagicBytes,
   asyncHandler(async (req: AuthRequest, res) => {
+    const idempotencyKey = leerIdempotencyKey(req, true)!;
     const raw = req.body.partidas;
     const datos = enviarSolicitudSchema.parse({
       ...req.body,
@@ -84,6 +94,30 @@ solicitudesRouter.post('/', requireRole('chofer', 'supervisor') as never,
     const archivos = req.files as { fotoTablero?: Express.Multer.File[] } | undefined;
     const fotoTableroPath = archivos?.fotoTablero?.[0]
       ? rutaPublicaDeArchivo(archivos.fotoTablero[0].filename) : null;
+    const fotoSha256 = await sha256Archivo(archivos?.fotoTablero?.[0]?.path);
+    const fingerprintCalculado = fingerprintSolicitud({
+      choferId: req.usuarioActual!.sub,
+      vehiculoId: datos.vehiculoId,
+      litrosSolicitados: datos.litrosSolicitados,
+      partidas: datos.partidas,
+      esUrgente: datos.esUrgente,
+      motivoChofer: datos.motivoChofer,
+      actividad: datos.actividad,
+      fechaProgramada: datos.fechaProgramada,
+      fotoSha256,
+    });
+    if (fingerprintCalculado !== datos.payloadFingerprint) {
+      throw new ApiError(409, 'La solicitud no coincide con su identidad local.', {
+        codigo: 'PAYLOAD_FINGERPRINT_INVALIDO',
+      });
+    }
+    const resultado = await ejecutarIdempotente({
+      usuarioId: req.usuarioActual!.sub,
+      operacion: OPERACIONES_IDEMPOTENTES.crearSolicitud,
+      idempotencyKey,
+      requestHash: fingerprintCalculado,
+      requestId: requestIdDe(req),
+      ejecutar: async (cliente) => {
     const solicitud = datos.partidas
       ? await marimbaPartidasService.crearSolicitudConPartidas({
           solicitanteId: req.usuarioActual!.sub,
@@ -95,7 +129,9 @@ solicitudesRouter.post('/', requireRole('chofer', 'supervisor') as never,
           esUrgente: datos.esUrgente,
           motivoChofer: datos.motivoChofer,
           fotoTableroPath,
-        })
+          idempotencyKey,
+          payloadFingerprint: fingerprintCalculado,
+        }, cliente)
       : await solicitudesService.enviarSolicitud({
           choferId: req.usuarioActual!.sub,
           rol: req.usuarioActual!.rol,
@@ -106,8 +142,15 @@ solicitudesRouter.post('/', requireRole('chofer', 'supervisor') as never,
           actividad: datos.actividad,
           fechaProgramada: datos.fechaProgramada,
           fotoTableroPath,
-        });
-    res.status(201).json(solicitud);
+          idempotencyKey,
+          payloadFingerprint: fingerprintCalculado,
+        }, cliente);
+    return { status: 201, body: solicitud, resourceType: 'solicitud_autorizacion', resourceId: solicitud.id };
+      },
+    });
+    if (resultado.replayed || resultado.body.replayed) await eliminarArchivosNuevos(req);
+    if (resultado.replayed) res.set('Idempotency-Replayed', 'true');
+    res.status(resultado.status).json(resultado.body);
   }));
 
 const resolverSolicitudSchema = z.object({
@@ -150,3 +193,8 @@ solicitudesRouter.patch('/:id/cancelar', requireRole('chofer', 'supervisor') as 
   asyncHandler(async (req: AuthRequest, res) => {
     res.json(await solicitudesService.cancelarSolicitud(req.params.id as string, req.usuarioActual!.sub));
   }));
+
+// Si la validación de negocio o la inserción falla después de que Multer
+// escribió la foto, elimina únicamente los archivos creados por esta
+// petición. Así no queda una evidencia huérfana asociada a ninguna fila.
+solicitudesRouter.use(limpiarArchivosAnteError);

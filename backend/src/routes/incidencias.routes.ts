@@ -2,8 +2,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../utils/asyncHandler';
 import { requireAuth, requireRole, type AuthRequest } from '../middleware/auth';
-import { upload, rutaPublicaDeArchivo, verificarMagicBytes } from '../middleware/upload';
+import { eliminarArchivosNuevos, limpiarArchivosAnteError, limpiarArchivosDeReplay, upload, rutaPublicaDeArchivo, verificarMagicBytes } from '../middleware/upload';
 import * as incidenciasService from '../services/incidenciasService';
+import { ejecutarIdempotente, leerIdempotencyKey, OPERACIONES_IDEMPOTENTES, requestIdDe } from '../services/idempotenciaService';
+import { fingerprintRequest, hashesDeArchivos } from '../utils/requestFingerprint';
 
 export const incidenciasRouter = Router();
 
@@ -41,16 +43,25 @@ incidenciasRouter.post(
   asyncHandler(async (req: AuthRequest, res) => {
     const datos = reportarSchema.parse(req.body);
     const archivos = req.files as { foto?: Express.Multer.File[] } | undefined;
-    const incidencia = await incidenciasService.reportar({
-      choferId: req.usuarioActual!.sub,
-      ...datos,
-      fotoPath: archivos?.foto?.[0]
-        ? rutaPublicaDeArchivo(archivos.foto[0].filename)
-        : null,
+    const key = leerIdempotencyKey(req, false);
+    const requestHash = fingerprintRequest({ ...datos, actorId: req.usuarioActual!.sub,
+      archivos: await hashesDeArchivos({ foto: archivos?.foto }) });
+    const resultado = await ejecutarIdempotente({
+      usuarioId: req.usuarioActual!.sub, operacion: OPERACIONES_IDEMPOTENTES.reportarIncidencia,
+      idempotencyKey: key, requestHash,
+      requestId: requestIdDe(req),
+      ejecutar: async (cliente) => {
+        const incidencia = await incidenciasService.reportar({ choferId: req.usuarioActual!.sub,
+          ...datos, fotoPath: archivos?.foto?.[0] ? rutaPublicaDeArchivo(archivos.foto[0].filename) : null }, cliente);
+        return { status: 201, body: incidencia, resourceType: 'incidencia_vehiculo', resourceId: incidencia.id };
+      },
     });
-    res.status(201).json(incidencia);
+    await limpiarArchivosDeReplay(req, resultado.replayed);
+    if (resultado.replayed) res.set('Idempotency-Replayed', 'true');
+    res.status(resultado.status).json(resultado.body);
   }),
 );
+incidenciasRouter.use(limpiarArchivosAnteError);
 
 const resolverSchema = z.object({
   comentario: z.string().trim().nullish(),

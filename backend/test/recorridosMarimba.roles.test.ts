@@ -4,6 +4,20 @@ import request from 'supertest';
 
 vi.mock('../src/db/pool', () => ({ pool: { query: vi.fn() } }));
 
+vi.mock('../src/services/idempotenciaService', () => ({
+  OPERACIONES_IDEMPOTENTES: {
+    abrirRecorridoMarimba: 'recorrido_marimba.abrir', crearDespachoMarimba: 'despacho_marimba.crear',
+    cerrarRecorridoMarimba: 'recorrido_marimba.cerrar',
+  },
+  leerIdempotencyKey: () => null,
+  requestIdDe: () => 'request-test',
+  ejecutarIdempotente: vi.fn(async ({ ejecutar }) => ({ ...(await ejecutar({})), replayed: false })),
+}));
+
+vi.mock('../src/utils/requestFingerprint', () => ({
+  fingerprintRequest: () => 'a'.repeat(64), hashesDeArchivos: async () => ({}),
+}));
+
 vi.mock('../src/middleware/upload', () => {
   const continuar = (_req: Request, _res: Response, next: NextFunction) => next();
   return {
@@ -21,6 +35,8 @@ vi.mock('../src/middleware/upload', () => {
     },
     verificarMagicBytes: continuar,
     limpiarArchivosAnteError: continuar,
+    limpiarArchivosDeReplay: vi.fn(),
+    eliminarArchivosNuevos: vi.fn(),
     rutaPublicaDeArchivo: (nombre: string) => `/uploads/${nombre}`,
   };
 });
@@ -38,6 +54,7 @@ vi.mock('../src/services/recorridosMarimbaService', () => ({
 
 vi.mock('../src/services/despachosMarimbaService', () => ({
   listarDespachosDeRecorrido: vi.fn(),
+  crearDespacho: vi.fn().mockResolvedValue({ id: 'despacho-prueba' }),
 }));
 
 import { pool } from '../src/db/pool';

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_colors.dart';
+
 /// Colores semánticos de operación. Siempre se acompañan con texto o icono.
 @immutable
 class AppStatusColors extends ThemeExtension<AppStatusColors> {
@@ -28,7 +30,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     approved: Color(0xFF147A38),
     rejected: Color(0xFFC62828),
     offline: Color(0xFF5F6368),
-    synchronizing: Color(0xFF1463FF),
+    synchronizing: AppColors.brandBlue,
     unconfigured: Color(0xFF6B7280),
     declared: Color(0xFF8A4B08),
     measured: Color(0xFF087F5B),
@@ -39,7 +41,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
     approved: Color(0xFF66D48A),
     rejected: Color(0xFFFF7B72),
     offline: Color(0xFFB8BDC5),
-    synchronizing: Color(0xFF78A9FF),
+    synchronizing: AppColors.brandBlue,
     unconfigured: Color(0xFFB8BDC5),
     declared: Color(0xFFFFB86B),
     measured: Color(0xFF63D6B3),

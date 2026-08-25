@@ -17,15 +17,18 @@ class RegistroAuditoria {
   });
 
   final String id;
-  final String usuarioId;
-  final String usuarioNombre;
+
+  /// Puede ser nulo para eventos de sistema o cuando la cuenta autora ya
+  /// no existe. La bitácora debe seguir siendo legible en ambos casos.
+  final String? usuarioId;
+  final String? usuarioNombre;
 
   /// Ej. "aprobó", "rechazó", "editó", "resolvió", "activó", "desactivó".
   final String accion;
 
   /// Ej. "solicitud", "vehiculo", "incidencia", "usuario".
   final String entidad;
-  final String entidadId;
+  final String? entidadId;
 
   /// Detalle adicional del cambio. En los datos de ejemplo (mocks) es un
   /// texto ya redactado ("Autorizó 40 L de los 45 L solicitados."); del
@@ -40,15 +43,19 @@ class RegistroAuditoria {
   factory RegistroAuditoria.fromJson(Map<String, dynamic> json) {
     return RegistroAuditoria(
       id: json['id'] as String,
-      usuarioId: json['usuarioId'] as String,
-      usuarioNombre: json['usuarioNombre'] as String,
+      usuarioId: json['usuarioId'] as String?,
+      usuarioNombre: json['usuarioNombre'] as String?,
       accion: json['accion'] as String,
       entidad: json['entidad'] as String,
-      entidadId: json['entidadId'] as String,
+      entidadId: json['entidadId'] as String?,
       detalle: json['detalle'],
       creadoEn: DateTime.parse(json['creadoEn'] as String),
     );
   }
+
+  String get usuarioNombreLegible => usuarioNombre?.trim().isNotEmpty == true
+      ? usuarioNombre!.trim()
+      : 'Usuario eliminado o sistema';
 
   /// Versión mostrable de [detalle] — si ya es texto (mocks), se muestra
   /// tal cual; si es el objeto JSON del backend real, se arma una frase

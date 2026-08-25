@@ -52,7 +52,8 @@ class ApiEvidenciasRepository implements EvidenciasRepository {
         // formato "crudo" de un double de Dart.
         'tipo_combustible_cargado': ?tipoCombustibleCargado,
         if (litros != null) 'litros': litros.toStringAsFixed(2),
-        if (precioPorLitro != null) 'precio_por_litro': precioPorLitro.toStringAsFixed(2),
+        if (precioPorLitro != null)
+          'precio_por_litro': precioPorLitro.toStringAsFixed(2),
         if (montoPagado != null) 'monto_pagado': montoPagado.toStringAsFixed(2),
       },
       archivosMultiples: {'fotos': fotoPaths},

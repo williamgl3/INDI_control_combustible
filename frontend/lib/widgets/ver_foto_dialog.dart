@@ -1,7 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/providers.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_radii.dart';
 import '../theme/app_theme.dart';
@@ -33,7 +35,7 @@ class VerFotoDialog {
   }
 }
 
-class _VerFotoDialogContent extends StatelessWidget {
+class _VerFotoDialogContent extends ConsumerWidget {
   const _VerFotoDialogContent({required this.titulo, this.url, this.rutaLocal});
 
   final String titulo;
@@ -41,7 +43,7 @@ class _VerFotoDialogContent extends StatelessWidget {
   final String? rutaLocal;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
     return AppDialogShell(
       maxWidth: 480,
@@ -54,19 +56,21 @@ class _VerFotoDialogContent extends StatelessWidget {
           ClipRRect(
             borderRadius: AppRadii.cardRadius,
             child: url != null
-                ? Image.network(
-                    url!,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) =>
-                        _ErrorFoto(colors: colors),
-                    loadingBuilder: (context, child, progreso) =>
-                        progreso == null
-                        ? child
-                        : const Padding(
-                            padding: EdgeInsets.all(40),
-                            child: Center(child: CircularProgressIndicator()),
-                          ),
-                  )
+                ? ref
+                      .watch(archivoBytesProvider(url!))
+                      .when(
+                        loading: () => const Padding(
+                          padding: EdgeInsets.all(40),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                        error: (_, _) => _ErrorFoto(colors: colors),
+                        data: (bytes) => Image.memory(
+                          bytes,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) =>
+                              _ErrorFoto(colors: colors),
+                        ),
+                      )
                 : Image.file(
                     File(rutaLocal!),
                     fit: BoxFit.contain,

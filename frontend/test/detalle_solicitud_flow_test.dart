@@ -16,14 +16,17 @@ void main() {
       final container = makeTestContainer();
       addTearDown(container.dispose);
 
-      final chofer1 = container.read(authRepositoryProvider).listarChoferes().firstWhere(
-            (c) => c.usuario == 'chofer1',
-          );
+      final chofer1 = container
+          .read(authRepositoryProvider)
+          .listarChoferes()
+          .firstWhere((c) => c.usuario == 'chofer1');
       final vehiculo1 = container.read(vehiculosRepositoryProvider).todos.first;
       final repo = container.read(operacionesRepositoryProvider);
       late SolicitudAutorizacion solicitud;
       await tester.runAsync(() async {
         solicitud = await repo.enviarSolicitud(
+          idempotencyKey: '00000000-0000-4000-8000-000000000004',
+          payloadFingerprint: 'd' * 64,
           choferId: chofer1.id,
           vehiculo: vehiculo1,
           litrosSolicitados: 40,
@@ -59,7 +62,9 @@ void main() {
       await tester.tap(find.textContaining('40.0 L'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Cancelar solicitud'));
+      await tester.tap(
+        find.widgetWithText(ElevatedButton, 'Cancelar solicitud'),
+      );
       await tester.pumpAndSettle();
 
       // Diálogo de confirmación destructivo.

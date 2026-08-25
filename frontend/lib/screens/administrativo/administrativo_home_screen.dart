@@ -21,6 +21,7 @@ import '../../widgets/confirmar_cerrar_sesion_dialog.dart';
 import '../../widgets/header_glass_button.dart';
 import '../../widgets/header_menu_button.dart';
 import '../../widgets/icon_badge.dart';
+import '../../widgets/logo_glass.dart';
 import '../../widgets/notificaciones_bell.dart';
 import '../../widgets/selector_tema_dialog.dart';
 import '../chofer/mi_perfil_screen.dart';
@@ -129,6 +130,13 @@ const _seccionesPrincipalesMovil = [
   _SeccionAdmin.finanzas,
   _SeccionAdmin.dashboard,
 ];
+
+const _etiquetasMoviles = {
+  _SeccionAdmin.autorizaciones: 'Autorizar',
+  _SeccionAdmin.concentrado: 'Resumen',
+  _SeccionAdmin.finanzas: 'Finanzas',
+  _SeccionAdmin.dashboard: 'Inicio',
+};
 
 const _descripcionSeccion = {
   _SeccionAdmin.dashboard: 'Vista general de la operación disponible.',
@@ -285,15 +293,18 @@ class _AdministrativoHomeScreenState
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         BrandHeader(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.xxl,
-            vertical: AppSpacing.lg,
+          padding: EdgeInsets.symmetric(
+            horizontal: esAncho ? AppSpacing.xxl : AppSpacing.lg,
+            vertical: esAncho ? AppSpacing.lg : AppSpacing.md,
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              IndiLogo(width: internalHeaderLogoWidth(ancho)),
+              SizedBox(width: internalHeaderLogoGap(ancho)),
               Expanded(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
@@ -312,15 +323,17 @@ class _AdministrativoHomeScreenState
                         color: BrandHeader.onColor,
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      _descripcionSeccion[destinoActual.seccion]!,
-                      maxLines: ancho < AppBreakpoints.tablet ? 1 : 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: BrandHeader.onColorMuted,
+                    if (esAncho) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        _descripcionSeccion[destinoActual.seccion]!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: BrandHeader.onColorMuted,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -328,32 +341,47 @@ class _AdministrativoHomeScreenState
                 provider: notificacionesAdminProvider,
                 color: BrandHeader.onColor,
               ),
-              const SizedBox(width: 8),
-              HeaderGlassButton(
-                tooltip: 'Tema',
-                onPressed: () => SelectorTemaDialog.show(context),
-                icon: const Icon(
-                  Icons.brightness_6_outlined,
-                  color: BrandHeader.onColor,
+              if (esAncho) ...[
+                const SizedBox(width: 8),
+                HeaderGlassButton(
+                  tooltip: 'Tema',
+                  onPressed: () => SelectorTemaDialog.show(context),
+                  icon: const Icon(
+                    Icons.brightness_6_outlined,
+                    color: BrandHeader.onColor,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              HeaderGlassButton(
-                tooltip: 'Cerrar sesión',
-                onPressed: _cerrandoSesion ? null : _cerrarSesion,
-                icon: _procesandoLogout
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: BrandHeader.onColor,
-                        ),
-                      )
-                    : const Icon(Icons.logout, color: BrandHeader.onColor),
-              ),
+                const SizedBox(width: 8),
+                HeaderGlassButton(
+                  tooltip: 'Cerrar sesión',
+                  onPressed: _cerrandoSesion ? null : _cerrarSesion,
+                  icon: _procesandoLogout
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: BrandHeader.onColor,
+                          ),
+                        )
+                      : const Icon(Icons.logout, color: BrandHeader.onColor),
+                ),
+              ],
               const SizedBox(width: 8),
               HeaderMenuButton(
                 items: [
+                  if (!esAncho) ...[
+                    HeaderMenuItem(
+                      icon: Icons.brightness_6_outlined,
+                      label: 'Tema',
+                      onTap: () => SelectorTemaDialog.show(context),
+                    ),
+                    HeaderMenuItem(
+                      icon: Icons.logout,
+                      label: 'Cerrar sesión',
+                      onTap: _cerrarSesion,
+                      destructive: true,
+                    ),
+                  ],
                   HeaderMenuItem(
                     icon: Icons.info_outline,
                     label: 'Acerca de',
@@ -431,34 +459,60 @@ class _AdministrativoHomeScreenState
 
     return Scaffold(
       body: SafeArea(child: contenido),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: indiceBarraMovil,
-        onDestinationSelected: (i) {
-          if (i == destinosPrincipales.length) {
-            _abrirMasMovil(context, destinosEnMas);
-            return;
-          }
-          _seleccionar(destinosPrincipales[i].seccion);
-        },
-        destinations: [
-          for (final d in destinosPrincipales)
-            NavigationDestination(
-              icon:
-                  d.seccion == _SeccionAdmin.autorizaciones &&
-                      pendientesAutorizaciones > 0
-                  ? Badge(
-                      label: Text('$pendientesAutorizaciones'),
-                      child: Icon(d.icono),
-                    )
-                  : Icon(d.icono),
-              label: d.etiqueta,
+      bottomNavigationBar: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          height: 68,
+          indicatorColor: Theme.of(
+            context,
+          ).colorScheme.primary.withValues(alpha: 0.12),
+          iconTheme: WidgetStateProperty.resolveWith(
+            (states) => IconThemeData(
+              size: 23,
+              color: states.contains(WidgetState.selected)
+                  ? Theme.of(context).colorScheme.primary
+                  : context.colors.textSecondary,
             ),
-          const NavigationDestination(
-            icon: Icon(Icons.more_horiz),
-            selectedIcon: Icon(Icons.more_horiz),
-            label: 'Más',
           ),
-        ],
+          labelTextStyle: WidgetStateProperty.resolveWith(
+            (states) => Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: states.contains(WidgetState.selected)
+                  ? Theme.of(context).colorScheme.primary
+                  : context.colors.textSecondary,
+              fontWeight: states.contains(WidgetState.selected)
+                  ? FontWeight.w700
+                  : FontWeight.w500,
+            ),
+          ),
+        ),
+        child: NavigationBar(
+          selectedIndex: indiceBarraMovil,
+          onDestinationSelected: (i) {
+            if (i == destinosPrincipales.length) {
+              _abrirMasMovil(context, destinosEnMas);
+              return;
+            }
+            _seleccionar(destinosPrincipales[i].seccion);
+          },
+          destinations: [
+            for (final d in destinosPrincipales)
+              NavigationDestination(
+                icon:
+                    d.seccion == _SeccionAdmin.autorizaciones &&
+                        pendientesAutorizaciones > 0
+                    ? Badge(
+                        label: Text('$pendientesAutorizaciones'),
+                        child: Icon(d.icono),
+                      )
+                    : Icon(d.icono),
+                label: _etiquetasMoviles[d.seccion]!,
+              ),
+            const NavigationDestination(
+              icon: Icon(Icons.more_horiz),
+              selectedIcon: Icon(Icons.more_horiz),
+              label: 'Más',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -521,7 +575,7 @@ class _SidebarAdmin extends ConsumerWidget {
     return Container(
       key: const ValueKey('sidebar-administrativo'),
       width: compacto ? 76 : 240,
-      color: colors.sidebarBackground,
+      color: colors.primary,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -532,55 +586,17 @@ class _SidebarAdmin extends ConsumerWidget {
               compacto ? AppSpacing.sm : AppSpacing.md,
               AppSpacing.md,
             ),
-            child: compacto
-                ? Column(
-                    children: [
-                      ClipRRect(
-                        borderRadius: AppRadii.inputRadius,
-                        child: Image.asset(
-                          'assets/images/logo_indi.jpeg',
-                          width: 36,
-                          height: 36,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      IconButton(
-                        tooltip: 'Expandir navegación',
-                        onPressed: onCambiarModo,
-                        icon: const Icon(Icons.chevron_right),
-                        color: colors.sidebarText,
-                      ),
-                    ],
-                  )
-                : Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: AppRadii.inputRadius,
-                        child: Image.asset(
-                          'assets/images/logo_indi.jpeg',
-                          width: 36,
-                          height: 36,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Text(
-                          'INDI Combustible',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(color: colors.sidebarText),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Contraer navegación',
-                        onPressed: onCambiarModo,
-                        icon: const Icon(Icons.chevron_left),
-                        color: colors.sidebarText,
-                      ),
-                    ],
-                  ),
+            child: Align(
+              alignment: compacto ? Alignment.center : Alignment.centerRight,
+              child: IconButton(
+                tooltip: compacto
+                    ? 'Expandir navegación'
+                    : 'Contraer navegación',
+                onPressed: onCambiarModo,
+                icon: Icon(compacto ? Icons.chevron_right : Icons.chevron_left),
+                color: colors.sidebarText,
+              ),
+            ),
           ),
           // `Expanded` + `ListView` en vez de una lista fija: con 8
           // secciones, una ventana baja (o el viewport chico de los
@@ -795,7 +811,7 @@ class _ItemSidebar extends StatelessWidget {
         message: compacto ? destino.etiqueta : '',
         child: Material(
           key: ValueKey('admin-destino-${destino.seccion.name}'),
-          color: seleccionado ? colors.primary : Colors.transparent,
+          color: seleccionado ? colors.primaryHover : Colors.transparent,
           borderRadius: AppRadii.navButtonRadius,
           child: InkWell(
             onTap: onTap,

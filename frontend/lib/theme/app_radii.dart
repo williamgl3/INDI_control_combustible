@@ -9,16 +9,16 @@ import 'package:flutter/material.dart';
 class AppRadii {
   const AppRadii._();
 
-  static const double card = 14;
+  static const double card = 16;
   // Cards flotantes en depth design — radio más amplio que [card] para
   // que la elevación se note en las esquinas.
   static const double floating = 18;
-  static const double input = 10;
+  static const double input = 12;
   static const double badge = 999; // pill/cápsula
   // Botones rellenos estilo iOS — radio moderado, no píldora completa.
   static const double button = 12;
   // Ítems de sidebar y botones de diálogo — mismo radio que los inputs.
-  static const double navButton = 10;
+  static const double navButton = 12;
 
   static const BorderRadius cardRadius = BorderRadius.all(
     Radius.circular(card),

@@ -35,11 +35,25 @@ void main() {
     expect(r.detalleLegible, '');
   });
 
+  test('acepta actor y entidad eliminados sin perder la auditoría', () {
+    final r = RegistroAuditoria.fromJson({
+      'id': 'audit-1',
+      'usuarioId': null,
+      'usuarioNombre': null,
+      'accion': 'chofer_eliminado',
+      'entidad': 'usuario',
+      'entidadId': null,
+      'detalle': null,
+      'creadoEn': '2026-01-01T00:00:00.000Z',
+    });
+
+    expect(r.usuarioId, isNull);
+    expect(r.entidadId, isNull);
+    expect(r.usuarioNombreLegible, 'Usuario eliminado o sistema');
+  });
+
   test('editar_precio arma el mensaje desde el mapa del backend', () {
-    final r = registro(
-      accion: 'editar_precio',
-      detalle: {'nuevoPrecio': 26.9},
-    );
+    final r = registro(accion: 'editar_precio', detalle: {'nuevoPrecio': 26.9});
     expect(r.detalleLegible, contains('26.9'));
   });
 

@@ -41,11 +41,7 @@ class AppLogger {
   /// Registra un error con su contexto. `contexto` debe ser algo
   /// identificable (ej. "ApiClient.get /solicitudes", nombre de pantalla)
   /// para poder rastrear de dónde vino sin stack trace completo.
-  static void error(
-    String contexto,
-    Object error, {
-    StackTrace? stackTrace,
-  }) {
+  static void error(String contexto, Object error, {StackTrace? stackTrace}) {
     final linea =
         '[${DateTime.now().toIso8601String()}] ERROR $contexto: $error';
 

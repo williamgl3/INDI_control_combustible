@@ -15,12 +15,35 @@ class AuthException implements Exception {
 /// hay que persistir (ver `AuthController._completarSesion`).
 typedef ResultadoAuth = ({Perfil perfil, String token, String refreshToken});
 
+typedef PaginaChoferes = ({
+  List<Perfil> datos,
+  int pagina,
+  int limite,
+  int total,
+  int totalPaginas,
+});
+typedef ActividadChofer = ({
+  int solicitudes,
+  int cargas,
+  int evidencias,
+  int incidencias,
+  int cierres,
+  int recorridos,
+  int despachos,
+  int auditoria,
+});
+typedef DetalleChofer = ({Perfil chofer, ActividadChofer actividad});
+typedef ElegibilidadEliminacion = ({bool elegible, bool tieneRelaciones});
+
 /// Interfaz común de autenticación — implementada por [MockAuthRepository]
 /// (datos en memoria) y por la implementación real que habla con el
 /// backend. Las pantallas y [AuthController] dependen solo de esta
 /// interfaz, nunca de una implementación concreta.
 abstract class AuthRepository {
-  Future<ResultadoAuth> login({required String usuario, required String password});
+  Future<ResultadoAuth> login({
+    required String usuario,
+    required String password,
+  });
 
   Future<ResultadoAuth> registrarChofer({
     required String nombre,
@@ -48,19 +71,44 @@ abstract class AuthRepository {
   /// vez tras iniciar sesión como administrativo (ver
   /// `AuthController._cargarDatosIniciales`). Puede incluir también
   /// usuarios administrativos (ver [Perfil.activo]/[Perfil.rol]).
-  Future<void> cargarChoferes();
+  Future<PaginaChoferes> cargarChoferes({
+    String buscar = '',
+    String estado = 'todos',
+    int pagina = 1,
+    int limite = 25,
+  });
+
+  Future<DetalleChofer> obtenerChofer(String usuarioId);
+  Future<Perfil> editarChofer({
+    required String usuarioId,
+    required String version,
+    required Map<String, dynamic> cambios,
+  });
 
   /// Activa/desactiva un usuario (chofer o administrativo). Un usuario
   /// desactivado no puede iniciar sesión. Actualiza la copia en memoria
   /// de [listarChoferes] si el usuario está en esa lista.
-  Future<void> cambiarEstado({required String usuarioId, required bool activo});
+  Future<Perfil> cambiarEstado({
+    required String usuarioId,
+    required bool activo,
+    required String motivo,
+  });
 
   /// Restablece la contraseña de otro usuario — acción de un
   /// administrativo, distinta de [cambiarPassword] (que es para la
   /// propia sesión).
-  Future<void> resetearPassword({
+  Future<String> resetearPassword({
     required String usuarioId,
-    required String passwordNueva,
+    required String motivo,
+  });
+
+  Future<ElegibilidadEliminacion> consultarElegibilidadEliminacion(
+    String usuarioId,
+  );
+  Future<void> eliminarChofer({
+    required String usuarioId,
+    required String usuarioConfirmado,
+    required String motivo,
   });
 
   /// Crea un nuevo usuario con rol administrativo. Solo permitido para un

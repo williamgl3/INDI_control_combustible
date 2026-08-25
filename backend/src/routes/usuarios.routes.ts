@@ -5,6 +5,7 @@ import { ApiError } from '../utils/asyncHandler';
 import { requireAuth, requireRole, type AuthRequest } from '../middleware/auth';
 import { authLimiter } from '../middleware/rateLimit';
 import * as authService from '../services/authService';
+import * as choferesService from '../services/choferesService';
 
 /// Gestión de usuarios — todo requiere rol `administrativo`. Separado de
 /// `auth.routes.ts` porque no es "sobre mi propia cuenta" sino sobre
@@ -19,27 +20,32 @@ usuariosRouter.use(requireAuth as never);
 // (`requireRole('superadmin')` solo, en esa ruta puntual).
 usuariosRouter.use(requireRole('administrativo', 'superadmin') as never);
 
-const estadoSchema = z.object({
-  activo: z.boolean(),
+const idSchema = z.string().uuid('Identificador de chofer inválido.');
+const motivoSchema = z.string().trim().min(5, 'El motivo debe tener al menos 5 caracteres.').max(500);
+
+export const listarChoferesSchema = z.object({
+  buscar: z.string().trim().max(100).optional(),
+  estado: z.enum(['todos', 'activo', 'inactivo']).default('todos'),
+  pagina: z.coerce.number().int().min(1).default(1),
+  limite: z.coerce.number().int().min(1).max(100).default(25),
 });
+
+const estadoSchema = z.object({ activo: z.boolean(), motivo: motivoSchema }).strict();
 
 usuariosRouter.patch(
   '/:id/estado',
   asyncHandler(async (req: AuthRequest, res) => {
     const { activo } = estadoSchema.parse(req.body);
-    const id = req.params.id as string;
+    const id = idSchema.parse(req.params.id);
     // Un admin no puede desactivarse a sí mismo — evitaría que quede
     // alguien con permiso para revertirlo.
     if (req.usuarioActual!.sub === id) {
       throw new ApiError(400, 'No puedes cambiar el estado de tu propia cuenta.');
     }
-    await authService.actualizarEstadoUsuario(
-      id,
-      activo,
-      req.usuarioActual!.sub,
-      req.usuarioActual!.rol,
+    const actualizado = await choferesService.cambiarEstado(
+      id, activo, req.body.motivo as string, req.usuarioActual!.sub,
     );
-    res.status(204).send();
+    res.json(actualizado);
   }),
 );
 
@@ -47,20 +53,80 @@ usuariosRouter.patch(
 // `Validators.password` del frontend) — no reinventar el límite.
 const passwordSchema = z.string().min(8, 'La contraseña debe tener al menos 8 caracteres.');
 
-const resetearPasswordSchema = z.object({
-  passwordNueva: passwordSchema,
-});
+const resetearPasswordSchema = z.object({ motivo: motivoSchema }).strict();
 
 usuariosRouter.post(
   '/:id/resetear-password',
   authLimiter,
   asyncHandler(async (req: AuthRequest, res) => {
-    const { passwordNueva } = resetearPasswordSchema.parse(req.body);
-    await authService.resetearPassword(
-      req.params.id as string,
-      passwordNueva,
-      req.usuarioActual!.sub,
+    const { motivo } = resetearPasswordSchema.parse(req.body);
+    await choferesService.solicitarReset(
+      idSchema.parse(req.params.id), motivo, req.usuarioActual!.sub,
     );
+    res.status(202).json({
+      estado: 'pendiente_configuracion',
+      mensaje: 'La solicitud quedó registrada. El envío seguro aún no está configurado; la contraseña no fue modificada.',
+    });
+  }),
+);
+
+const textoPersona = z.string().trim().min(2).max(100);
+const editarChoferSchema = z.object({
+  nombre: textoPersona.optional(),
+  apellidoPaterno: textoPersona.optional(),
+  apellidoMaterno: z.string().trim().max(100).nullable().optional(),
+  correo: z.string().trim().email('Ingresa un correo válido.').max(150).optional(),
+  usuario: z.string().trim().regex(/^[a-zA-Z0-9._]{3,30}$/, 'Usuario inválido.').optional(),
+  version: z.string().regex(/^\d+$/, 'Versión inválida.'),
+}).strict().refine((v) => Object.keys(v).some((k) => k !== 'version'), 'No hay cambios para guardar.');
+
+usuariosRouter.get(
+  '/choferes/:id',
+  asyncHandler(async (req, res) => {
+    res.json(await choferesService.obtener(idSchema.parse(req.params.id)));
+  }),
+);
+
+usuariosRouter.patch(
+  '/choferes/:id',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const { version, ...cambios } = editarChoferSchema.parse(req.body);
+    res.json(await choferesService.editar(idSchema.parse(req.params.id), cambios, version, req.usuarioActual!.sub));
+  }),
+);
+
+usuariosRouter.post(
+  '/choferes/:id/desactivar',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const { motivo } = z.object({ motivo: motivoSchema }).strict().parse(req.body);
+    res.json(await choferesService.cambiarEstado(idSchema.parse(req.params.id), false, motivo, req.usuarioActual!.sub));
+  }),
+);
+
+usuariosRouter.post(
+  '/choferes/:id/reactivar',
+  asyncHandler(async (req: AuthRequest, res) => {
+    const { motivo } = z.object({ motivo: motivoSchema }).strict().parse(req.body);
+    res.json(await choferesService.cambiarEstado(idSchema.parse(req.params.id), true, motivo, req.usuarioActual!.sub));
+  }),
+);
+
+usuariosRouter.get(
+  '/choferes/:id/elegibilidad-eliminacion',
+  requireRole('superadmin') as never,
+  asyncHandler(async (req, res) => {
+    res.json(await choferesService.elegibilidadEliminacion(idSchema.parse(req.params.id)));
+  }),
+);
+
+usuariosRouter.delete(
+  '/choferes/:id',
+  requireRole('superadmin') as never,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const id = idSchema.parse(req.params.id);
+    if (id === req.usuarioActual!.sub) throw new ApiError(400, 'No puedes eliminar tu propia cuenta.');
+    const datos = z.object({ usuarioConfirmado: z.string().trim(), motivo: motivoSchema }).strict().parse(req.body);
+    await choferesService.eliminarDefinitivamente(id, datos.usuarioConfirmado, datos.motivo, req.usuarioActual!.sub);
     res.status(204).send();
   }),
 );

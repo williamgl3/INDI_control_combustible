@@ -4,6 +4,7 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { requireAuth, requireRole, type AuthRequest } from '../middleware/auth';
 import { authLimiter, authRefreshLimiter, authStrictLimiter } from '../middleware/rateLimit';
 import * as authService from '../services/authService';
+import * as choferesService from '../services/choferesService';
 
 export const authRouter = Router();
 
@@ -117,8 +118,14 @@ authRouter.get(
   '/choferes',
   requireAuth as never,
   requireRole('administrativo', 'superadmin') as never,
-  asyncHandler(async (_req, res) => {
-    res.json(await authService.listarChoferes());
+  asyncHandler(async (req, res) => {
+    const opciones = z.object({
+      buscar: z.string().trim().max(100).optional(),
+      estado: z.enum(['todos', 'activo', 'inactivo']).default('todos'),
+      pagina: z.coerce.number().int().min(1).default(1),
+      limite: z.coerce.number().int().min(1).max(100).default(25),
+    }).parse(req.query);
+    res.json(await choferesService.listar(opciones));
   }),
 );
 

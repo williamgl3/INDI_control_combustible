@@ -197,9 +197,7 @@ class _AuditoriaTabState extends ConsumerState<AuditoriaTab> {
           else ...[
             GroupedSection(
               header: 'Actividad reciente',
-              children: [
-                for (final r in registros) _RegistroRow(registro: r),
-              ],
+              children: [for (final r in registros) _RegistroRow(registro: r)],
             ),
             const SizedBox(height: 16),
             if (!repo.sinMasRegistros && _filtroEntidad == null)
@@ -255,7 +253,7 @@ class _RegistroRow extends StatelessWidget {
     final accion = _accionLegible(registro.accion);
     final detalle = registro.detalleLegible;
     return GroupedRow(
-      titulo: '${registro.usuarioNombre} $accion $_entidadLegible',
+      titulo: '${registro.usuarioNombreLegible} $accion $_entidadLegible',
       subtitulo: detalle.isEmpty ? null : detalle,
       icono: _icono,
       iconoColor: AppSectionColors.auditoria,

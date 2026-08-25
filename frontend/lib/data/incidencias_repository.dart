@@ -20,8 +20,5 @@ abstract class IncidenciasRepository {
     String? fotoPath,
   });
 
-  Future<IncidenciaVehiculo> resolver({
-    required String id,
-    String? comentario,
-  });
+  Future<IncidenciaVehiculo> resolver({required String id, String? comentario});
 }

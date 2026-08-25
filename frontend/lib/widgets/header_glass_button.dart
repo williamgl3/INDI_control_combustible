@@ -32,7 +32,6 @@ class _HeaderGlassButtonState extends State<HeaderGlassButton> {
   @override
   Widget build(BuildContext context) {
     final habilitado = widget.onPressed != null;
-    final escala = _hover ? 1.04 : 1.0;
     final alphaFondo = !habilitado
         ? 0.08
         : _hover
@@ -45,38 +44,33 @@ class _HeaderGlassButtonState extends State<HeaderGlassButton> {
         if (habilitado) setState(() => _hover = true);
       },
       onExit: (_) => setState(() => _hover = false),
-      child: AnimatedScale(
-        scale: escala,
-        duration: AppMotion.fast,
-        curve: AppMotion.curve,
-        child: ClipOval(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-            child: AnimatedContainer(
-              duration: AppMotion.fast,
-              curve: AppMotion.curve,
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: alphaFondo),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+      child: ClipOval(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: AnimatedContainer(
+            duration: AppMotion.fast,
+            curve: AppMotion.curve,
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: alphaFondo),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+            ),
+            child: IconButton(
+              tooltip: widget.tooltip,
+              onPressed: widget.onPressed,
+              padding: EdgeInsets.zero,
+              iconSize: 24,
+              style: IconButton.styleFrom(
+                minimumSize: const Size.square(48),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                disabledForegroundColor: Colors.white54,
+                focusColor: Colors.white24,
+                hoverColor: Colors.white12,
+                highlightColor: Colors.white12,
               ),
-              child: IconButton(
-                tooltip: widget.tooltip,
-                onPressed: widget.onPressed,
-                padding: EdgeInsets.zero,
-                iconSize: 24,
-                style: IconButton.styleFrom(
-                  minimumSize: const Size.square(48),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  disabledForegroundColor: Colors.white54,
-                  focusColor: Colors.white24,
-                  hoverColor: Colors.transparent,
-                  highlightColor: Colors.white12,
-                ),
-                icon: widget.icon,
-              ),
+              icon: widget.icon,
             ),
           ),
         ),

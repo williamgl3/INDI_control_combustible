@@ -9,10 +9,12 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/cola_solicitudes_offline.dart';
+import '../../core/app_logger.dart';
 import '../../core/catalogos_vehiculo.dart';
 import '../../core/connectivity_provider.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
+import '../../core/solicitud_idempotencia.dart';
 import '../../data/api_client.dart';
 import '../../models/vehiculo.dart';
 import '../../models/solicitud_autorizacion.dart';
@@ -272,6 +274,19 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
           : _motivoController.text.trim(),
     );
     final actividad = _actividadController.text.trim();
+    final perfil = ref.read(sessionProvider)!;
+    final idempotencyKey = nuevaIdempotencyKey();
+    final payloadFingerprint = await fingerprintSolicitud(
+      choferId: perfil.id,
+      vehiculoId: _vehiculo!.id,
+      litrosSolicitados: _totalSolicitado,
+      esUrgente: _esUrgente,
+      motivoChofer: motivo,
+      actividad: actividad,
+      fechaProgramada: _fechaProgramada,
+      fotoTableroPath: _fotoTableroPath,
+      partidas: _partidasSolicitud,
+    );
 
     try {
       if (ref.read(conectividadProvider).valueOrNull == false) {
@@ -284,13 +299,20 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
           }
           return;
         }
-        await _encolarSinConexion(motivo: motivo, actividad: actividad);
+        await _encolarSinConexion(
+          motivo: motivo,
+          actividad: actividad,
+          usuarioId: perfil.id,
+          idempotencyKey: idempotencyKey,
+          payloadFingerprint: payloadFingerprint,
+        );
         return;
       }
-      final perfil = ref.read(sessionProvider)!;
       final solicitud = await ref
           .read(operacionesRepositoryProvider)
           .enviarSolicitud(
+            idempotencyKey: idempotencyKey,
+            payloadFingerprint: payloadFingerprint,
             choferId: perfil.id,
             vehiculo: _vehiculo!,
             litrosSolicitados: _totalSolicitado,
@@ -309,11 +331,22 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
       }
     } on ApiException catch (e) {
       if (e.status == null) {
-        await _encolarSinConexion(motivo: motivo, actividad: actividad);
+        await _encolarSinConexion(
+          motivo: motivo,
+          actividad: actividad,
+          usuarioId: perfil.id,
+          idempotencyKey: idempotencyKey,
+          payloadFingerprint: payloadFingerprint,
+        );
         return;
       }
       if (mounted) setState(() => _errorGeneral = e.mensaje);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      AppLogger.error(
+        'SolicitarCargaScreen.enviarSolicitud',
+        e,
+        stackTrace: stackTrace,
+      );
       if (mounted) {
         setState(
           () => _errorGeneral =
@@ -328,13 +361,19 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
   Future<void> _encolarSinConexion({
     required String? motivo,
     required String actividad,
+    required String usuarioId,
+    required String idempotencyKey,
+    required String payloadFingerprint,
   }) async {
     final ahora = DateTime.now();
-    await ref
+    final agregada = await ref
         .read(colaSolicitudesOfflineProvider)
         .agregar(
           SolicitudPendienteOffline(
-            idLocal: 'offline-${ahora.microsecondsSinceEpoch}',
+            idLocal: idempotencyKey,
+            usuarioId: usuarioId,
+            idempotencyKey: idempotencyKey,
+            payloadFingerprint: payloadFingerprint,
             vehiculoId: _vehiculo!.id,
             litrosSolicitados: _litros,
             esUrgente: _esUrgente,
@@ -351,9 +390,11 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
     setState(() => _cargando = false);
     await SinConexionDialog.show(
       context,
-      mensaje:
-          'Guardamos tu solicitud en este dispositivo. Se enviará sola en '
-          'cuanto vuelvas a tener señal — no hace falta que la repitas.',
+      mensaje: agregada
+          ? 'Guardamos tu solicitud en este dispositivo. Se enviará sola en '
+                'cuanto vuelvas a tener señal — no hace falta que la repitas.'
+          : 'Esta solicitud ya está guardada y se enviará cuando recuperes '
+                'conexión.',
     );
     // `go` en vez de `pop`: ahora esta pantalla se alcanza vía
     // TipoOperacionScreen (push), así que un solo `pop` regresaría ahí en

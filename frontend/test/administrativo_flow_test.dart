@@ -102,6 +102,8 @@ void main() {
         await container
             .read(operacionesRepositoryProvider)
             .enviarSolicitud(
+              idempotencyKey: '00000000-0000-4000-8000-000000000001',
+              payloadFingerprint: 'a' * 64,
               choferId: chofer1.id,
               vehiculo: vehiculo1,
               litrosSolicitados: 100,
@@ -116,15 +118,18 @@ void main() {
         scrollBehavior: _SinEstiramientoDeScroll(),
       );
       await _loginComoAdmin(tester);
+      expect(tester.takeException(), isNull, reason: 'después del login');
 
       expect(find.text('Panel administrativo'), findsOneWidget);
 
       await _irASeccion(tester, 'Choferes');
+      expect(tester.takeException(), isNull, reason: 'sección Choferes');
       expect(find.text('Juan Pérez'), findsOneWidget);
 
       await tester.ensureVisible(find.text('Juan Pérez'));
       await tester.tap(find.text('Juan Pérez'));
       await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'detalle del chofer');
 
       expect(find.text('Vehículos usados'), findsOneWidget);
       expect(find.textContaining(vehiculo1.etiquetaUnidad), findsWidgets);
@@ -133,9 +138,11 @@ void main() {
       await tester.pumpAndSettle();
 
       await _irASeccion(tester, 'Vehículos');
+      expect(tester.takeException(), isNull, reason: 'sección Vehículos');
       await tester.ensureVisible(find.text('Editar').first);
       await tester.tap(find.text('Editar').first);
       await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'diálogo de vehículo');
 
       final dialog = find.byType(Dialog);
       // vehiculo1 (veh-1) trae combustible 'Diésel' de fábrica en el mock —
@@ -206,6 +213,8 @@ void main() {
       // reloj falso de testWidgets nunca avanza y el await se cuelga.
       await tester.runAsync(() async {
         await repo.enviarSolicitud(
+          idempotencyKey: '00000000-0000-4000-8000-000000000002',
+          payloadFingerprint: 'b' * 64,
           choferId: chofer1.id,
           vehiculo: vehiculo1,
           litrosSolicitados: 100,
@@ -213,6 +222,8 @@ void main() {
           fechaProgramada: DateTime.now().add(const Duration(days: 1)),
         );
         await repo.enviarSolicitud(
+          idempotencyKey: '00000000-0000-4000-8000-000000000003',
+          payloadFingerprint: 'c' * 64,
           choferId: chofer1.id,
           vehiculo: vehiculo1,
           litrosSolicitados: 50,

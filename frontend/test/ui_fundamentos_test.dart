@@ -3,12 +3,48 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:indi_combustible/core/session_provider.dart';
 import 'package:indi_combustible/models/perfil.dart';
+import 'package:indi_combustible/screens/bienvenida/bienvenida_screen.dart';
+import 'package:indi_combustible/theme/app_radii.dart';
+import 'package:indi_combustible/theme/app_colors.dart';
 import 'package:indi_combustible/theme/app_status_colors.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
 import 'package:indi_combustible/widgets/app_status_chip.dart';
+import 'package:indi_combustible/widgets/brand_header.dart';
+import 'package:indi_combustible/widgets/logo_glass.dart';
 import 'package:indi_combustible/widgets/sidebar_chofer.dart';
 
 void main() {
+  testWidgets('bienvenida conserva jerarquía y acciones equivalentes', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(theme: AppTheme.light(), home: const BienvenidaScreen()),
+    );
+
+    expect(find.text('¡Bienvenido!'), findsOneWidget);
+    expect(
+      find.text(
+        'Registra y controla el combustible de forma rápida y sencilla.',
+      ),
+      findsOneWidget,
+    );
+    final principal = find.widgetWithText(ElevatedButton, 'Iniciar sesión');
+    final secundaria = find.widgetWithText(OutlinedButton, 'Crear cuenta');
+    expect(tester.getSize(principal).height, greaterThanOrEqualTo(52));
+    expect(tester.getSize(secundaria).height, greaterThanOrEqualTo(52));
+    expect(tester.getSize(principal).width, tester.getSize(secundaria).width);
+
+    final shape = Theme.of(
+      tester.element(secundaria),
+    ).outlinedButtonTheme.style?.shape?.resolve(<WidgetState>{});
+    expect(shape, RoundedRectangleBorder(borderRadius: AppRadii.buttonRadius));
+    expect(tester.takeException(), isNull);
+  });
+
   for (final mode in [ThemeMode.light, ThemeMode.dark]) {
     testWidgets('el sistema visual instala tokens y estados en $mode', (
       tester,
@@ -35,7 +71,7 @@ void main() {
       final context = tester.element(find.byType(AppStatusChip));
       final theme = Theme.of(context);
       expect(theme.extension<AppStatusColors>(), isNotNull);
-      expect(theme.colorScheme.primary, const Color(0xFF1463FF));
+      expect(theme.colorScheme.primary, AppColors.brandBlue);
       expect(theme.colorScheme.primary, isNot(theme.colorScheme.onPrimary));
       expect(find.byIcon(Icons.cloud_off_outlined), findsOneWidget);
       expect(find.text('Sin conexión'), findsOneWidget);
@@ -73,12 +109,33 @@ void main() {
     }
     expect(
       find.byWidgetPredicate(
-        (widget) =>
-            widget is Tooltip && widget.message == 'Perfil de Supervisor',
+        (widget) => widget is Tooltip && widget.message == 'Ver perfil',
       ),
       findsOneWidget,
     );
     expect(find.text('INDI Combustible'), findsNothing);
+    expect(find.bySemanticsLabel('INDI Combustible'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('el logo y los encabezados parten del mismo primary', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Column(
+          children: [
+            const IndiLogo(colorVariant: IndiLogoColor.primary),
+            const BrandHeader(child: SizedBox(height: 8)),
+          ],
+        ),
+      ),
+    );
+
+    expect(AppColors.brandBlue, AppColors.light.primary);
+    expect(find.bySemanticsLabel('INDI Combustible'), findsOneWidget);
+    expect(find.byType(BrandHeader), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

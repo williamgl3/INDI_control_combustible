@@ -3,70 +3,56 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers.dart';
-import '../../core/validators.dart';
 import '../../data/auth_repository.dart';
 import '../../models/perfil.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_dialog.dart';
 
-/// Modal para que un administrativo restablezca la contraseña de otro
-/// usuario (chofer o administrativo) — distinto de "Cambiar contraseña"
-/// de Mi Perfil, que es para la propia sesión y pide la contraseña
-/// actual; aquí, al ser una acción de un administrativo sobre otra
-/// cuenta, no se pide la contraseña anterior.
+/// Registra una solicitud administrativa de recuperación. No permite al
+/// administrador conocer ni reemplazar la contraseña del chofer.
 class ResetearPasswordDialog extends ConsumerStatefulWidget {
   const ResetearPasswordDialog({super.key, required this.usuario});
-
   final Perfil usuario;
 
-  static Future<bool?> show(BuildContext context, {required Perfil usuario}) {
-    return mostrarDialogoApp<bool>(
-      context,
-      builder: (_) => ResetearPasswordDialog(usuario: usuario),
-    );
-  }
+  static Future<bool?> show(BuildContext context, {required Perfil usuario}) =>
+      mostrarDialogoApp<bool>(
+        context,
+        builder: (_) => ResetearPasswordDialog(usuario: usuario),
+      );
 
   @override
-  ConsumerState<ResetearPasswordDialog> createState() =>
-      _ResetearPasswordDialogState();
+  ConsumerState<ResetearPasswordDialog> createState() => _State();
 }
 
-class _ResetearPasswordDialogState
-    extends ConsumerState<ResetearPasswordDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _passwordController = TextEditingController();
-  final _confirmarController = TextEditingController();
+class _State extends ConsumerState<ResetearPasswordDialog> {
+  final _form = GlobalKey<FormState>();
+  final _motivo = TextEditingController();
   bool _cargando = false;
-  String? _errorGeneral;
-  bool _passwordVisible = false;
-  bool _confirmarVisible = false;
+  String? _error;
 
   @override
   void dispose() {
-    _passwordController.dispose();
-    _confirmarController.dispose();
+    _motivo.dispose();
     super.dispose();
   }
 
-  Future<void> _guardar() async {
-    if (!_formKey.currentState!.validate()) return;
-
+  Future<void> _enviar() async {
+    if (_cargando || !_form.currentState!.validate()) return;
     setState(() {
       _cargando = true;
-      _errorGeneral = null;
+      _error = null;
     });
-
     try {
       await ref
           .read(authRepositoryProvider)
           .resetearPassword(
             usuarioId: widget.usuario.id,
-            passwordNueva: _passwordController.text,
+            motivo: _motivo.text.trim(),
           );
       HapticFeedback.mediumImpact();
       if (mounted) Navigator.of(context).pop(true);
     } on AuthException catch (e) {
-      if (mounted) setState(() => _errorGeneral = e.mensaje);
+      if (mounted) setState(() => _error = e.mensaje);
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -75,116 +61,63 @@ class _ResetearPasswordDialogState
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-
     return AppDialogShell(
       child: Form(
-        key: _formKey,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
+        key: _form,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Resetear contraseña',
+              'Solicitar restablecimiento',
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
             Text(
-              widget.usuario.nombreCompleto,
+              'No podrás ver la contraseña actual ni establecer una nueva. La solicitud quedará auditada. El envío automático todavía no está configurado.',
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             TextFormField(
-              controller: _passwordController,
+              controller: _motivo,
               autofocus: true,
-              decoration: InputDecoration(
-                labelText: 'Contraseña nueva',
-                prefixIcon: const Icon(Icons.lock_outline),
-                suffixIcon: Semantics(
-                  label: _passwordVisible
-                      ? 'Ocultar contraseña'
-                      : 'Mostrar contraseña',
-                  button: true,
-                  child: IconButton(
-                    icon: Icon(
-                      _passwordVisible
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                    ),
-                    tooltip: _passwordVisible ? 'Ocultar' : 'Ver',
-                    onPressed: () =>
-                        setState(() => _passwordVisible = !_passwordVisible),
-                  ),
-                ),
+              maxLength: 500,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Motivo',
+                prefixIcon: Icon(Icons.notes),
               ),
-              obscureText: !_passwordVisible,
-              validator: Validators.password,
-              onFieldSubmitted: (_) => _guardar(),
+              validator: (v) => (v?.trim().length ?? 0) < 5
+                  ? 'Escribe un motivo de al menos 5 caracteres.'
+                  : null,
             ),
-            const SizedBox(height: 20),
-            TextFormField(
-              controller: _confirmarController,
-              decoration: InputDecoration(
-                labelText: 'Confirmar contraseña nueva',
-                prefixIcon: const Icon(Icons.lock_outline),
-                suffixIcon: Semantics(
-                  label: _confirmarVisible
-                      ? 'Ocultar confirmación de contraseña'
-                      : 'Mostrar confirmación de contraseña',
-                  button: true,
-                  child: IconButton(
-                    icon: Icon(
-                      _confirmarVisible
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                    ),
-                    tooltip: _confirmarVisible ? 'Ocultar' : 'Ver',
-                    onPressed: () => setState(
-                      () => _confirmarVisible = !_confirmarVisible,
-                    ),
-                  ),
-                ),
-              ),
-              obscureText: !_confirmarVisible,
-              validator: (v) => Validators.confirmarPassword(
-                v,
-                _passwordController.text,
-              ),
-              onFieldSubmitted: (_) => _guardar(),
-            ),
-            if (_errorGeneral != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _errorGeneral!,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: colors.error),
-              ),
-            ],
-            const SizedBox(height: 20),
+            if (_error != null)
+              Text(_error!, style: TextStyle(color: colors.error)),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
                     onPressed: _cargando
                         ? null
-                        : () => Navigator.of(context).pop(false),
+                        : () => Navigator.pop(context, false),
                     child: const Text('Cancelar'),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _cargando ? null : _guardar,
+                    onPressed: _cargando ? null : _enviar,
                     child: _cargando
                         ? const SizedBox(
-                            height: 18,
                             width: 18,
+                            height: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Guardar'),
+                        : const Text('Registrar solicitud'),
                   ),
                 ),
               ],

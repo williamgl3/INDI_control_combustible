@@ -130,9 +130,9 @@ class _RegistrarServicioDialogState
               const SizedBox(height: 12),
               Text(
                 _errorGeneral!,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: context.colors.error,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: context.colors.error),
               ),
             ],
             const SizedBox(height: 20),

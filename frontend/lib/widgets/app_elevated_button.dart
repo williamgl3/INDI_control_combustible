@@ -47,8 +47,8 @@ class AppElevatedButton extends StatelessWidget {
         // `elevatedButtonTheme` genérico. Antes era más marcada (elevation
         // 10 + azul al 40%, sin relación con el resto del sistema de
         // sombras).
-        elevation: 8,
-        shadowColor: (backgroundColor ?? colors.primary).withValues(alpha: 0.3),
+        elevation: 0,
+        shadowColor: (backgroundColor ?? colors.primary).withValues(alpha: 0.2),
       ),
       onPressed: cargando ? null : onPressed,
       child: cargando

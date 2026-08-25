@@ -68,19 +68,19 @@ class _AppCardState extends State<AppCard> {
     final interactiva = widget.onTap != null;
     final rippleColor = widget.rippleColor ?? colors.primary;
 
-    final radius = widget.floating ? AppRadii.floatingRadius : AppRadii.cardRadius;
+    final radius = widget.floating
+        ? AppRadii.floatingRadius
+        : AppRadii.cardRadius;
     final shadows = widget.floating
         ? (_hover ? context.shadows.raised : context.shadows.floating)
         : (_hover ? context.shadows.raised : context.shadows.card);
 
     // En floating: si no se pasó un border explícito, se usa el borde
     // sutil del tema (blanco al 6% en oscuro, invisible en claro).
-    final effectiveBorder = widget.border ??
+    final effectiveBorder =
+        widget.border ??
         (widget.floating
-            ? Border.all(
-                color: colors.border,
-                width: AppBorders.floating,
-              )
+            ? Border.all(color: colors.border, width: AppBorders.floating)
             : null);
 
     final tarjeta = AnimatedContainer(
@@ -103,20 +103,15 @@ class _AppCardState extends State<AppCard> {
       onExit: (_) => _setHover(false),
       child: PressableScale(
         onTap: widget.onTap,
-        child: AnimatedScale(
-          scale: _hover ? 1.02 : 1.0,
-          duration: AppMotion.fast,
-          curve: AppMotion.curve,
-          child: Material(
-            color: Colors.transparent,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: radius,
+          child: InkWell(
+            onTap: widget.onTap,
             borderRadius: radius,
-            child: InkWell(
-              onTap: widget.onTap,
-              borderRadius: radius,
-              splashColor: rippleColor.withValues(alpha: 0.1),
-              highlightColor: rippleColor.withValues(alpha: 0.06),
-              child: tarjeta,
-            ),
+            splashColor: rippleColor.withValues(alpha: 0.1),
+            highlightColor: rippleColor.withValues(alpha: 0.06),
+            child: tarjeta,
           ),
         ),
       ),

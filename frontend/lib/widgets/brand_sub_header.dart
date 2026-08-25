@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_sizes.dart';
 import 'brand_header.dart';
 import 'logo_glass.dart';
 
@@ -18,6 +17,7 @@ class BrandSubHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
     return Stack(
       children: [
         BrandHeader(
@@ -25,8 +25,8 @@ class BrandSubHeader extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const LogoGlass(size: AppSizes.logoHeaderSize),
-              const SizedBox(height: 10),
+              IndiLogo(width: internalHeaderLogoWidth(screenWidth)),
+              SizedBox(height: internalHeaderLogoGap(screenWidth) / 2),
               Text(
                 titulo,
                 textAlign: TextAlign.center,
@@ -46,6 +46,7 @@ class BrandSubHeader extends StatelessWidget {
               bottom: false,
               child: IconButton(
                 onPressed: onBack,
+                tooltip: 'Atrás',
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
               ),
             ),

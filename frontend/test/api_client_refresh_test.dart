@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -46,7 +47,10 @@ void main() {
         if (request.url.path == '/refresh') {
           intentosRefresh++;
           return http.Response(
-            jsonEncode({'token': 'token-nuevo', 'refreshToken': 'refresh-nuevo'}),
+            jsonEncode({
+              'token': 'token-nuevo',
+              'refreshToken': 'refresh-nuevo',
+            }),
             200,
           );
         }
@@ -73,43 +77,37 @@ void main() {
     },
   );
 
-  test(
-    'si el refresh también falla, limpia la sesión, notifica '
-    'onSesionExpirada y propaga el 401 original',
-    () async {
-      final storage = _FakeTokenStorage()
-        ..token = 'token-viejo'
-        ..refreshToken = 'refresh-vencido';
-      var notificaciones = 0;
+  test('si el refresh también falla, limpia la sesión, notifica '
+      'onSesionExpirada y propaga el 401 original', () async {
+    final storage = _FakeTokenStorage()
+      ..token = 'token-viejo'
+      ..refreshToken = 'refresh-vencido';
+    var notificaciones = 0;
 
-      final mockHttp = MockClient((request) async {
-        if (request.url.path == '/refresh') {
-          return http.Response(
-            jsonEncode({'error': 'Refresh token inválido'}),
-            401,
-          );
-        }
-        return http.Response(jsonEncode({'error': 'Token expirado'}), 401);
-      });
+    final mockHttp = MockClient((request) async {
+      if (request.url.path == '/refresh') {
+        return http.Response(
+          jsonEncode({'error': 'Refresh token inválido'}),
+          401,
+        );
+      }
+      return http.Response(jsonEncode({'error': 'Token expirado'}), 401);
+    });
 
-      final client = ApiClient(
-        tokenStorage: storage,
-        httpClient: mockHttp,
-        onSesionExpirada: () => notificaciones++,
-      );
+    final client = ApiClient(
+      tokenStorage: storage,
+      httpClient: mockHttp,
+      onSesionExpirada: () => notificaciones++,
+    );
 
-      await expectLater(
-        client.get('/dato'),
-        throwsA(isA<ApiException>()),
-      );
-      expect(storage.token, isNull);
-      expect(storage.refreshToken, isNull);
-      // Antes no existía este callback — el guard de rutas nunca se
-      // enteraba de la sesión expirada hasta el siguiente arranque de la
-      // app (ver `ApiClient._limpiarSesionExpirada`).
-      expect(notificaciones, 1);
-    },
-  );
+    await expectLater(client.get('/dato'), throwsA(isA<ApiException>()));
+    expect(storage.token, isNull);
+    expect(storage.refreshToken, isNull);
+    // Antes no existía este callback — el guard de rutas nunca se
+    // enteraba de la sesión expirada hasta el siguiente arranque de la
+    // app (ver `ApiClient._limpiarSesionExpirada`).
+    expect(notificaciones, 1);
+  });
 
   test('sin refresh token guardado, un 401 no intenta refrescar', () async {
     final storage = _FakeTokenStorage()..token = 'token-viejo';
@@ -126,4 +124,78 @@ void main() {
     await expectLater(client.get('/dato'), throwsA(isA<ApiException>()));
     expect(llamadasRefresh, 0);
   });
+
+  test(
+    'dos 401 simultáneos comparten una sola rotación del refresh token',
+    () async {
+      final storage = _FakeTokenStorage()
+        ..token = 'token-viejo'
+        ..refreshToken = 'refresh-viejo';
+      final ambos401 = Completer<void>();
+      var respuestas401 = 0;
+      var llamadasRefresh = 0;
+
+      final mockHttp = MockClient((request) async {
+        if (request.url.path == '/refresh') {
+          llamadasRefresh++;
+          await ambos401.future;
+          return http.Response(
+            jsonEncode({
+              'token': 'token-nuevo',
+              'refreshToken': 'refresh-nuevo',
+            }),
+            200,
+          );
+        }
+        if (request.headers['Authorization'] == 'Bearer token-nuevo') {
+          return http.Response(jsonEncode({'ok': true}), 200);
+        }
+        respuestas401++;
+        if (respuestas401 == 2) ambos401.complete();
+        return http.Response(jsonEncode({'error': 'Token expirado'}), 401);
+      });
+
+      final client = ApiClient(tokenStorage: storage, httpClient: mockHttp);
+      final resultados = await Future.wait([
+        client.get('/dato-1'),
+        client.get('/dato-2'),
+      ]);
+
+      expect(resultados, everyElement({'ok': true}));
+      expect(llamadasRefresh, 1);
+    },
+  );
+
+  test(
+    'limpia la sesión si el token recién renovado también recibe 401',
+    () async {
+      final storage = _FakeTokenStorage()
+        ..token = 'token-viejo'
+        ..refreshToken = 'refresh-viejo';
+      var notificaciones = 0;
+
+      final mockHttp = MockClient((request) async {
+        if (request.url.path == '/refresh') {
+          return http.Response(
+            jsonEncode({
+              'token': 'token-nuevo',
+              'refreshToken': 'refresh-nuevo',
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'error': 'Token rechazado'}), 401);
+      });
+      final client = ApiClient(
+        tokenStorage: storage,
+        httpClient: mockHttp,
+        onSesionExpirada: () => notificaciones++,
+      );
+
+      await expectLater(client.get('/dato'), throwsA(isA<ApiException>()));
+      expect(storage.token, isNull);
+      expect(storage.refreshToken, isNull);
+      expect(notificaciones, 1);
+    },
+  );
 }

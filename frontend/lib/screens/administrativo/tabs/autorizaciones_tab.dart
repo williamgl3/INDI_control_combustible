@@ -119,9 +119,7 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
     );
   }
 
-  Future<void> _rechazarSeleccionadas(
-    List<SolicitudAutorizacion> todas,
-  ) async {
+  Future<void> _rechazarSeleccionadas(List<SolicitudAutorizacion> todas) async {
     final motivo = await _DialogoMotivoLote.show(context);
     if (motivo == null || !mounted) return;
 
@@ -287,8 +285,7 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
                             _SolicitudTile(
                               solicitud: s,
                               nombreChofer:
-                                  nombresPorChoferId[s.choferId] ??
-                                  s.choferId,
+                                  nombresPorChoferId[s.choferId] ?? s.choferId,
                               onRevisar: () => _revisar(
                                 s,
                                 nombresPorChoferId[s.choferId] ?? s.choferId,

@@ -6,6 +6,19 @@ vi.mock('../src/db/pool', () => ({
   pool: { query: vi.fn() },
 }));
 
+vi.mock('../src/services/idempotenciaService', () => ({
+  OPERACIONES_IDEMPOTENTES: {
+    crearCierreDia: 'cierre_dia.crear', reportarIncidencia: 'incidencia.reportar', subirEvidencia: 'evidencia.subir',
+  },
+  leerIdempotencyKey: () => null,
+  requestIdDe: () => 'request-test',
+  ejecutarIdempotente: vi.fn(async ({ ejecutar }) => ({ ...(await ejecutar({})), replayed: false })),
+}));
+
+vi.mock('../src/utils/requestFingerprint', () => ({
+  fingerprintRequest: () => 'a'.repeat(64), hashesDeArchivos: async () => ({}),
+}));
+
 vi.mock('../src/middleware/upload', () => {
   const continuar = (req: Request, _res: Response, next: NextFunction) => next();
   return {
@@ -24,6 +37,8 @@ vi.mock('../src/middleware/upload', () => {
     verificarMagicBytes: continuar,
     rutaPublicaDeArchivo: (nombre: string) => `/uploads/${nombre}`,
     eliminarArchivosNuevos: vi.fn(),
+    limpiarArchivosDeReplay: vi.fn(),
+    limpiarArchivosAnteError: continuar,
   };
 });
 

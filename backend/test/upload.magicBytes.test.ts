@@ -2,7 +2,13 @@ import { mkdtempSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { UPLOADS_DIR, verificarMagicBytes } from '../src/middleware/upload';
+import {
+  esMimetypePermitido,
+  limpiarArchivosAnteError,
+  limpiarArchivosDeReplay,
+  UPLOADS_DIR,
+  verificarMagicBytes,
+} from '../src/middleware/upload';
 
 /// El `fileFilter` de multer solo ve el mimetype que el cliente declaró
 /// en el multipart — este middleware corre después, con el archivo ya en
@@ -24,6 +30,13 @@ function archivoFalso(path: string): Express.Multer.File {
 }
 
 describe('verificarMagicBytes', () => {
+  it('acepta los MIME de cámara que luego se validan por firma real', () => {
+    expect(esMimetypePermitido('image/jpeg')).toBe(true);
+    expect(esMimetypePermitido('image/jpg')).toBe(true);
+    expect(esMimetypePermitido('application/octet-stream')).toBe(true);
+    expect(esMimetypePermitido('application/pdf')).toBe(false);
+  });
+
   it('deja pasar un archivo con bytes reales de JPEG', async () => {
     const dir = mkdtempSync(join(UPLOADS_DIR, 'upload-test-'));
     const ruta = join(dir, 'real.jpg');
@@ -58,5 +71,39 @@ describe('verificarMagicBytes', () => {
     expect(errorRecibido).toBeInstanceOf(Error);
     expect((errorRecibido as Error).message).toContain('no es una imagen válida');
     expect(existsSync(ruta)).toBe(false);
+  });
+
+  it('limpia solo el archivo de la petición cuando falla la persistencia', async () => {
+    const dir = mkdtempSync(join(UPLOADS_DIR, 'upload-test-'));
+    const ruta = join(dir, 'creado-por-esta-peticion.jpg');
+    writeFileSync(ruta, Buffer.from([0xff, 0xd8, 0xff]));
+    const errorOriginal = new Error('fallo de inserción');
+    const req = { file: archivoFalso(ruta), files: undefined } as never;
+
+    await new Promise<void>((resolve, reject) => {
+      limpiarArchivosAnteError(errorOriginal, req, {} as never, (error) => {
+        try {
+          expect(error).toBe(errorOriginal);
+          expect(existsSync(ruta)).toBe(false);
+          resolve();
+        } catch (assertionError) {
+          reject(assertionError);
+        }
+      });
+    });
+  });
+
+  it('un replay elimina solo la copia multipart nueva y conserva el original', async () => {
+    const dir = mkdtempSync(join(UPLOADS_DIR, 'upload-replay-test-'));
+    const original = join(dir, 'original.jpg');
+    const copiaRetry = join(dir, 'retry.jpg');
+    writeFileSync(original, Buffer.from([0xff, 0xd8, 0xff, 1]));
+    writeFileSync(copiaRetry, Buffer.from([0xff, 0xd8, 0xff, 1]));
+    await limpiarArchivosDeReplay(
+      { file: archivoFalso(copiaRetry), files: undefined } as never,
+      true,
+    );
+    expect(existsSync(copiaRetry)).toBe(false);
+    expect(existsSync(original)).toBe(true);
   });
 });

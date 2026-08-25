@@ -1,6 +1,7 @@
 import { pool } from '../db/pool';
 import { ApiError } from '../utils/asyncHandler';
 import { registrarAuditoria } from './auditoriaService';
+import type { PoolClient } from 'pg';
 import type { EstadoIncidencia, IncidenciaVehiculo } from '../types';
 
 interface FilaIncidencia {
@@ -51,8 +52,8 @@ export async function reportar(datos: {
   choferId: string;
   descripcion: string;
   fotoPath?: string | null | undefined;
-}): Promise<IncidenciaVehiculo> {
-  const { rows } = await pool.query<FilaIncidencia>(
+}, cliente?: PoolClient): Promise<IncidenciaVehiculo> {
+  const { rows } = await (cliente ?? pool).query<FilaIncidencia>(
     `INSERT INTO incidencias_vehiculo (vehiculo_id, chofer_id, descripcion, foto_path)
      VALUES ($1, $2, $3, $4)
      RETURNING *`,

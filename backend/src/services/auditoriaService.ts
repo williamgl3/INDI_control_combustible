@@ -1,5 +1,6 @@
 import { pool } from '../db/pool';
 import { logger } from '../utils/logger';
+import type { PoolClient } from 'pg';
 
 /// Auditoría de acciones administrativas sensibles (aprobar/rechazar
 /// solicitudes, editar vehículos/topes, mantenimiento, incidencias,
@@ -16,9 +17,9 @@ export async function registrarAuditoria(datos: {
   entidad: string;
   entidadId?: string | null | undefined;
   detalle?: Record<string, unknown> | null | undefined;
-}): Promise<void> {
+}, cliente?: PoolClient): Promise<void> {
   try {
-    await pool.query(
+    await (cliente ?? pool).query(
       `INSERT INTO auditoria_acciones (usuario_id, accion, entidad, entidad_id, detalle)
        VALUES ($1, $2, $3, $4, $5)`,
       [
@@ -30,6 +31,7 @@ export async function registrarAuditoria(datos: {
       ],
     );
   } catch (err) {
+    if (cliente) throw err;
     logger.error({ err, datos }, 'No se pudo registrar la auditoría (se ignora, no bloquea la operación).');
   }
 }

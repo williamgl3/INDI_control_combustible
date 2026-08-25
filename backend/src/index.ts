@@ -16,8 +16,8 @@ import { evidenciasRouter } from './routes/evidencias.routes';
 import { suministrosRouter } from './routes/suministros.routes';
 import { despachosMarimbaRouter } from './routes/despachosMarimba.routes';
 import { recorridosMarimbaRouter } from './routes/recorridosMarimba.routes';
+import { archivosRouter } from './routes/archivos.routes';
 import { errorHandler } from './middleware/errorHandler';
-import { UPLOADS_DIR } from './middleware/upload';
 import { logger } from './utils/logger';
 import { httpLoggerOptions } from './utils/httpLogger';
 import { pool } from './db/pool';
@@ -65,7 +65,6 @@ app.use(
   }),
 );
 app.use(express.json());
-app.use('/uploads', express.static(UPLOADS_DIR));
 
 app.get('/health', async (_req, res) => {
   // Antes solo confirmaba que el proceso Express respondía — no servía
@@ -92,6 +91,7 @@ app.use('/evidencias', evidenciasRouter);
 app.use('/suministros', suministrosRouter);
 app.use('/despachos-marimba', despachosMarimbaRouter);
 app.use('/recorridos-marimba', recorridosMarimbaRouter);
+app.use('/archivos', archivosRouter);
 
 // SIEMPRE al final — traduce errores (ApiError/ZodError/lo que sea) a
 // una respuesta JSON consistente en vez de colgar la petición. Solo

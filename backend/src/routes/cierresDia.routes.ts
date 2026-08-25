@@ -6,6 +6,9 @@ import { ApiError } from '../utils/asyncHandler';
 import { upload, rutaPublicaDeArchivo, verificarMagicBytes } from '../middleware/upload';
 import * as cierresDiaService from '../services/cierresDiaService';
 import * as cargasService from '../services/cargasService';
+import { ejecutarIdempotente, leerIdempotencyKey, OPERACIONES_IDEMPOTENTES, requestIdDe } from '../services/idempotenciaService';
+import { fingerprintRequest, hashesDeArchivos } from '../utils/requestFingerprint';
+import { eliminarArchivosNuevos, limpiarArchivosAnteError, limpiarArchivosDeReplay } from '../middleware/upload';
 
 export const cierresDiaRouter = Router();
 
@@ -67,13 +70,23 @@ cierresDiaRouter.post(
     if (!req.file) {
       throw new ApiError(400, 'Falta la foto del tablero con la lectura final.');
     }
-
-    const cierre = await cierresDiaService.cerrarDia({
-      choferId: req.usuarioActual!.sub,
-      cargaId: datos.cargaId,
-      kmFinal: datos.kmFinal,
-      fotoTableroPath: rutaPublicaDeArchivo(req.file.filename),
+    const key = leerIdempotencyKey(req, false);
+    const requestHash = fingerprintRequest({ ...datos, actorId: req.usuarioActual!.sub,
+      archivos: await hashesDeArchivos({ fotoTablero: [req.file] }) });
+    const resultado = await ejecutarIdempotente({
+      usuarioId: req.usuarioActual!.sub, operacion: OPERACIONES_IDEMPOTENTES.crearCierreDia,
+      idempotencyKey: key, requestHash,
+      requestId: requestIdDe(req),
+      ejecutar: async (cliente) => {
+        const cierre = await cierresDiaService.cerrarDia({ choferId: req.usuarioActual!.sub,
+          cargaId: datos.cargaId, kmFinal: datos.kmFinal,
+          fotoTableroPath: rutaPublicaDeArchivo(req.file!.filename) }, cliente);
+        return { status: 201, body: cierre, resourceType: 'cierre_dia', resourceId: cierre.id };
+      },
     });
-    res.status(201).json(cierre);
+    await limpiarArchivosDeReplay(req, resultado.replayed);
+    if (resultado.replayed) res.set('Idempotency-Replayed', 'true');
+    res.status(resultado.status).json(resultado.body);
   }),
 );
+cierresDiaRouter.use(limpiarArchivosAnteError);

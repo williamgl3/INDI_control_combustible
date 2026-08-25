@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// Recorte que divide el header en una diagonal fluida tipo "S" —el lado
-/// izquierdo del header baja más (más área azul) y el lado derecho sube
-/// más (menos área azul), en vez de una onda centrada y simétrica.
+/// Silueta orgánica compartida por todos los encabezados de autenticación.
+/// Tiene tres movimientos amplios, deliberadamente asimétricos: una entrada
+/// baja y corta, un ascenso central largo y una salida más progresiva.
 ///
 /// `leftHeightFactor` y `rightHeightFactor` son fracciones del alto del
 /// contenedor (`size.height`), no píxeles fijos, para que la diagonal se
@@ -20,8 +20,8 @@ import 'package:flutter/material.dart';
 /// no se toca aquí.
 class SShapeHeaderClipper extends CustomClipper<Path> {
   const SShapeHeaderClipper({
-    this.leftHeightFactor = 0.88,
-    this.rightHeightFactor = 0.48,
+    this.leftHeightFactor = 0.94,
+    this.rightHeightFactor = 0.80,
   });
 
   /// Fracción del alto donde la curva llega al borde izquierdo (x = 0).
@@ -32,15 +32,17 @@ class SShapeHeaderClipper extends CustomClipper<Path> {
 
   @override
   Path getClip(Size size) {
+    final w = size.width;
+    final h = size.height;
+    final yLeft = h * leftHeightFactor;
+    final yRight = h * rightHeightFactor;
     return Path()
       ..moveTo(0, 0)
-      ..lineTo(0, size.height * leftHeightFactor)
-      ..addSShapeBoundary(
-        size,
-        leftHeightFactor: leftHeightFactor,
-        rightHeightFactor: rightHeightFactor,
-      )
-      ..lineTo(size.width, 0)
+      ..lineTo(0, yLeft)
+      ..cubicTo(w * 0.10, yLeft, w * 0.18, h * 0.87, w * 0.34, h * 0.84)
+      ..cubicTo(w * 0.47, h * 0.86, w * 0.57, h * 0.86, w * 0.67, h * 0.80)
+      ..cubicTo(w * 0.78, h * 0.72, w * 0.88, yRight, w, yRight)
+      ..lineTo(w, 0)
       ..lineTo(0, 0)
       ..close();
   }
@@ -51,68 +53,26 @@ class SShapeHeaderClipper extends CustomClipper<Path> {
       oldClipper.rightHeightFactor != rightHeightFactor;
 }
 
-/// Recorta la superficie inferior usando exactamente el mismo límite que la
-/// capa azul. Así ambas piezas son complementarias y no se genera un hueco
-/// entre ellas por diferencias de geometría.
-class SShapeSurfaceClipper extends CustomClipper<Path> {
-  const SShapeSurfaceClipper({
-    this.leftHeightFactor = 0.88,
-    this.rightHeightFactor = 0.48,
-  });
-
-  final double leftHeightFactor;
-  final double rightHeightFactor;
+/// Onda horizontal exclusiva del login. Mantiene dos ondulaciones amplias,
+/// discretas y casi niveladas sin reutilizar la diagonal de las pantallas
+/// secundarias de autenticación.
+class LoginWaveClipper extends CustomClipper<Path> {
+  const LoginWaveClipper();
 
   @override
   Path getClip(Size size) {
+    final w = size.width;
+    final h = size.height;
     return Path()
-      ..moveTo(0, size.height * leftHeightFactor)
-      ..addSShapeBoundary(
-        size,
-        leftHeightFactor: leftHeightFactor,
-        rightHeightFactor: rightHeightFactor,
-      )
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
+      ..moveTo(0, 0)
+      ..lineTo(0, h * 0.82)
+      ..cubicTo(w * 0.14, h * 0.92, w * 0.27, h * 0.70, w * 0.43, h * 0.73)
+      ..cubicTo(w * 0.59, h * 0.73, w * 0.74, h * 0.96, w * 0.88, h * 0.87)
+      ..cubicTo(w * 0.94, h * 0.86, w * 0.98, h * 0.80, w, h * 0.82)
+      ..lineTo(w, 0)
       ..close();
   }
 
   @override
-  bool shouldReclip(covariant SShapeSurfaceClipper oldClipper) =>
-      oldClipper.leftHeightFactor != leftHeightFactor ||
-      oldClipper.rightHeightFactor != rightHeightFactor;
-}
-
-extension on Path {
-  void addSShapeBoundary(
-    Size size, {
-    required double leftHeightFactor,
-    required double rightHeightFactor,
-  }) {
-    final width = size.width;
-    final height = size.height;
-    final yLeft = height * leftHeightFactor;
-    final yRight = height * rightHeightFactor;
-    final yMiddle = (yLeft + yRight) / 2;
-
-    // El primer lóbulo baja antes de subir hacia la inflexión central.
-    cubicTo(
-      width * 0.18,
-      (yLeft + height * 0.08).clamp(0, height),
-      width * 0.31,
-      (yMiddle - height * 0.10).clamp(0, height),
-      width * 0.50,
-      yMiddle,
-    );
-    // El segundo empieza con la misma dirección visual, baja suavemente y
-    // vuelve a subir hacia la derecha. La inflexión queda exactamente al 50%.
-    cubicTo(
-      width * 0.69,
-      (yMiddle + height * 0.10).clamp(0, height),
-      width * 0.82,
-      (yRight - height * 0.08).clamp(0, height),
-      width,
-      yRight,
-    );
-  }
+  bool shouldReclip(covariant LoginWaveClipper oldClipper) => false;
 }

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/api_auditoria_repository.dart';
@@ -37,6 +39,14 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     // `ApiClient._limpiarSesionExpirada`).
     onSesionExpirada: () => ref.read(sessionProvider.notifier).cerrarSesion(),
   );
+});
+
+final archivoBytesProvider = FutureProvider.family<Uint8List, String>((
+  ref,
+  referencia,
+) {
+  ref.watch(sessionProvider.select((perfil) => perfil?.id));
+  return ref.read(apiClientProvider).descargarArchivo(referencia);
 });
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {

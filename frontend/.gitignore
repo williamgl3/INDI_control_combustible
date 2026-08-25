@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firma Android release: contiene rutas y contraseñas locales.
+/android/key.properties
+/android/*.jks
+/android/*.keystore

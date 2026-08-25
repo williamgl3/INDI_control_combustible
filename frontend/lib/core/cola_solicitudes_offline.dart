@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -19,6 +20,9 @@ import 'session_provider.dart';
 class SolicitudPendienteOffline {
   const SolicitudPendienteOffline({
     required this.idLocal,
+    required this.usuarioId,
+    required this.idempotencyKey,
+    required this.payloadFingerprint,
     required this.vehiculoId,
     required this.litrosSolicitados,
     required this.esUrgente,
@@ -27,9 +31,17 @@ class SolicitudPendienteOffline {
     required this.fechaProgramada,
     required this.fotoTableroPath,
     required this.creadaEn,
+    this.estado = EstadoSolicitudOffline.pendiente,
+    this.idRemoto,
+    this.intentos = 0,
+    this.ultimoError,
+    this.proximoIntento,
   });
 
   final String idLocal;
+  final String usuarioId;
+  final String idempotencyKey;
+  final String payloadFingerprint;
   final String vehiculoId;
   final double litrosSolicitados;
   final bool esUrgente;
@@ -42,10 +54,19 @@ class SolicitudPendienteOffline {
   /// archivo ya no existe al sincronizar, se descarta la pendiente.
   final String fotoTableroPath;
   final DateTime creadaEn;
+  final EstadoSolicitudOffline estado;
+  final String? idRemoto;
+  final int intentos;
+  final String? ultimoError;
+  final DateTime? proximoIntento;
 
   factory SolicitudPendienteOffline.fromJson(Map<String, dynamic> json) {
     return SolicitudPendienteOffline(
       idLocal: json['idLocal'] as String,
+      usuarioId: json['usuarioId'] as String? ?? '',
+      idempotencyKey:
+          json['idempotencyKey'] as String? ?? json['idLocal'] as String,
+      payloadFingerprint: json['payloadFingerprint'] as String? ?? '',
       vehiculoId: json['vehiculoId'] as String,
       litrosSolicitados: (json['litrosSolicitados'] as num).toDouble(),
       esUrgente: json['esUrgente'] as bool,
@@ -54,11 +75,23 @@ class SolicitudPendienteOffline {
       fechaProgramada: DateTime.parse(json['fechaProgramada'] as String),
       fotoTableroPath: json['fotoTableroPath'] as String,
       creadaEn: DateTime.parse(json['creadaEn'] as String),
+      estado: EstadoSolicitudOffline.values.byName(
+        json['estado'] as String? ?? EstadoSolicitudOffline.pendiente.name,
+      ),
+      idRemoto: json['idRemoto'] as String?,
+      intentos: json['intentos'] as int? ?? 0,
+      ultimoError: json['ultimoError'] as String?,
+      proximoIntento: json['proximoIntento'] == null
+          ? null
+          : DateTime.parse(json['proximoIntento'] as String),
     );
   }
 
   Map<String, dynamic> toJson() => {
     'idLocal': idLocal,
+    'usuarioId': usuarioId,
+    'idempotencyKey': idempotencyKey,
+    'payloadFingerprint': payloadFingerprint,
     'vehiculoId': vehiculoId,
     'litrosSolicitados': litrosSolicitados,
     'esUrgente': esUrgente,
@@ -67,11 +100,53 @@ class SolicitudPendienteOffline {
     'fechaProgramada': fechaProgramada.toIso8601String(),
     'fotoTableroPath': fotoTableroPath,
     'creadaEn': creadaEn.toIso8601String(),
+    'estado': estado.name,
+    'idRemoto': idRemoto,
+    'intentos': intentos,
+    'ultimoError': ultimoError,
+    'proximoIntento': proximoIntento?.toIso8601String(),
   };
+
+  SolicitudPendienteOffline copiar({
+    EstadoSolicitudOffline? estado,
+    String? idRemoto,
+    int? intentos,
+    String? ultimoError,
+    DateTime? proximoIntento,
+  }) => SolicitudPendienteOffline(
+    idLocal: idLocal,
+    usuarioId: usuarioId,
+    idempotencyKey: idempotencyKey,
+    payloadFingerprint: payloadFingerprint,
+    vehiculoId: vehiculoId,
+    litrosSolicitados: litrosSolicitados,
+    esUrgente: esUrgente,
+    motivoChofer: motivoChofer,
+    actividad: actividad,
+    fechaProgramada: fechaProgramada,
+    fotoTableroPath: fotoTableroPath,
+    creadaEn: creadaEn,
+    estado: estado ?? this.estado,
+    idRemoto: idRemoto ?? this.idRemoto,
+    intentos: intentos ?? this.intentos,
+    ultimoError: ultimoError,
+    proximoIntento: proximoIntento,
+  );
+}
+
+enum EstadoSolicitudOffline {
+  pendiente,
+  sincronizando,
+  enviadaSinConfirmar,
+  sincronizada,
+  requiereReintento,
+  fallidaPermanente,
+  requiereRevision,
 }
 
 class ColaSolicitudesOffline {
   static const _key = 'cola_solicitudes_offline';
+  static Future<void> _operacion = Future.value();
 
   Future<List<SolicitudPendienteOffline>> leer() async {
     final prefs = await SharedPreferences.getInstance();
@@ -85,13 +160,51 @@ class ColaSolicitudesOffline {
         .toList();
   }
 
-  Future<void> agregar(SolicitudPendienteOffline pendiente) async {
+  Future<bool> agregar(SolicitudPendienteOffline pendiente) async {
+    var agregada = false;
+    final previa = _operacion;
+    final completa = Completer<void>();
+    _operacion = completa.future;
+    await previa;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      final duplicada = actuales.any(
+        (p) =>
+            p.usuarioId == pendiente.usuarioId &&
+            (p.idempotencyKey == pendiente.idempotencyKey ||
+                p.payloadFingerprint == pendiente.payloadFingerprint) &&
+            !{
+              EstadoSolicitudOffline.sincronizada,
+              EstadoSolicitudOffline.fallidaPermanente,
+            }.contains(p.estado),
+      );
+      if (!duplicada) {
+        await prefs.setStringList(_key, [
+          ...actuales.map((p) => jsonEncode(p.toJson())),
+          jsonEncode(pendiente.toJson()),
+        ]);
+        agregada = true;
+      }
+    } finally {
+      completa.complete();
+    }
+    return agregada;
+  }
+
+  Future<void> actualizar(SolicitudPendienteOffline pendiente) async {
     final prefs = await SharedPreferences.getInstance();
-    final actuales = prefs.getStringList(_key) ?? const [];
-    await prefs.setStringList(_key, [
-      ...actuales,
-      jsonEncode(pendiente.toJson()),
-    ]);
+    final actuales = await leer();
+    await prefs.setStringList(
+      _key,
+      actuales
+          .map(
+            (p) => jsonEncode(
+              p.idLocal == pendiente.idLocal ? pendiente.toJson() : p.toJson(),
+            ),
+          )
+          .toList(),
+    );
   }
 
   Future<void> quitar(String idLocal) async {
@@ -986,8 +1099,9 @@ final solicitudesPendientesOfflineProvider =
 /// varios despachos sin sincronizar.
 final totalPendientesOfflineProvider = FutureProvider<int>((ref) async {
   ref.watch(operacionesTickProvider);
+  final usuarioId = ref.watch(sessionProvider)?.id;
+  final solicitudes = await ref.read(colaSolicitudesOfflineProvider).leer();
   final resultados = await Future.wait([
-    ref.read(colaSolicitudesOfflineProvider).leer(),
     ref.read(colaComprobarCargaOfflineProvider).leer(),
     ref.read(colaCerrarDiaOfflineProvider).leer(),
     ref.read(colaIncidenciasOfflineProvider).leer(),
@@ -995,7 +1109,8 @@ final totalPendientesOfflineProvider = FutureProvider<int>((ref) async {
     ref.read(colaDespachosMarimbaOfflineProvider).leer(),
     ref.read(colaCierresRecorridoMarimbaOfflineProvider).leer(),
   ]);
-  return resultados.fold<int>(0, (suma, lista) => suma + lista.length);
+  return solicitudes.where((p) => p.usuarioId == usuarioId).length +
+      resultados.fold<int>(0, (suma, lista) => suma + lista.length);
 });
 
 /// Registra en [AvisosSincronizacionOfflineStorage] que una pendiente
@@ -1040,6 +1155,13 @@ Future<void> _sincronizarSolicitudes(WidgetRef ref) async {
   final choferId = ref.read(sessionProvider)?.id ?? '';
 
   for (final pendiente in pendientes) {
+    if (pendiente.usuarioId != choferId ||
+        pendiente.estado == EstadoSolicitudOffline.sincronizada ||
+        pendiente.estado == EstadoSolicitudOffline.fallidaPermanente ||
+        pendiente.estado == EstadoSolicitudOffline.requiereRevision ||
+        (pendiente.proximoIntento?.isAfter(DateTime.now()) ?? false)) {
+      continue;
+    }
     final vehiculo = vehiculosRepo.porId(pendiente.vehiculoId);
     if (vehiculo == null) {
       await cola.quitar(pendiente.idLocal);
@@ -1059,7 +1181,12 @@ Future<void> _sincronizarSolicitudes(WidgetRef ref) async {
       continue;
     }
     try {
+      await cola.actualizar(
+        pendiente.copiar(estado: EstadoSolicitudOffline.sincronizando),
+      );
       await repo.enviarSolicitud(
+        idempotencyKey: pendiente.idempotencyKey,
+        payloadFingerprint: pendiente.payloadFingerprint,
         choferId: choferId,
         vehiculo: vehiculo,
         litrosSolicitados: pendiente.litrosSolicitados,
@@ -1076,9 +1203,44 @@ Future<void> _sincronizarSolicitudes(WidgetRef ref) async {
         // verdad (falso positivo de `conectividadProvider`, que solo
         // detecta wifi/datos, no que el backend responda). Se detiene
         // aquí y se reintenta en el próximo evento de reconexión.
+        final intentos = pendiente.intentos + 1;
+        final segundos =
+            (1 << intentos.clamp(0, 8)) +
+            (pendiente.idLocal.hashCode.abs() % 4);
+        await cola.actualizar(
+          pendiente.copiar(
+            estado: EstadoSolicitudOffline.enviadaSinConfirmar,
+            intentos: intentos,
+            ultimoError: e.mensaje,
+            proximoIntento: DateTime.now().add(Duration(seconds: segundos)),
+          ),
+        );
         return;
       }
-      await cola.quitar(pendiente.idLocal);
+      if (e.codigo == 'SOLICITUD_PENDIENTE_EXISTENTE' &&
+          e.solicitudId != null) {
+        await cola.quitar(pendiente.idLocal);
+      } else {
+        final transitorio = {408, 429, 500, 502, 503, 504}.contains(e.status);
+        await cola.actualizar(
+          pendiente.copiar(
+            estado: transitorio
+                ? EstadoSolicitudOffline.requiereReintento
+                : e.status == 409
+                ? EstadoSolicitudOffline.requiereRevision
+                : EstadoSolicitudOffline.fallidaPermanente,
+            intentos: pendiente.intentos + 1,
+            ultimoError: e.mensaje,
+            proximoIntento: transitorio
+                ? DateTime.now().add(
+                    Duration(
+                      seconds: 1 << (pendiente.intentos + 1).clamp(0, 8),
+                    ),
+                  )
+                : null,
+          ),
+        );
+      }
       await _registrarAviso(
         ref,
         idLocal: pendiente.idLocal,
@@ -1393,12 +1555,24 @@ Future<void> sincronizarRecorridosMarimba(WidgetRef ref) =>
 Future<void> sincronizarSolicitudesOffline(WidgetRef ref) async {
   final perfil = ref.read(sessionProvider);
   if (perfil == null || (!perfil.esChofer && !perfil.esSupervisor)) return;
-  await _sincronizarSolicitudes(ref);
+  final existente = _sincronizacionesSolicitudes[perfil.id];
+  if (existente != null) return existente;
+  final futura = _sincronizarSolicitudes(ref);
+  _sincronizacionesSolicitudes[perfil.id] = futura;
+  try {
+    await futura;
+  } finally {
+    if (identical(_sincronizacionesSolicitudes[perfil.id], futura)) {
+      _sincronizacionesSolicitudes.remove(perfil.id);
+    }
+  }
   await _sincronizarComprobarCarga(ref);
   await _sincronizarCerrarDia(ref);
   await _sincronizarIncidencias(ref);
   await _sincronizarRecorridosMarimba(ref);
 }
+
+final Map<String, Future<void>> _sincronizacionesSolicitudes = {};
 
 /// Se suscribe a `conectividadProvider` y sincroniza automáticamente en
 /// cuanto detecta que volvió la conexión — se llama desde el `build` de
@@ -1412,12 +1586,36 @@ Future<void> sincronizarSolicitudesOffline(WidgetRef ref) async {
 /// `false`, y por lo tanto jamás dispararía la sincronización al
 /// reconectar.
 void observarReconexionParaSincronizar(WidgetRef ref) {
+  final perfil = ref.read(sessionProvider);
   bool? anterior = ref.read(conectividadProvider).valueOrNull;
+  final controlInicial = ref.read(_sesionSincronizacionInicialProvider);
+  if (perfil == null) {
+    controlInicial.usuarioId = null;
+    controlInicial.intentoRealizado = false;
+  } else if (controlInicial.usuarioId != perfil.id) {
+    controlInicial.usuarioId = perfil.id;
+    controlInicial.intentoRealizado = false;
+    if (anterior == true) {
+      controlInicial.intentoRealizado = true;
+      unawaited(sincronizarSolicitudesOffline(ref));
+    }
+  }
   ref.listen<AsyncValue<bool>>(conectividadProvider, (previous, next) {
     final actual = next.valueOrNull;
-    if (actual == true && anterior == false) {
+    if (actual == true &&
+        (anterior == false || !controlInicial.intentoRealizado)) {
+      controlInicial.intentoRealizado = true;
       sincronizarSolicitudesOffline(ref);
     }
     anterior = actual;
   });
 }
+
+class _ControlSincronizacionInicial {
+  String? usuarioId;
+  bool intentoRealizado = false;
+}
+
+final _sesionSincronizacionInicialProvider = Provider(
+  (ref) => _ControlSincronizacionInicial(),
+);

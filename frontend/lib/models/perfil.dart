@@ -29,6 +29,9 @@ class Perfil {
     this.fechaNacimiento,
     required this.rol,
     this.activo = true,
+    this.creadoEn,
+    this.ultimaActividad,
+    this.version = '0',
   });
 
   final String id;
@@ -52,6 +55,9 @@ class Perfil {
   /// iniciar sesión — lo valida el backend, aquí solo se refleja en la UI
   /// (badge en el directorio de choferes/administrativos).
   final bool activo;
+  final DateTime? creadoEn;
+  final DateTime? ultimaActividad;
+  final String version;
 
   bool get esChofer => rol == RolUsuario.chofer;
 
@@ -101,6 +107,9 @@ class Perfil {
     DateTime? fechaNacimiento,
     RolUsuario? rol,
     bool? activo,
+    DateTime? creadoEn,
+    DateTime? ultimaActividad,
+    String? version,
   }) {
     return Perfil(
       id: id ?? this.id,
@@ -112,6 +121,9 @@ class Perfil {
       fechaNacimiento: fechaNacimiento ?? this.fechaNacimiento,
       rol: rol ?? this.rol,
       activo: activo ?? this.activo,
+      creadoEn: creadoEn ?? this.creadoEn,
+      ultimaActividad: ultimaActividad ?? this.ultimaActividad,
+      version: version ?? this.version,
     );
   }
 
@@ -128,6 +140,13 @@ class Perfil {
           : null,
       rol: RolUsuario.values.byName(json['rol'] as String),
       activo: json['activo'] as bool? ?? true,
+      creadoEn: json['creadoEn'] == null
+          ? null
+          : DateTime.parse(json['creadoEn'] as String),
+      ultimaActividad: json['ultimaActividad'] == null
+          ? null
+          : DateTime.parse(json['ultimaActividad'] as String),
+      version: json['version'] as String? ?? '0',
     );
   }
 
@@ -146,6 +165,9 @@ class Perfil {
                 '${fechaNacimiento!.day.toString().padLeft(2, '0')}',
       'rol': rol.name,
       'activo': activo,
+      'creadoEn': creadoEn?.toIso8601String(),
+      'ultimaActividad': ultimaActividad?.toIso8601String(),
+      'version': version,
     };
   }
 
@@ -160,7 +182,10 @@ class Perfil {
         other.correo == correo &&
         other.fechaNacimiento == fechaNacimiento &&
         other.rol == rol &&
-        other.activo == activo;
+        other.activo == activo &&
+        other.creadoEn == creadoEn &&
+        other.ultimaActividad == ultimaActividad &&
+        other.version == version;
   }
 
   @override
@@ -174,5 +199,8 @@ class Perfil {
     fechaNacimiento,
     rol,
     activo,
+    creadoEn,
+    ultimaActividad,
+    version,
   );
 }

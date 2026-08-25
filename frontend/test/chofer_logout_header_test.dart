@@ -2,107 +2,131 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:indi_combustible/core/cola_solicitudes_offline.dart';
 import 'package:indi_combustible/core/providers.dart';
 import 'package:indi_combustible/core/session_provider.dart';
 import 'package:indi_combustible/data/auth_repository.dart';
 import 'package:indi_combustible/router/app_router.dart';
 import 'package:indi_combustible/router/route_paths.dart';
-import 'package:indi_combustible/widgets/header_glass_button.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'mocks/mock_auth_repository.dart';
 import 'test_helpers.dart';
 
 void main() {
-  for (final themeMode in [ThemeMode.light, ThemeMode.dark]) {
-    testWidgets('las acciones del encabezado comparten medidas en $themeMode', (
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  for (final caso in <(Size, ThemeMode)>[
+    (const Size(360, 640), ThemeMode.light),
+    (const Size(412, 915), ThemeMode.dark),
+    (const Size(768, 1024), ThemeMode.light),
+    (const Size(1024, 768), ThemeMode.dark),
+    (const Size(1440, 900), ThemeMode.light),
+  ]) {
+    testWidgets('un solo menu accesible sin overflow en ${caso.$1}', (
       tester,
     ) async {
-      tester.view.physicalSize = const Size(390, 844);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
+      await _configurarVista(tester, caso.$1);
       final container = makeTestContainer();
       addTearDown(container.dispose);
-      await _iniciarComoChofer(tester, container, themeMode: themeMode);
+      await _iniciarComoChofer(tester, container, themeMode: caso.$2);
 
-      final cerrar = find.byTooltip('Cerrar sesión');
-      final opciones = find.byTooltip('Más opciones');
-      final botonCerrar = find.ancestor(
-        of: cerrar,
-        matching: find.byType(HeaderGlassButton),
-      );
-      final botonOpciones = find.ancestor(
-        of: opciones,
-        matching: find.byType(HeaderGlassButton),
-      );
-      expect(tester.getSize(botonCerrar), const Size.square(48));
-      expect(tester.getSize(botonOpciones), const Size.square(48));
-      expect(tester.getSize(find.byIcon(Icons.logout)), const Size.square(24));
+      expect(find.byTooltip('Cerrar sesión'), findsNothing);
+      expect(find.byTooltip('Más opciones'), findsOneWidget);
+      expect(find.byIcon(Icons.more_vert_rounded), findsOneWidget);
       expect(
-        tester.getSize(find.byIcon(Icons.more_vert)),
-        const Size.square(24),
+        tester.getSize(find.byKey(const ValueKey('chofer-header-menu-button'))),
+        const Size.square(48),
       );
+
+      await tester.tap(find.byTooltip('Más opciones'));
+      await tester.pumpAndSettle();
+      expect(find.text('Perfil'), findsOneWidget);
+      expect(find.text('Cambiar tema'), findsOneWidget);
+      expect(find.text('Ayuda y soporte'), findsOneWidget);
+      expect(find.text('Acerca de'), findsOneWidget);
+      expect(find.text('Cerrar sesión'), findsOneWidget);
       expect(
-        tester.getCenter(botonCerrar).dy,
-        tester.getCenter(botonOpciones).dy,
-      );
-      expect(
-        tester.getTopLeft(botonOpciones).dx -
-            tester.getTopRight(botonCerrar).dx,
-        12,
+        find.byKey(const ValueKey('chofer-menu-logout-divider')),
+        findsOneWidget,
       );
       expect(tester.takeException(), isNull);
     });
   }
 
-  testWidgets('el encabezado muestra cierre y conserva las otras opciones', (
+  testWidgets('menu conserva ruta y cierra con Escape, fuera y Atrás', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(320, 700);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
     final container = makeTestContainer();
     addTearDown(container.dispose);
     await _iniciarComoChofer(tester, container);
-
-    expect(find.byIcon(Icons.logout), findsOneWidget);
-    expect(find.byTooltip('Cerrar sesión'), findsOneWidget);
-    expect(find.byTooltip('Más opciones'), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    final ruta = container.read(appRouterProvider).state.uri.path;
 
     await tester.tap(find.byTooltip('Más opciones'));
     await tester.pumpAndSettle();
-    expect(find.text('Acerca de'), findsOneWidget);
-    expect(find.text('Ayuda y soporte'), findsOneWidget);
-    expect(find.text('Cerrar sesión'), findsNothing);
+    expect(container.read(appRouterProvider).state.uri.path, ruta);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(find.text('Acerca de'), findsNothing);
-    expect(tester.takeException(), isNull);
+    expect(find.text('Cambiar tema'), findsNothing);
+
+    await tester.tap(find.byTooltip('Más opciones'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(8, 500));
+    await tester.pumpAndSettle();
+    expect(find.text('Cambiar tema'), findsNothing);
+
+    await tester.tap(find.byTooltip('Más opciones'));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Cambiar tema'), findsNothing);
+    expect(container.read(appRouterProvider).state.uri.path, ruta);
   });
 
-  testWidgets('cancelar el cierre conserva la sesión', (tester) async {
+  testWidgets('acciones reales reutilizan perfil, tema, ayuda y acerca de', (
+    tester,
+  ) async {
     final container = makeTestContainer();
     addTearDown(container.dispose);
     await _iniciarComoChofer(tester, container);
 
-    await tester.tap(find.byTooltip('Cerrar sesión'));
+    await _elegir(tester, 'Cambiar tema');
+    expect(find.text('Tema'), findsOneWidget);
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('¿Cerrar sesión?'), findsOneWidget);
 
-    await tester.tap(
-      find.descendant(of: find.byType(Dialog), matching: find.text('Cancelar')),
+    await _elegir(tester, 'Ayuda y soporte');
+    expect(find.text('Ayuda y soporte'), findsWidgets);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    await _elegir(tester, 'Acerca de');
+    expect(find.text('INDI Combustible'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    await _elegir(tester, 'Perfil');
+    expect(
+      container.read(appRouterProvider).state.uri.path,
+      RoutePaths.choferPerfil,
     );
+  });
+
+  testWidgets('cancelar logout conserva sesion', (tester) async {
+    final container = makeTestContainer();
+    addTearDown(container.dispose);
+    await _iniciarComoChofer(tester, container);
+
+    await _elegir(tester, 'Cerrar sesión');
+    expect(find.text('¿Cerrar sesión?'), findsOneWidget);
+    await tester.tap(find.text('Cancelar'));
     await tester.pumpAndSettle();
 
     expect(container.read(sessionProvider), isNotNull);
     expect(container.read(appRouterProvider).state.uri.path, RoutePaths.chofer);
   });
 
-  testWidgets('confirmar cierra una sola vez y dirige al login', (
+  testWidgets('confirmar logout ejecuta una vez y navega a login', (
     tester,
   ) async {
     final auth = _AuthContado();
@@ -112,29 +136,69 @@ void main() {
     addTearDown(container.dispose);
     await _iniciarComoChofer(tester, container);
 
-    final boton = tester.widget<IconButton>(
-      find.ancestor(
-        of: find.byTooltip('Cerrar sesión'),
-        matching: find.byType(IconButton),
-      ),
+    await _elegir(tester, 'Cerrar sesión');
+    final confirmar = find.descendant(
+      of: find.byType(Dialog),
+      matching: find.text('Cerrar sesión'),
     );
-    boton.onPressed!();
-    boton.onPressed!();
-    await tester.pumpAndSettle();
-    expect(find.text('¿Cerrar sesión?'), findsOneWidget);
-
-    await tester.tap(
-      find.descendant(
-        of: find.byType(Dialog),
-        matching: find.text('Cerrar sesión'),
-      ),
-    );
+    await tester.tap(confirmar);
+    await tester.tap(confirmar, warnIfMissed: false);
     await tester.pumpAndSettle();
 
     expect(auth.cierres, 1);
     expect(container.read(sessionProvider), isNull);
     expect(container.read(appRouterProvider).state.uri.path, RoutePaths.login);
   });
+
+  testWidgets('logout advierte y conserva la cola offline por usuario', (
+    tester,
+  ) async {
+    final container = makeTestContainer();
+    addTearDown(container.dispose);
+    await _iniciarComoChofer(tester, container);
+    final usuarioId = container.read(sessionProvider)!.id;
+    final cola = container.read(colaSolicitudesOfflineProvider);
+    await cola.agregar(
+      SolicitudPendienteOffline(
+        idLocal: '00000000-0000-4000-8000-000000000099',
+        usuarioId: usuarioId,
+        idempotencyKey: '00000000-0000-4000-8000-000000000099',
+        payloadFingerprint: 'a' * 64,
+        vehiculoId: 'vehiculo-prueba',
+        litrosSolicitados: 20,
+        esUrgente: false,
+        motivoChofer: null,
+        actividad: 'Prueba offline',
+        fechaProgramada: DateTime.utc(2026, 8, 22),
+        fotoTableroPath: 'foto-local.jpg',
+        creadaEn: DateTime.utc(2026, 8, 21),
+      ),
+    );
+    container.read(operacionesTickProvider.notifier).state++;
+
+    await _elegir(tester, 'Cerrar sesión');
+    expect(
+      find.textContaining('Se conservarán asociadas a esta cuenta'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+    expect(await cola.leer(), hasLength(1));
+  });
+}
+
+Future<void> _elegir(WidgetTester tester, String etiqueta) async {
+  await tester.tap(find.byTooltip('Más opciones'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(etiqueta));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _configurarVista(WidgetTester tester, Size size) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
 }
 
 Future<void> _iniciarComoChofer(

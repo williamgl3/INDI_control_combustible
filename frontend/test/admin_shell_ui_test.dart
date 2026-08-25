@@ -7,6 +7,8 @@ import 'package:indi_combustible/core/session_provider.dart';
 import 'package:indi_combustible/data/auth_repository.dart';
 import 'package:indi_combustible/router/app_router.dart';
 import 'package:indi_combustible/router/route_paths.dart';
+import 'package:indi_combustible/widgets/brand_header.dart';
+import 'package:indi_combustible/widgets/logo_glass.dart';
 
 import 'mocks/mock_auth_repository.dart';
 import 'test_helpers.dart';
@@ -22,6 +24,17 @@ void main() {
 
       final sidebar = find.byKey(const ValueKey('sidebar-administrativo'));
       expect(tester.getSize(sidebar).width, 240);
+      expect(
+        find.descendant(of: sidebar, matching: find.byType(IndiLogo)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(BrandHeader),
+          matching: find.byType(IndiLogo),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('OPERACIÓN'), findsOneWidget);
       expect(find.text('CONTROL'), findsOneWidget);
       expect(find.text('ADMINISTRACIÓN'), findsOneWidget);
@@ -193,12 +206,59 @@ void main() {
 
     expect(find.byKey(const ValueKey('sidebar-administrativo')), findsNothing);
     expect(find.byType(NavigationBar), findsOneWidget);
+    for (final etiqueta in const [
+      'Autorizar',
+      'Resumen',
+      'Finanzas',
+      'Inicio',
+      'Más',
+    ]) {
+      expect(find.text(etiqueta), findsOneWidget);
+    }
+    expect(find.byTooltip('Tema'), findsNothing);
+    expect(find.byTooltip('Cerrar sesión'), findsNothing);
+    expect(find.byTooltip('Más opciones'), findsOneWidget);
     await tester.tap(find.byTooltip('Notificaciones'));
     await tester.pumpAndSettle();
     expect(
       find.byKey(const ValueKey('hoja-notificaciones-movil')),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('dashboard móvil compacta header y distribuye métricas 2+1', (
+    tester,
+  ) async {
+    await _fijarSuperficie(tester, const Size(360, 640));
+    final container = makeTestContainer();
+    addTearDown(container.dispose);
+    await _iniciarComoAdmin(tester, container);
+
+    await tester.tap(find.text('Inicio'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dashboard administrativo'), findsOneWidget);
+    expect(
+      find.text('Resumen de consumo, importe y tendencia por periodo.'),
+      findsOneWidget,
+    );
+    expect(
+      tester.getSize(find.byType(BrandHeader)).height,
+      lessThanOrEqualTo(88),
+    );
+    final first = tester.getSize(
+      find.byKey(const ValueKey('dashboard-mobile-metric-0')),
+    );
+    final second = tester.getSize(
+      find.byKey(const ValueKey('dashboard-mobile-metric-1')),
+    );
+    final third = tester.getSize(
+      find.byKey(const ValueKey('dashboard-mobile-metric-2')),
+    );
+    expect(first.width, second.width);
+    expect(third.width, greaterThan(first.width * 1.9));
+    expect(find.text('Sin datos para este período'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

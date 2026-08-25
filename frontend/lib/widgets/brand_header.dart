@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// Header de marca — degradado azul, tomado directo del banner corporativo
-/// real de INDI. Reutilizado en Login y en los "home" de chofer/administrativo
-/// para dar coherencia visual e identidad de marca fuerte entre pantallas.
+/// Header de marca en el azul corporativo del tema. Reutilizado en los home y
+/// headers internos para dar estructura consistente sin decoración.
 ///
 /// El contenido ([child]) se pinta sobre fondo oscuro — usa
 /// [BrandHeader.onColor]/[BrandHeader.onColorMuted] para texto/íconos en
@@ -29,18 +28,10 @@ class BrandHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final mid = Color.lerp(colors.brandHeaderStart, colors.brandHeaderEnd, 0.5)!;
 
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [colors.brandHeaderStart, mid, colors.brandHeaderEnd],
-          stops: const [0.0, 0.55, 1.0],
-        ),
-      ),
+      color: colors.primary,
       padding: padding,
       child: child,
     );

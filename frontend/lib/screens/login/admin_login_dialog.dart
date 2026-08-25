@@ -6,6 +6,7 @@ import '../../core/validators.dart';
 import '../../data/auth_repository.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_dialog.dart';
+import '../../widgets/logo_glass.dart';
 
 /// Modal de "Acceso de administrador": la cuenta de administrador es
 /// ÚNICA y la crea el equipo (no hay registro de administrativos), por
@@ -74,10 +75,9 @@ class _AdminLoginDialogState extends ConsumerState<AdminLoginDialog> {
         color: colors.sidebarBackground,
         child: Row(
           children: [
-            CircleAvatar(
-              backgroundColor: colors.sidebarSurfaceAlt,
-              child: Icon(Icons.shield_outlined, color: colors.sidebarText),
-            ),
+            const IndiLogo(width: 32),
+            const SizedBox(width: 8),
+            Icon(Icons.shield_outlined, color: colors.sidebarText, size: 20),
             const SizedBox(width: 12),
             Expanded(
               child: Text(

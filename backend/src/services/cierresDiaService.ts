@@ -1,6 +1,7 @@
 import { pool } from '../db/pool';
 import { buscarCargaPorId } from './cargasService';
 import type { CierreDia } from '../types';
+import type { PoolClient } from 'pg';
 
 interface FilaCierre {
   id: string;
@@ -27,8 +28,8 @@ export async function cerrarDia(datos: {
   cargaId: string;
   kmFinal: number;
   fotoTableroPath: string;
-}): Promise<CierreDia> {
-  const { rows } = await pool.query<FilaCierre>(
+}, cliente?: PoolClient): Promise<CierreDia> {
+  const { rows } = await (cliente ?? pool).query<FilaCierre>(
     `INSERT INTO cierres_dia (chofer_id, carga_id, km_final, foto_tablero_path)
      VALUES ($1, $2, $3, $4)
      RETURNING *`,

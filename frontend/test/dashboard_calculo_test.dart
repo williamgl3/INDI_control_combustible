@@ -21,29 +21,75 @@ void main() {
     final ahora = DateTime(2026, 7, 17); // viernes
 
     test('dia: solo el mismo día', () {
-      expect(cargaDentroDePeriodo(DateTime(2026, 7, 17, 10), PeriodoDashboard.dia, ahora), isTrue);
-      expect(cargaDentroDePeriodo(DateTime(2026, 7, 16, 10), PeriodoDashboard.dia, ahora), isFalse);
+      expect(
+        cargaDentroDePeriodo(
+          DateTime(2026, 7, 17, 10),
+          PeriodoDashboard.dia,
+          ahora,
+        ),
+        isTrue,
+      );
+      expect(
+        cargaDentroDePeriodo(
+          DateTime(2026, 7, 16, 10),
+          PeriodoDashboard.dia,
+          ahora,
+        ),
+        isFalse,
+      );
     });
 
     test('semana: lunes a domingo de esa semana', () {
       expect(
-        cargaDentroDePeriodo(DateTime(2026, 7, 13), PeriodoDashboard.semana, ahora),
+        cargaDentroDePeriodo(
+          DateTime(2026, 7, 13),
+          PeriodoDashboard.semana,
+          ahora,
+        ),
         isTrue,
       );
       expect(
-        cargaDentroDePeriodo(DateTime(2026, 7, 20), PeriodoDashboard.semana, ahora),
+        cargaDentroDePeriodo(
+          DateTime(2026, 7, 20),
+          PeriodoDashboard.semana,
+          ahora,
+        ),
         isFalse,
       );
     });
 
     test('mes: mismo año y mes', () {
-      expect(cargaDentroDePeriodo(DateTime(2026, 7, 1), PeriodoDashboard.mes, ahora), isTrue);
-      expect(cargaDentroDePeriodo(DateTime(2026, 6, 30), PeriodoDashboard.mes, ahora), isFalse);
+      expect(
+        cargaDentroDePeriodo(DateTime(2026, 7, 1), PeriodoDashboard.mes, ahora),
+        isTrue,
+      );
+      expect(
+        cargaDentroDePeriodo(
+          DateTime(2026, 6, 30),
+          PeriodoDashboard.mes,
+          ahora,
+        ),
+        isFalse,
+      );
     });
 
     test('anio: mismo año', () {
-      expect(cargaDentroDePeriodo(DateTime(2026, 1, 1), PeriodoDashboard.anio, ahora), isTrue);
-      expect(cargaDentroDePeriodo(DateTime(2025, 12, 31), PeriodoDashboard.anio, ahora), isFalse);
+      expect(
+        cargaDentroDePeriodo(
+          DateTime(2026, 1, 1),
+          PeriodoDashboard.anio,
+          ahora,
+        ),
+        isTrue,
+      );
+      expect(
+        cargaDentroDePeriodo(
+          DateTime(2025, 12, 31),
+          PeriodoDashboard.anio,
+          ahora,
+        ),
+        isFalse,
+      );
     });
   });
 
@@ -55,7 +101,11 @@ void main() {
       _carga(DateTime(2026, 7, 17), 'veh-1', 20), // viernes
     ];
 
-    final serie = agruparLitrosPorSubperiodo(cargas, PeriodoDashboard.semana, ahora);
+    final serie = agruparLitrosPorSubperiodo(
+      cargas,
+      PeriodoDashboard.semana,
+      ahora,
+    );
 
     expect(serie, hasLength(7));
     expect(serie[0].etiqueta, 'Lun');

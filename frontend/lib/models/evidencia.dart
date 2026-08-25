@@ -118,7 +118,8 @@ class Evidencia {
       pendienteVincular: pendienteVincular ?? this.pendienteVincular,
       notas: notas ?? this.notas,
       creadaEn: creadaEn ?? this.creadaEn,
-      tipoCombustibleCargado: tipoCombustibleCargado ?? this.tipoCombustibleCargado,
+      tipoCombustibleCargado:
+          tipoCombustibleCargado ?? this.tipoCombustibleCargado,
       litros: litros ?? this.litros,
       precioPorLitro: precioPorLitro ?? this.precioPorLitro,
       montoPagado: montoPagado ?? this.montoPagado,
@@ -150,10 +151,10 @@ class Evidencia {
       precioPorLitro: (json['precioPorLitro'] as num?)?.toDouble(),
       montoPagado: (json['montoPagado'] as num?)?.toDouble(),
       requiereRevision: json['requiereRevision'] as bool? ?? false,
-      desviacionPrecioPorcentaje:
-          (json['desviacionPrecioPorcentaje'] as num?)?.toDouble(),
-      precioReferenciaComparado:
-          (json['precioReferenciaComparado'] as num?)?.toDouble(),
+      desviacionPrecioPorcentaje: (json['desviacionPrecioPorcentaje'] as num?)
+          ?.toDouble(),
+      precioReferenciaComparado: (json['precioReferenciaComparado'] as num?)
+          ?.toDouble(),
     );
   }
 

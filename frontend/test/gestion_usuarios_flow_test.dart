@@ -1,25 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:indi_combustible/core/providers.dart';
 import 'package:indi_combustible/data/auth_repository.dart';
-import 'mocks/mock_auth_repository.dart';
 import 'package:indi_combustible/models/perfil.dart';
 
+import 'mocks/mock_auth_repository.dart';
 import 'test_helpers.dart';
 
-/// El menú de acciones de cada fila en `ChoferesTab` lleva una
-/// `ValueKey('acciones-<id>')` — se usa esto en vez de `find.byTooltip`
-/// porque, con varias filas o SDKs de Flutter que duplican el nodo
-/// interno del tooltip, ese finder resulta ambiguo.
-Finder _accionesDe(String usuarioId) =>
-    find.byKey(ValueKey('acciones-$usuarioId'));
-
-/// Réplica del helper de `administrativo_flow_test.dart` — inicia sesión
-/// como el admin de prueba (`admin1`) para poder llegar a las pestañas
-/// del panel administrativo. `usuario`/`password` permiten reutilizarlo
-/// para el superadmin de prueba (`superadmin1`, ver `MockAuthRepository`).
-Future<void> _loginComoAdmin(
+Future<void> _login(
   WidgetTester tester, {
   String usuario = 'admin1',
   String password = 'admin1234',
@@ -27,305 +15,166 @@ Future<void> _loginComoAdmin(
   await tester.ensureVisible(find.text('Entrar como administrador'));
   await tester.tap(find.text('Entrar como administrador'));
   await tester.pumpAndSettle();
-
-  final dialog = find.byType(Dialog);
+  final d = find.byType(Dialog);
   await tester.enterText(
     find.descendant(
-      of: dialog,
+      of: d,
       matching: find.widgetWithText(TextFormField, 'Usuario del administrador'),
     ),
     usuario,
   );
   await tester.enterText(
     find.descendant(
-      of: dialog,
+      of: d,
       matching: find.widgetWithText(TextFormField, 'Contraseña'),
     ),
     password,
   );
-  await tester.tap(
-    find.descendant(of: dialog, matching: find.text('Ingresar')),
-  );
+  await tester.tap(find.descendant(of: d, matching: find.text('Ingresar')));
   await tester.pumpAndSettle();
 }
 
-Future<void> _irASeccion(WidgetTester tester, String etiqueta) async {
-  if (find.text(etiqueta).evaluate().isEmpty &&
+Future<void> _choferes(WidgetTester tester) async {
+  if (find.text('Choferes').evaluate().isEmpty &&
       find.byTooltip('Expandir navegación').evaluate().isNotEmpty) {
     await tester.tap(find.byTooltip('Expandir navegación'));
     await tester.pumpAndSettle();
   }
-  if (find.text(etiqueta).evaluate().isEmpty) {
-    await tester.scrollUntilVisible(
-      find.text(etiqueta),
-      180,
-      scrollable: find.descendant(
-        of: find.byKey(const ValueKey('sidebar-administrativo')),
-        matching: find.byType(Scrollable),
-      ),
-    );
-  }
-  await tester.ensureVisible(find.text(etiqueta));
-  await tester.tap(find.text(etiqueta));
+  await tester.tap(find.text('Choferes').last);
   await tester.pumpAndSettle();
 }
 
+Finder _menu(String id) => find.byKey(ValueKey('acciones-$id'));
+
 void main() {
   testWidgets(
-    'desactivar y reactivar un chofer desde el menú de acciones actualiza el badge',
+    'la vista excluye cuentas administrativas y permite buscar correo',
     (tester) async {
-      // Con 8 secciones en el sidebar admin, el tamaño lógico por
-      // defecto de flutter_test (800x600) ya no alcanza para mostrar
-      // todas sin recortar la última — se agranda a un tamaño de
-      // escritorio, igual que en `reportar_incidencia_flow_test.dart`.
       tester.view.physicalSize = const Size(1600, 1000);
-      tester.view.devicePixelRatio = 1.0;
+      tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-
-      final container = makeTestContainer();
-      addTearDown(container.dispose);
-      await pumpTestApp(tester, container: container);
-      await _loginComoAdmin(tester);
-      await _irASeccion(tester, 'Choferes');
-
-      expect(find.text('INACTIVO'), findsNothing);
-
-      final chofer1Id = container
-          .read(authRepositoryProvider)
-          .listarChoferes()
-          .first
-          .id;
-
-      await tester.tap(_accionesDe(chofer1Id));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Desactivar'));
-      await tester.pumpAndSettle();
-      // Confirmación (ConfirmarAccionDialog).
-      await tester.tap(find.text('Desactivar').last);
-      await tester.pumpAndSettle();
-
-      expect(find.text('INACTIVO'), findsOneWidget);
-      expect(
-        container.read(authRepositoryProvider).listarChoferes().first.activo,
-        isFalse,
+      final repo = _RepoMixto();
+      final c = makeTestContainer(
+        overridesExtra: [authRepositoryProvider.overrideWithValue(repo)],
       );
-
-      await tester.tap(_accionesDe(chofer1Id));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Reactivar'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Reactivar').last);
-      await tester.pumpAndSettle();
-
-      expect(find.text('INACTIVO'), findsNothing);
-      expect(
-        container.read(authRepositoryProvider).listarChoferes().first.activo,
-        isTrue,
+      addTearDown(c.dispose);
+      await pumpTestApp(tester, container: c);
+      await _login(tester);
+      await _choferes(tester);
+      expect(find.text('Juan Pérez'), findsOneWidget);
+      expect(find.text('Administrativo Mezclado'), findsNothing);
+      await tester.enterText(
+        find.widgetWithText(
+          TextField,
+          'Buscar por nombre, apellidos, usuario o correo',
+        ),
+        'chofer1@example.com',
       );
+      await tester.pump();
+      expect(find.text('Juan Pérez'), findsOneWidget);
     },
   );
 
-  testWidgets(
-    'resetear la contraseña de un chofer permite iniciar sesión con la nueva y no con la anterior',
-    (tester) async {
-      // Con 8 secciones en el sidebar admin, el tamaño lógico por
-      // defecto de flutter_test (800x600) ya no alcanza para mostrar
-      // todas sin recortar la última — se agranda a un tamaño de
-      // escritorio, igual que en `reportar_incidencia_flow_test.dart`.
-      tester.view.physicalSize = const Size(1600, 1000);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-
-      final container = makeTestContainer();
-      addTearDown(container.dispose);
-      await pumpTestApp(tester, container: container);
-      await _loginComoAdmin(tester);
-      await _irASeccion(tester, 'Choferes');
-
-      final chofer1 = container
-          .read(authRepositoryProvider)
-          .listarChoferes()
-          .first;
-
-      await tester.tap(_accionesDe(chofer1.id));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Resetear contraseña'));
-      await tester.pumpAndSettle();
-
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Contraseña nueva'),
-        'passwordNueva123',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Confirmar contraseña nueva'),
-        'passwordNueva123',
-      );
-      await tester.tap(find.text('Guardar'));
-      await tester.pumpAndSettle();
-
-      // El diálogo se cierra tras guardar con éxito.
-      expect(find.byType(Dialog), findsNothing);
-
-      // runAsync: login() usa Future.delayed real; sin esto, el timer no
-      // avanza dentro de la zona de fake async del test y el await se
-      // queda colgado para siempre (ver administrativo_flow_test.dart).
-      await tester.runAsync(() async {
-        await expectLater(
-          container
-              .read(authRepositoryProvider)
-              .login(usuario: chofer1.usuario, password: 'chofer123'),
-          throwsA(isA<AuthException>()),
-        );
-        final resultado = await container
-            .read(authRepositoryProvider)
-            .login(usuario: chofer1.usuario, password: 'passwordNueva123');
-        expect(resultado.perfil.usuario, chofer1.usuario);
-      });
-    },
-  );
-
-  testWidgets(
-    'crear administrador da de alta un usuario que puede iniciar sesión',
-    (tester) async {
-      // Con 8 secciones en el sidebar admin, el tamaño lógico por
-      // defecto de flutter_test (800x600) ya no alcanza para mostrar
-      // todas sin recortar la última — se agranda a un tamaño de
-      // escritorio, igual que en `reportar_incidencia_flow_test.dart`.
-      tester.view.physicalSize = const Size(1600, 1000);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-
-      final container = makeTestContainer();
-      addTearDown(container.dispose);
-      await pumpTestApp(tester, container: container);
-      // "Crear administrador" es exclusivo de superadmin — un
-      // administrativo normal ni siquiera ve el botón (ver el test de
-      // abajo, "un administrativo normal no ve el botón...").
-      await _loginComoAdmin(
-        tester,
-        usuario: 'superadmin1',
-        password: 'superadmin1234',
-      );
-      await _irASeccion(tester, 'Choferes');
-
-      await tester.tap(find.text('Crear administrador'));
-      await tester.pumpAndSettle();
-
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Nombre'),
-        'Beto Nuevo',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Apellido paterno'),
-        'Nuevo',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Apellido materno'),
-        'García',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Usuario'),
-        'beto.nuevo',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Correo'),
-        'beto.nuevo@example.com',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Contraseña'),
-        'password123',
-      );
-      await tester.tap(find.text('Crear'));
-      await tester.pumpAndSettle();
-
-      expect(find.byType(Dialog), findsNothing);
-
-      // runAsync: mismo motivo que en la prueba de resetear contraseña.
-      await tester.runAsync(() async {
-        final resultado = await container
-            .read(authRepositoryProvider)
-            .login(usuario: 'beto.nuevo', password: 'password123');
-        expect(resultado.perfil.esAdministrativo, isTrue);
-      });
-    },
-  );
-
-  testWidgets('un administrativo normal no ve el botón "Crear administrador"', (
+  testWidgets('desactivar exige motivo y actualiza solo la fila', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1600, 1000);
-    tester.view.devicePixelRatio = 1.0;
+    tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-
-    final container = makeTestContainer();
-    addTearDown(container.dispose);
-    await pumpTestApp(tester, container: container);
-    await _loginComoAdmin(tester);
-    await _irASeccion(tester, 'Choferes');
-
-    expect(find.text('Crear administrador'), findsNothing);
+    final c = makeTestContainer();
+    addTearDown(c.dispose);
+    await pumpTestApp(tester, container: c);
+    await _login(tester);
+    await _choferes(tester);
+    final p = c.read(authRepositoryProvider).listarChoferes().first;
+    await tester.tap(_menu(p.id));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Desactivar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Motivo obligatorio'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Motivo obligatorio'),
+      'Cuenta temporalmente suspendida',
+    );
+    await tester.tap(find.text('Desactivar').last);
+    await tester.pumpAndSettle();
+    expect(find.text('INACTIVO'), findsOneWidget);
   });
 
   testWidgets(
-    'el menú de acciones no ofrece Desactivar para el usuario en sesión actual',
+    'administrativo no ve eliminación y reset no muestra contraseñas',
     (tester) async {
-      // Con 8 secciones en el sidebar admin, el tamaño lógico por
-      // defecto de flutter_test (800x600) ya no alcanza para mostrar
-      // todas sin recortar la última — se agranda a un tamaño de
-      // escritorio, igual que en `reportar_incidencia_flow_test.dart`.
       tester.view.physicalSize = const Size(1600, 1000);
-      tester.view.devicePixelRatio = 1.0;
+      tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-
-      // El directorio hoy solo lista choferes (rol chofer) — el propio
-      // admin en sesión nunca aparece ahí, así que la protección de
-      // "no desactivarse a sí mismo" no tiene forma de fallar todavía.
-      // Para ejercitarla de cara al contrato ("el backend también puede
-      // traer usuarios con rol administrativo"), se usa un repo fake que
-      // agrega al admin de la sesión actual a esa misma lista — sin tocar
-      // sessionProvider directamente, para no disparar el guard de rutas
-      // (que saca a cualquier no-administrativo de /administrativo).
-      final container = makeTestContainer(
-        overridesExtra: [
-          authRepositoryProvider.overrideWithValue(
-            _AuthRepositoryConAdminEnDirectorio(),
-          ),
-        ],
-      );
-      addTearDown(container.dispose);
-      await pumpTestApp(tester, container: container);
-      await _loginComoAdmin(tester);
-      await _irASeccion(tester, 'Choferes');
-
-      expect(find.text('Ana Torres'), findsWidgets);
-
-      await tester.tap(_accionesDe('mock-admin-1'));
+      final c = makeTestContainer();
+      addTearDown(c.dispose);
+      await pumpTestApp(tester, container: c);
+      await _login(tester);
+      await _choferes(tester);
+      final p = c.read(authRepositoryProvider).listarChoferes().first;
+      await tester.tap(_menu(p.id));
       await tester.pumpAndSettle();
-
-      expect(find.text('Resetear contraseña'), findsOneWidget);
-      expect(find.text('Desactivar'), findsNothing);
+      expect(find.text('Eliminar definitivamente'), findsNothing);
+      await tester.tap(find.text('Restablecer contraseña'));
+      await tester.pumpAndSettle();
+      expect(find.text('Contraseña nueva'), findsNothing);
+      expect(find.text('Motivo'), findsOneWidget);
     },
   );
+
+  testWidgets('superadmin ve eliminación solo en cuenta inactiva', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final repo = _RepoInactivo();
+    final c = makeTestContainer(
+      overridesExtra: [authRepositoryProvider.overrideWithValue(repo)],
+    );
+    addTearDown(c.dispose);
+    await pumpTestApp(tester, container: c);
+    await _login(tester, usuario: 'superadmin1', password: 'superadmin1234');
+    await _choferes(tester);
+    final p = repo.listarChoferes().first;
+    await tester.tap(_menu(p.id));
+    await tester.pumpAndSettle();
+    expect(find.text('Eliminar definitivamente'), findsOneWidget);
+  });
 }
 
-/// Variante de [MockAuthRepository] cuyo directorio ([listarChoferes])
-/// también incluye al propio admin de prueba (`admin1`) — simula el
-/// escenario real que protege "no puede desactivarse a sí mismo": el
-/// admin viendo su propia fila en un directorio con roles mixtos.
-class _AuthRepositoryConAdminEnDirectorio extends MockAuthRepository {
+class _RepoMixto extends MockAuthRepository {
   @override
-  List<Perfil> listarChoferes() {
-    return [
-      ...super.listarChoferes(),
-      Perfil(
-        id: 'mock-admin-1',
-        usuario: 'admin1',
-        nombre: 'Ana',
-        apellidoPaterno: 'Torres',
-        correo: 'admin1@example.com',
-        fechaNacimiento: DateTime(1991, 8, 22),
-        rol: RolUsuario.administrativo,
-      ),
-    ];
-  }
+  List<Perfil> listarChoferes() => [
+    ...super.listarChoferes(),
+    const Perfil(
+      id: 'admin-mezclado',
+      usuario: 'admin.mezclado',
+      nombre: 'Administrativo',
+      apellidoPaterno: 'Mezclado',
+      correo: 'admin@example.com',
+      rol: RolUsuario.administrativo,
+    ),
+  ];
+}
+
+class _RepoInactivo extends MockAuthRepository {
+  _RepoInactivo();
+  @override
+  List<Perfil> listarChoferes() =>
+      super.listarChoferes().map((p) => p.copyWith(activo: false)).toList();
+  @override
+  Future<PaginaChoferes> cargarChoferes({
+    String buscar = '',
+    String estado = 'todos',
+    int pagina = 1,
+    int limite = 25,
+  }) async => (
+    datos: listarChoferes(),
+    pagina: 1,
+    limite: 25,
+    total: 1,
+    totalPaginas: 1,
+  );
 }

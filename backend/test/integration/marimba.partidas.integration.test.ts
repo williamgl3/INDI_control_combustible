@@ -37,7 +37,7 @@ suite('flujo Marimba/Pipa con PostgreSQL temporal', () => {
     const { rows } = await pool.query<{ total: string }>(
       'SELECT count(*) total FROM schema_migrations',
     );
-    expect(Number(rows[0]?.total)).toBe(31);
+    expect(Number(rows[0]?.total)).toBe(33);
     await pool.query(
       `INSERT INTO usuarios(id,usuario,password_hash,nombre,correo,rol) VALUES
        ($1,'supervisor-test','no-login','Supervisor','supervisor@test.invalid','supervisor'),

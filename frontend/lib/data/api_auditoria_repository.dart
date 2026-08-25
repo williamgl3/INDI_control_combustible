@@ -22,12 +22,28 @@ class ApiAuditoriaRepository implements AuditoriaRepository {
     required int limit,
     String? before,
   }) async {
-    final query = <String>['limit=$limit', if (before != null) 'before=$before'];
+    final query = <String>[
+      'limit=$limit',
+      if (before != null) 'before=$before',
+    ];
     final data = await _client.get('/auditoria?${query.join('&')}');
-    final lista = (data as Map<String, dynamic>)['registros'] as List;
-    return lista
-        .map((j) => RegistroAuditoria.fromJson(j as Map<String, dynamic>))
-        .toList();
+    if (data is! Map) {
+      throw const FormatException('La respuesta de auditoría no es un objeto.');
+    }
+    final lista = data['registros'];
+    if (lista is! List) {
+      throw const FormatException(
+        'La respuesta de auditoría no contiene registros.',
+      );
+    }
+    return List<RegistroAuditoria>.unmodifiable(
+      lista.map((registro) {
+        if (registro is! Map) {
+          throw const FormatException('Un registro de auditoría no es válido.');
+        }
+        return RegistroAuditoria.fromJson(Map<String, dynamic>.from(registro));
+      }),
+    );
   }
 
   @override

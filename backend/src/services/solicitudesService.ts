@@ -5,6 +5,7 @@ import { estaEnSemanaDe, finDeSemana, inicioDeSemana } from '../utils/semana';
 import { precioDeDecimal, presupuestoSemanalTotalDecimal } from './preciosService';
 import { buscarVehiculoPorId } from './vehiculosService';
 import { registrarAuditoria } from './auditoriaService';
+import type { PoolClient } from 'pg';
 import type {
   EstadoSolicitud,
   RolUsuario,
@@ -36,6 +37,8 @@ interface FilaSolicitud {
   comentario: string | null;
   creada_en: Date;
   foto_tablero_path: string | null;
+  idempotency_key?: string | null;
+  payload_fingerprint?: string | null;
   partidas_json?: SolicitudAutorizacion['partidas'];
 }
 
@@ -227,7 +230,9 @@ export async function enviarSolicitud(datos: {
   actividad: string;
   fechaProgramada: string;
   fotoTableroPath?: string | null | undefined;
-}): Promise<SolicitudAutorizacion> {
+  idempotencyKey: string;
+  payloadFingerprint: string;
+}, clienteExterno?: PoolClient): Promise<SolicitudAutorizacion & { replayed: boolean }> {
   const vehiculo = await validarUnidadParaSolicitud(datos.vehiculoId, datos.rol);
 
   // Bifurcación (ver migración 0029): "sin tipoCombustible confirmado"
@@ -285,12 +290,49 @@ export async function enviarSolicitud(datos: {
 
   const folio = seAutoAprueba ? await siguienteFolio() : null;
 
-  const { rows } = await pool.query<FilaSolicitud>(
+  const cliente = clienteExterno ?? await pool.connect();
+  const transaccionPropia = clienteExterno === undefined;
+  try {
+    if (transaccionPropia) await cliente.query('BEGIN');
+    // Puente de compatibilidad para operaciones creadas con 0032 antes de
+    // existir el ledger 0033. La UNIQUE del ledger sigue siendo el
+    // coordinador de concurrencia para peticiones nuevas.
+    const { rows: historicas } = await cliente.query<FilaSolicitud>(
+      'SELECT * FROM solicitudes_autorizacion WHERE chofer_id=$1 AND idempotency_key=$2 FOR UPDATE',
+      [datos.choferId, datos.idempotencyKey],
+    );
+    if (historicas[0]) {
+      if (historicas[0].payload_fingerprint !== datos.payloadFingerprint) {
+        throw new ApiError(409, 'La clave idempotente ya fue usada con otros datos.', {
+          codigo: 'IDEMPOTENCY_KEY_PAYLOAD_MISMATCH',
+        });
+      }
+      if (transaccionPropia) await cliente.query('COMMIT');
+      return { ...aSolicitud(historicas[0]), replayed: true };
+    }
+    const { rows: pendientes } = await cliente.query<FilaSolicitud>(
+      `SELECT * FROM solicitudes_autorizacion
+       WHERE chofer_id=$1 AND vehiculo_id=$2
+         AND (fecha_programada AT TIME ZONE 'America/Mexico_City')::date =
+             ($3::timestamptz AT TIME ZONE 'America/Mexico_City')::date
+         AND estado='pendiente'
+       ORDER BY creada_en LIMIT 1 FOR UPDATE`,
+      [datos.choferId, datos.vehiculoId, datos.fechaProgramada],
+    );
+    if (pendientes[0]) {
+      throw new ApiError(409, 'Ya existe una solicitud pendiente para esta unidad y fecha.', {
+        codigo: 'SOLICITUD_PENDIENTE_EXISTENTE',
+        detalles: { solicitudId: pendientes[0].id },
+      });
+    }
+
+    const { rows } = await cliente.query<FilaSolicitud>(
     `INSERT INTO solicitudes_autorizacion
        (chofer_id, vehiculo_id, litros_solicitados, litros_autorizados, costo_estimado,
         es_urgente, motivo_chofer, actividad, fecha_programada, estado, aprobada_por,
-        folio_autorizacion, comentario, foto_tablero_path)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        folio_autorizacion, comentario, foto_tablero_path, idempotency_key,
+        payload_fingerprint)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      RETURNING *`,
     [
       datos.choferId,
@@ -307,9 +349,40 @@ export async function enviarSolicitud(datos: {
       folio,
       comentario,
       datos.fotoTableroPath ?? null,
+      datos.idempotencyKey,
+      datos.payloadFingerprint,
     ],
   );
-  return aSolicitud(rows[0]!);
+    if (transaccionPropia) await cliente.query('COMMIT');
+    return { ...aSolicitud(rows[0]!), replayed: false };
+  } catch (error) {
+    if (transaccionPropia) await cliente.query('ROLLBACK');
+    const pg = error as { code?: string; constraint?: string };
+    if (pg.code === '23505') {
+      if (pg.constraint === 'uq_solicitudes_pendiente_negocio') {
+        const { rows } = await pool.query<FilaSolicitud>(
+          `SELECT * FROM solicitudes_autorizacion
+           WHERE chofer_id=$1 AND vehiculo_id=$2
+             AND (fecha_programada AT TIME ZONE 'America/Mexico_City')::date =
+                 ($3::timestamptz AT TIME ZONE 'America/Mexico_City')::date
+             AND estado='pendiente'
+           ORDER BY creada_en LIMIT 1`,
+          [datos.choferId, datos.vehiculoId, datos.fechaProgramada],
+        );
+        throw new ApiError(
+          409,
+          'Ya existe una solicitud pendiente para esta unidad y fecha.',
+          {
+            codigo: 'SOLICITUD_PENDIENTE_EXISTENTE',
+            ...(rows[0] ? { detalles: { solicitudId: rows[0].id } } : {}),
+          },
+        );
+      }
+    }
+    throw error;
+  } finally {
+    if (transaccionPropia) cliente.release();
+  }
 }
 
 export async function validarUnidadParaSolicitud(

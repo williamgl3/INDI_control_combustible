@@ -48,9 +48,10 @@ class NotificacionesVistasStorage {
   }
 }
 
-final notificacionesVistasStorageProvider = Provider<NotificacionesVistasStorage>(
-  (ref) => NotificacionesVistasStorage(),
-);
+final notificacionesVistasStorageProvider =
+    Provider<NotificacionesVistasStorage>(
+      (ref) => NotificacionesVistasStorage(),
+    );
 
 /// Notificaciones pendientes del chofer en sesión: solicitudes ya
 /// resueltas (aprobadas/rechazadas) que todavía no ha visto, más un
@@ -63,12 +64,13 @@ final notificacionesChoferProvider = FutureProvider<List<NotificacionItem>>((
 
   ref.watch(operacionesTickProvider);
   final repo = ref.watch(operacionesRepositoryProvider);
-  final vistas = await ref.read(notificacionesVistasStorageProvider).leerVistas();
+  final vistas = await ref
+      .read(notificacionesVistasStorageProvider)
+      .leerVistas();
 
   final solicitudes = repo.solicitudesDeChofer(perfil.id);
   final resueltas = solicitudes.where(
-    (s) =>
-        s.estado != EstadoSolicitud.pendiente && !vistas.contains(s.id),
+    (s) => s.estado != EstadoSolicitud.pendiente && !vistas.contains(s.id),
   );
 
   final items = <NotificacionItem>[
@@ -78,7 +80,8 @@ final notificacionesChoferProvider = FutureProvider<List<NotificacionItem>>((
         titulo: s.estado == EstadoSolicitud.aprobada
             ? 'Solicitud autorizada'
             : 'Solicitud rechazada',
-        subtitulo: '${s.litrosSolicitados.toStringAsFixed(1)} L'
+        subtitulo:
+            '${s.litrosSolicitados.toStringAsFixed(1)} L'
             '${s.comentario != null ? ' · ${s.comentario}' : ''}',
         icono: s.estado == EstadoSolicitud.aprobada
             ? 'check_circle_outline'
@@ -104,9 +107,7 @@ final notificacionesChoferProvider = FutureProvider<List<NotificacionItem>>((
   // que, al reintentarse tras reconectar, falló por una razón real del
   // servidor (no solo "seguía sin haber señal") — antes esto fallaba en
   // silencio, ver el pendiente que se resolvió en `auth_controller.dart`.
-  final avisos = await ref
-      .read(avisosSincronizacionOfflineProvider)
-      .leer();
+  final avisos = await ref.read(avisosSincronizacionOfflineProvider).leer();
   for (final aviso in avisos.where((a) => !vistas.contains(a.id))) {
     items.insert(
       0,
@@ -135,7 +136,9 @@ final notificacionesAdminProvider = FutureProvider<List<NotificacionItem>>((
 
   ref.watch(operacionesTickProvider);
   final repo = ref.watch(operacionesRepositoryProvider);
-  final vistas = await ref.read(notificacionesVistasStorageProvider).leerVistas();
+  final vistas = await ref
+      .read(notificacionesVistasStorageProvider)
+      .leerVistas();
 
   final pendientes = repo.todasLasSolicitudes.where(
     (s) => s.estado == EstadoSolicitud.pendiente && !vistas.contains(s.id),
@@ -151,7 +154,9 @@ final notificacionesAdminProvider = FutureProvider<List<NotificacionItem>>((
       ),
   ];
 
-  final incidencias = ref.watch(incidenciasRepositoryProvider).todasLasIncidencias;
+  final incidencias = ref
+      .watch(incidenciasRepositoryProvider)
+      .todasLasIncidencias;
   for (final inc in incidencias.where(
     (i) => i.estado == EstadoIncidencia.abierta && !vistas.contains(i.id),
   )) {

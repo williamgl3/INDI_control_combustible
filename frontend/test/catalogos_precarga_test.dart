@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:indi_combustible/core/providers.dart';
 import 'package:indi_combustible/core/auth_controller.dart';
 import 'package:indi_combustible/core/session_provider.dart';
+import 'package:indi_combustible/data/auth_repository.dart';
 import 'package:indi_combustible/models/perfil.dart';
 import 'package:indi_combustible/models/vehiculo.dart';
 
@@ -19,7 +20,20 @@ class _AuthContable extends MockAuthRepository {
   int cargasUsuarios = 0;
 
   @override
-  Future<void> cargarChoferes() async => cargasUsuarios++;
+  Future<PaginaChoferes> cargarChoferes({
+    String buscar = '',
+    String estado = 'todos',
+    int pagina = 1,
+    int limite = 25,
+  }) async {
+    cargasUsuarios++;
+    return super.cargarChoferes(
+      buscar: buscar,
+      estado: estado,
+      pagina: pagina,
+      limite: limite,
+    );
+  }
 }
 
 class _OperacionesContables extends MockOperacionesRepository {

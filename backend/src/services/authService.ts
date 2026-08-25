@@ -181,7 +181,7 @@ export interface ChoferOAdministrativo extends Perfil {
 /// listarlas todas desde el mismo endpoint.
 export async function listarChoferes(): Promise<ChoferOAdministrativo[]> {
   const { rows } = await pool.query<FilaUsuario>(
-    "SELECT * FROM usuarios WHERE rol IN ('chofer', 'administrativo') ORDER BY nombre, apellido_paterno",
+    "SELECT * FROM usuarios WHERE rol = 'chofer' ORDER BY nombre, apellido_paterno",
   );
   return rows.map((fila) => ({ ...aPerfil(fila), activo: fila.activo }));
 }

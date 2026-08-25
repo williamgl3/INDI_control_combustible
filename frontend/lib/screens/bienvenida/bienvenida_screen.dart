@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../router/route_paths.dart';
-import '../../theme/app_radii.dart';
+import '../../theme/app_spacing.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/auth_screen_shell.dart';
 
@@ -28,28 +28,22 @@ class BienvenidaScreen extends StatelessWidget {
               context,
             ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.sm),
           Text(
-            'Contro de combustible registra tus datos facil y rapido.',
+            'Registra y controla el combustible de forma rápida y sencilla.',
             textAlign: TextAlign.center,
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: AppSpacing.xxl),
           ElevatedButton(
             onPressed: () => context.go(RoutePaths.login),
             child: const Text('Iniciar sesión'),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.md),
           OutlinedButton(
             onPressed: () => context.go(RoutePaths.registroChofer),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: colors.textPrimary,
-              side: BorderSide(color: colors.border),
-              shape: RoundedRectangleBorder(borderRadius: AppRadii.cardRadius),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
             child: const Text('Crear cuenta'),
           ),
         ],

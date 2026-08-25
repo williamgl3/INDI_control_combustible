@@ -234,6 +234,8 @@ class MockOperacionesRepository implements OperacionesRepository {
   /// para el admin al revisar.
   @override
   Future<SolicitudAutorizacion> enviarSolicitud({
+    required String idempotencyKey,
+    required String payloadFingerprint,
     required String choferId,
     required Vehiculo vehiculo,
     required double litrosSolicitados,

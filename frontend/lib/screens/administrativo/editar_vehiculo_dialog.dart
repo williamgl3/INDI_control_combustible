@@ -195,7 +195,10 @@ class _EditarVehiculoDialogState extends ConsumerState<EditarVehiculoDialog> {
               ),
               items: tiposUnidadAdministrables
                   .map(
-                    (tipo) => DropdownMenuItem(value: tipo, child: Text(tipo)),
+                    (tipo) => DropdownMenuItem(
+                      value: tipo,
+                      child: Text(tipo, overflow: TextOverflow.ellipsis),
+                    ),
                   )
                   .toList(),
               onChanged: _cargando
@@ -266,7 +269,7 @@ class _EditarVehiculoDialogState extends ConsumerState<EditarVehiculoDialog> {
                   .map<DropdownMenuItem<String?>>(
                     (tipo) => DropdownMenuItem<String?>(
                       value: tipo,
-                      child: Text(tipo),
+                      child: Text(tipo, overflow: TextOverflow.ellipsis),
                     ),
                   )
                   .toList(),

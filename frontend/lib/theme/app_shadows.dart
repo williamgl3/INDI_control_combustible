@@ -36,7 +36,11 @@ class AppShadows extends ThemeExtension<AppShadows> {
       BoxShadow(color: Color(0x26000000), blurRadius: 24, offset: Offset(0, 8)),
     ],
     floating: [
-      BoxShadow(color: Color(0x1F000000), blurRadius: 24, offset: Offset(0, 10)),
+      BoxShadow(
+        color: Color(0x1F000000),
+        blurRadius: 24,
+        offset: Offset(0, 10),
+      ),
     ],
   );
 
@@ -48,7 +52,11 @@ class AppShadows extends ThemeExtension<AppShadows> {
       BoxShadow(color: Color(0x59000000), blurRadius: 24, offset: Offset(0, 8)),
     ],
     floating: [
-      BoxShadow(color: Color(0x66000000), blurRadius: 24, offset: Offset(0, 10)),
+      BoxShadow(
+        color: Color(0x66000000),
+        blurRadius: 24,
+        offset: Offset(0, 10),
+      ),
     ],
   );
 

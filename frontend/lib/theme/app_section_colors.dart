@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_colors.dart';
+
 /// Colores de acento por sección del panel administrativo — cada sección
 /// tiene su propio color de identidad en vez de que todo sea el mismo
 /// azul de marca, para que la navegación se sienta más viva y sea más
@@ -23,7 +25,7 @@ class AppSectionColors {
   // hex que `colors.primary` (#0165F9), que esta clase reserva para
   // CTAs/selección, no para iconografía de categoría — quedaba fuera de
   // su propia regla.
-  static const autorizaciones = Color(0xFF0A84FF);
+  static const autorizaciones = AppColors.brandBlue;
   static const concentrado = Color(0xFF0D9488); // verde azulado — reportes
   static const finanzas = Color(0xFF16A34A); // verde — dinero/presupuesto
   static const vehiculos = Color(0xFFD97706); // ámbar — catálogo de unidades

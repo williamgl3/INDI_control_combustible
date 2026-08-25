@@ -71,7 +71,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final colors = context.colors;
 
     return AuthScreenShell(
-      titulo: null,
       subtitulo: null,
       centrarContenido: false,
       child: AutofillGroup(
@@ -82,6 +81,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
+              Text(
+                'Iniciar sesión',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
               TextFormField(
                 controller: _usuarioController,
                 decoration: const InputDecoration(

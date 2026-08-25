@@ -1,19 +1,50 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../core/app_logger.dart';
 import '../core/token_storage.dart';
 
+final _storageKeyArchivoPattern = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:jpe?g|png|webp|heic|heif)$',
+  caseSensitive: false,
+);
+
+/// Convierte únicamente referencias internas controladas al endpoint
+/// privado. Rechaza hosts, schemes, query strings y rutas arbitrarias.
+String normalizarReferenciaArchivo(String referencia) {
+  final uri = Uri.tryParse(referencia);
+  if (uri == null ||
+      uri.hasScheme ||
+      uri.hasAuthority ||
+      uri.hasQuery ||
+      uri.hasFragment) {
+    throw ApiException('La referencia del archivo no es válida.');
+  }
+  final segmentos = uri.pathSegments;
+  if (segmentos.length != 2 ||
+      (segmentos.first != 'uploads' && segmentos.first != 'archivos')) {
+    throw ApiException('La referencia del archivo no es válida.');
+  }
+  final storageKey = segmentos.last;
+  if (!_storageKeyArchivoPattern.hasMatch(storageKey)) {
+    throw ApiException('La referencia del archivo no es válida.');
+  }
+  return '/archivos/$storageKey';
+}
+
 /// Excepción lanzada por [ApiClient] cuando el backend responde con un
 /// error, con un mensaje ya listo para mostrar al usuario (el backend
 /// siempre responde `{ "error": "mensaje" }` — ver `errorHandler.ts`).
 class ApiException implements Exception {
-  ApiException(this.mensaje, {this.status});
+  ApiException(this.mensaje, {this.status, this.codigo, this.solicitudId});
   final String mensaje;
   final int? status;
+  final String? codigo;
+  final String? solicitudId;
 
   @override
   String toString() => mensaje;
@@ -31,6 +62,7 @@ class ApiClient {
 
   final TokenStorage _tokenStorage;
   final http.Client _http;
+  Future<bool>? _refreshEnCurso;
 
   /// Se llama cuando un 401 no se pudo resolver ni con refresh token —
   /// además de borrar el storage (ver `_limpiarSesionExpirada`), esto es
@@ -79,6 +111,24 @@ class ApiClient {
     }
   }
 
+  /// Comparte una sola rotación de refresh token entre todas las peticiones
+  /// que fallen con 401 al mismo tiempo. El backend rota el token en cada uso;
+  /// enviarlo en paralelo haría que una de las solicitudes use un token que
+  /// la otra acaba de revocar.
+  Future<bool> _refrescarTokenUnaVez() {
+    final existente = _refreshEnCurso;
+    if (existente != null) return existente;
+
+    final futuro = _intentarRefrescarToken();
+    _refreshEnCurso = futuro;
+    futuro.whenComplete(() {
+      if (identical(_refreshEnCurso, futuro)) {
+        _refreshEnCurso = null;
+      }
+    });
+    return futuro;
+  }
+
   /// Borra ambos tokens y notifica [onSesionExpirada]. El guard de rutas
   /// (`app_router.dart`) reacciona solo a `sessionProvider`, no a
   /// `TokenStorage` directamente — sin el callback, la sesión quedaba
@@ -99,19 +149,28 @@ class ApiClient {
   /// [onSesionExpirada], que saca al usuario a `/login` DE INMEDIATO, no
   /// solo en el próximo arranque de la app) y deja que la respuesta 401
   /// original se propague como [ApiException].
-  Future<dynamic> _conReintentoDeToken(
+  Future<http.Response> _respuestaConReintentoDeToken(
     Future<http.Response> Function() enviar,
   ) async {
     final res = await enviar();
-    if (res.statusCode != 401) return _decode(res);
+    if (res.statusCode != 401) return res;
 
-    final refrescado = await _intentarRefrescarToken();
+    final refrescado = await _refrescarTokenUnaVez();
     if (!refrescado) {
       await _limpiarSesionExpirada();
-      return _decode(res);
+      return res;
     }
     final res2 = await enviar();
-    return _decode(res2);
+    if (res2.statusCode == 401) {
+      await _limpiarSesionExpirada();
+    }
+    return res2;
+  }
+
+  Future<dynamic> _conReintentoDeToken(
+    Future<http.Response> Function() enviar,
+  ) async {
+    return _decode(await _respuestaConReintentoDeToken(enviar));
   }
 
   dynamic _decode(http.Response res) {
@@ -120,10 +179,14 @@ class ApiClient {
       return jsonDecode(utf8.decode(res.bodyBytes));
     }
     var mensaje = 'Ocurrió un error. Intenta de nuevo.';
+    String? codigo;
+    String? solicitudId;
     try {
       final body = jsonDecode(utf8.decode(res.bodyBytes));
       if (body is Map && body['error'] is String) {
         mensaje = body['error'] as String;
+        codigo = body['codigo'] as String?;
+        solicitudId = body['solicitudId'] as String?;
       }
     } catch (_) {
       // Respuesta de error sin cuerpo JSON válido — se conserva el
@@ -133,7 +196,12 @@ class ApiClient {
       'ApiClient ${res.request?.method} ${res.request?.url.path}',
       'HTTP ${res.statusCode}: $mensaje',
     );
-    throw ApiException(mensaje, status: res.statusCode);
+    throw ApiException(
+      mensaje,
+      status: res.statusCode,
+      codigo: codigo,
+      solicitudId: solicitudId,
+    );
   }
 
   /// Envuelve cualquier llamada HTTP: registra en [AppLogger] las fallas
@@ -169,6 +237,22 @@ class ApiClient {
     });
   }
 
+  /// Descarga una evidencia mediante el endpoint privado. Los bytes no se
+  /// registran ni se decodifican como JSON; los errores conservan el manejo
+  /// y la renovación de sesión usados por el resto del cliente.
+  Future<Uint8List> descargarArchivo(String referencia) {
+    return _conManejoDeErrores('ApiClient.descargarArchivo', () async {
+      final path = normalizarReferenciaArchivo(referencia);
+      final respuesta = await _respuestaConReintentoDeToken(
+        () async => _http.get(_uri(path), headers: await _headers(json: false)),
+      );
+      if (respuesta.statusCode < 200 || respuesta.statusCode >= 300) {
+        _decode(respuesta);
+      }
+      return respuesta.bodyBytes;
+    });
+  }
+
   Future<dynamic> post(String path, {Object? body}) {
     return _conManejoDeErrores('ApiClient.post $path', () async {
       return _conReintentoDeToken(
@@ -193,6 +277,18 @@ class ApiClient {
     });
   }
 
+  Future<dynamic> delete(String path, {Object? body}) {
+    return _conManejoDeErrores('ApiClient.delete $path', () async {
+      return _conReintentoDeToken(
+        () async => _http.delete(
+          _uri(path),
+          headers: await _headers(),
+          body: body == null ? null : jsonEncode(body),
+        ),
+      );
+    });
+  }
+
   /// POST multipart — para /cargas y /cierres-dia, que reciben las fotos
   /// como `multipart/form-data` (ver `middleware/upload.ts`). `campos`
   /// son los valores de texto/número; `archivos` mapea el nombre del
@@ -201,6 +297,7 @@ class ApiClient {
   Future<dynamic> postMultipart(
     String path, {
     required Map<String, String> campos,
+    Map<String, String> headers = const {},
     Map<String, String?> archivos = const {},
     // Igual que `archivos`, pero para campos que aceptan varios archivos
     // bajo el mismo nombre (ej. `fotos`, hasta 5) — multer/el backend los
@@ -209,21 +306,51 @@ class ApiClient {
   }) {
     return _conManejoDeErrores('ApiClient.postMultipart $path', () async {
       Future<http.Response> enviar() async {
-        final req = http.MultipartRequest('POST', _uri(path));
+        final uri = _uri(path);
+        final req = http.MultipartRequest('POST', uri);
         req.headers.addAll(await _headers(json: false));
+        req.headers.addAll(headers);
         req.fields.addAll(campos);
         for (final entry in archivos.entries) {
           final ruta = entry.value;
           if (ruta == null) continue;
+          if (!await File(ruta).exists()) {
+            throw ApiException('No se encontró la evidencia seleccionada.');
+          }
           req.files.add(await http.MultipartFile.fromPath(entry.key, ruta));
         }
         for (final entry in archivosMultiples.entries) {
           for (final ruta in entry.value) {
+            if (!await File(ruta).exists()) {
+              throw ApiException('No se encontró una evidencia seleccionada.');
+            }
             req.files.add(await http.MultipartFile.fromPath(entry.key, ruta));
           }
         }
+        if (kDebugMode) {
+          final camposDebug = <String, Object?>{
+            for (final entry in campos.entries)
+              entry.key: entry.key.toLowerCase().contains('motivo')
+                  ? '<redacted>'
+                  : entry.value,
+          };
+          debugPrint('POST multipart $uri');
+          debugPrint('Token presente: ${req.headers['Authorization'] != null}');
+          debugPrint('Campos: $camposDebug');
+          debugPrint(
+            'Archivos: ${archivos.entries.map((e) => '${e.key}=${e.value != null}').join(', ')}',
+          );
+        }
         final streamed = await _http.send(req);
-        return http.Response.fromStream(streamed);
+        final response = await http.Response.fromStream(streamed);
+        if (kDebugMode) {
+          final body = response.body;
+          debugPrint(
+            'Respuesta POST multipart ${response.statusCode}: '
+            '${body.length > 1000 ? '${body.substring(0, 1000)}…' : body}',
+          );
+        }
+        return response;
       }
 
       return _conReintentoDeToken(enviar);

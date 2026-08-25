@@ -97,43 +97,213 @@ class ApiAuthRepository implements AuthRepository {
   List<Perfil> listarChoferes() => List.unmodifiable(_choferes);
 
   @override
-  Future<void> cargarChoferes() async {
-    final data = await _client.get('/choferes');
-    _choferes = (data as List)
-        .map((j) => Perfil.fromJson(j as Map<String, dynamic>))
-        .toList();
+  Future<PaginaChoferes> cargarChoferes({
+    String buscar = '',
+    String estado = 'todos',
+    int pagina = 1,
+    int limite = 25,
+  }) async {
+    final query = Uri(
+      queryParameters: {
+        'buscar': buscar,
+        'estado': estado,
+        'pagina': '$pagina',
+        'limite': '$limite',
+      },
+    ).query;
+    try {
+      final respuesta = await _client.get('/choferes?$query');
+      if (respuesta is! Map) {
+        throw const FormatException('La respuesta no es un objeto JSON.');
+      }
+      final data = Map<String, dynamic>.from(respuesta);
+      final datosJson = data['datos'];
+      if (datosJson is! List) {
+        throw const FormatException('Falta la lista de choferes.');
+      }
+
+      final perfiles = <Perfil>[];
+      for (final elemento in datosJson) {
+        if (elemento is! Map) {
+          throw const FormatException('Un perfil no es un objeto JSON.');
+        }
+        perfiles.add(Perfil.fromJson(Map<String, dynamic>.from(elemento)));
+      }
+
+      final paginaRespuesta = _enteroPaginacion(data, 'pagina', minimo: 1);
+      final limiteRespuesta = _enteroPaginacion(
+        data,
+        'limite',
+        minimo: 1,
+        maximo: 100,
+      );
+      final total = _enteroPaginacion(data, 'total', minimo: 0);
+      final totalPaginas = _enteroPaginacion(data, 'totalPaginas', minimo: 0);
+      final totalPaginasEsperado = total == 0
+          ? 0
+          : (total / limiteRespuesta).ceil();
+      if (totalPaginas != totalPaginasEsperado ||
+          perfiles.length > limiteRespuesta ||
+          (totalPaginas > 0 && paginaRespuesta > totalPaginas)) {
+        throw const FormatException('Metadatos de paginación inconsistentes.');
+      }
+
+      _choferes = List<Perfil>.of(perfiles);
+      return (
+        datos: List<Perfil>.unmodifiable(_choferes),
+        pagina: paginaRespuesta,
+        limite: limiteRespuesta,
+        total: total,
+        totalPaginas: totalPaginas,
+      );
+    } on ApiException catch (e) {
+      throw AuthException(e.mensaje);
+    } on Object {
+      throw AuthException(
+        'La respuesta de choferes no tiene un formato válido.',
+      );
+    }
+  }
+
+  int _enteroPaginacion(
+    Map<String, dynamic> data,
+    String campo, {
+    required int minimo,
+    int? maximo,
+  }) {
+    final valor = data[campo];
+    final entero = switch (valor) {
+      int numero => numero,
+      num numero when numero.isFinite && numero == numero.truncate() =>
+        numero.toInt(),
+      String texto => int.tryParse(texto),
+      _ => null,
+    };
+    if (entero == null ||
+        entero < minimo ||
+        (maximo != null && entero > maximo)) {
+      throw FormatException('Metadato de paginación inválido: $campo.');
+    }
+    return entero;
   }
 
   @override
-  Future<void> cambiarEstado({
-    required String usuarioId,
-    required bool activo,
-  }) async {
+  Future<DetalleChofer> obtenerChofer(String usuarioId) async {
     try {
-      await _client.patch(
-        '/usuarios/$usuarioId/estado',
-        body: {'activo': activo},
+      final data =
+          await _client.get('/usuarios/choferes/$usuarioId')
+              as Map<String, dynamic>;
+      final a = data['actividad'] as Map<String, dynamic>;
+      return (
+        chofer: Perfil.fromJson(data['chofer'] as Map<String, dynamic>),
+        actividad: (
+          solicitudes: a['solicitudes'] as int,
+          cargas: a['cargas'] as int,
+          evidencias: a['evidencias'] as int,
+          incidencias: a['incidencias'] as int,
+          cierres: a['cierres'] as int,
+          recorridos: a['recorridos'] as int,
+          despachos: a['despachos'] as int,
+          auditoria: a['auditoria'] as int,
+        ),
       );
-      final indice = _choferes.indexWhere((p) => p.id == usuarioId);
-      if (indice != -1) {
-        _choferes = [..._choferes];
-        _choferes[indice] = _choferes[indice].copyWith(activo: activo);
-      }
     } on ApiException catch (e) {
       throw AuthException(e.mensaje);
     }
   }
 
   @override
-  Future<void> resetearPassword({
+  Future<Perfil> editarChofer({
     required String usuarioId,
-    required String passwordNueva,
+    required String version,
+    required Map<String, dynamic> cambios,
   }) async {
     try {
-      await _client.post(
-        '/usuarios/$usuarioId/resetear-password',
-        body: {'passwordNueva': passwordNueva},
+      final data = await _client.patch(
+        '/usuarios/choferes/$usuarioId',
+        body: {...cambios, 'version': version},
       );
+      final actualizado = Perfil.fromJson(data as Map<String, dynamic>);
+      _reemplazar(actualizado);
+      return actualizado;
+    } on ApiException catch (e) {
+      throw AuthException(e.mensaje);
+    }
+  }
+
+  void _reemplazar(Perfil perfil) {
+    final indice = _choferes.indexWhere((p) => p.id == perfil.id);
+    if (indice != -1) {
+      _choferes = [..._choferes]..[indice] = perfil;
+    }
+  }
+
+  @override
+  Future<Perfil> cambiarEstado({
+    required String usuarioId,
+    required bool activo,
+    required String motivo,
+  }) async {
+    try {
+      final data = await _client.post(
+        '/usuarios/choferes/$usuarioId/${activo ? 'reactivar' : 'desactivar'}',
+        body: {'motivo': motivo},
+      );
+      final actualizado = Perfil.fromJson(data as Map<String, dynamic>);
+      _reemplazar(actualizado);
+      return actualizado;
+    } on ApiException catch (e) {
+      throw AuthException(e.mensaje);
+    }
+  }
+
+  @override
+  Future<String> resetearPassword({
+    required String usuarioId,
+    required String motivo,
+  }) async {
+    try {
+      final data = await _client.post(
+        '/usuarios/$usuarioId/resetear-password',
+        body: {'motivo': motivo},
+      );
+      return (data as Map<String, dynamic>)['mensaje'] as String;
+    } on ApiException catch (e) {
+      throw AuthException(e.mensaje);
+    }
+  }
+
+  @override
+  Future<ElegibilidadEliminacion> consultarElegibilidadEliminacion(
+    String usuarioId,
+  ) async {
+    try {
+      final data =
+          await _client.get(
+                '/usuarios/choferes/$usuarioId/elegibilidad-eliminacion',
+              )
+              as Map<String, dynamic>;
+      return (
+        elegible: data['elegible'] as bool,
+        tieneRelaciones: data['tieneRelaciones'] as bool,
+      );
+    } on ApiException catch (e) {
+      throw AuthException(e.mensaje);
+    }
+  }
+
+  @override
+  Future<void> eliminarChofer({
+    required String usuarioId,
+    required String usuarioConfirmado,
+    required String motivo,
+  }) async {
+    try {
+      await _client.delete(
+        '/usuarios/choferes/$usuarioId',
+        body: {'usuarioConfirmado': usuarioConfirmado, 'motivo': motivo},
+      );
+      _choferes = _choferes.where((p) => p.id != usuarioId).toList();
     } on ApiException catch (e) {
       throw AuthException(e.mensaje);
     }

@@ -2,9 +2,11 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, ApiError } from '../utils/asyncHandler';
 import { requireAuth, requireRole, type AuthRequest } from '../middleware/auth';
-import { limpiarArchivosAnteError, upload, rutaPublicaDeArchivo, verificarMagicBytes } from '../middleware/upload';
+import { eliminarArchivosNuevos, limpiarArchivosAnteError, limpiarArchivosDeReplay, upload, rutaPublicaDeArchivo, verificarMagicBytes } from '../middleware/upload';
 import * as recorridosService from '../services/recorridosMarimbaService';
 import * as despachosService from '../services/despachosMarimbaService';
+import { ejecutarIdempotente, leerIdempotencyKey, OPERACIONES_IDEMPOTENTES, requestIdDe } from '../services/idempotenciaService';
+import { fingerprintRequest, hashesDeArchivos } from '../utils/requestFingerprint';
 
 export const recorridosMarimbaRouter=Router();
 recorridosMarimbaRouter.use(requireAuth as never);
@@ -43,8 +45,13 @@ recorridosMarimbaRouter.post('/',requireRole('supervisor') as never,
   asyncHandler(async(req:AuthRequest,res)=>{const d=abrirSchema.parse(req.body);
     const operadorId=d.operadorId??(req.usuarioActual!.rol==='supervisor'?req.usuarioActual!.sub:null);
     if(!operadorId)throw new ApiError(400,'Indica el supervisor responsable del recorrido.');
-    res.status(201).json(await recorridosService.crearRecorrido({...d,operadorId,
-      registradoPor:req.usuarioActual!.sub}));}));
+    const key=leerIdempotencyKey(req,false);const requestHash=fingerprintRequest({...d,operadorId,actorId:req.usuarioActual!.sub});
+    const resultado=await ejecutarIdempotente({usuarioId:req.usuarioActual!.sub,
+      operacion:OPERACIONES_IDEMPOTENTES.abrirRecorridoMarimba,idempotencyKey:key,requestHash,requestId:requestIdDe(req),
+      ejecutar:async(cliente)=>{const recorrido=await recorridosService.crearRecorrido({...d,operadorId,
+        registradoPor:req.usuarioActual!.sub},cliente);return{status:201,body:recorrido,
+          resourceType:'recorrido_marimba',resourceId:recorrido.id};}});
+    if(resultado.replayed)res.set('Idempotency-Replayed','true');res.status(resultado.status).json(resultado.body);}));
 
 const despachoSchema=z.object({vehiculoDestinoId:z.string().uuid(),operadorTexto:z.string().trim().min(1).max(150),
   tipoCombustible:z.enum(['Diésel','Magna','Premium']),
@@ -57,12 +64,21 @@ recorridosMarimbaRouter.post('/:id/despachos',requireRole('supervisor') as never
     if(!recorrido)throw new ApiError(404,'El recorrido no está disponible.');const d=despachoSchema.parse(req.body);
     const f=req.files as Record<string,Express.Multer.File[]>|undefined;const hor=f?.fotoHorometro?.[0];
     if(!hor)throw new ApiError(400,'La foto del horómetro es obligatoria.');
-    res.status(201).json(await recorridosService.agregarDespacho(recorrido.id,{...d,marimbaId:recorrido.marimbaId,
+    const key=leerIdempotencyKey(req,false);const requestHash=fingerprintRequest({...d,recorridoId:recorrido.id,
+      marimbaId:recorrido.marimbaId,actorId:req.usuarioActual!.sub,
+      archivos:await hashesDeArchivos({fotoHorometro:f?.fotoHorometro,fotoMedidor:f?.fotoMedidor,fotoEvidencia:f?.fotoEvidencia})});
+    const resultado=await ejecutarIdempotente({usuarioId:req.usuarioActual!.sub,
+      operacion:OPERACIONES_IDEMPOTENTES.crearDespachoMarimba,idempotencyKey:key,requestHash,requestId:requestIdDe(req),
+      ejecutar:async(cliente)=>{const despacho=await despachosService.crearDespacho({...d,marimbaId:recorrido.marimbaId,
+      recorridoId:recorrido.id,responsableId:recorrido.operadorId,
       registradoPor:req.usuarioActual!.sub,
       actorRol:req.usuarioActual!.rol,
       fotoHorometroPath:rutaPublicaDeArchivo(hor.filename),
       fotoMedidorPath:f?.fotoMedidor?.[0]?rutaPublicaDeArchivo(f.fotoMedidor[0].filename):null,
-      fotoEvidenciaPath:f?.fotoEvidencia?.[0]?rutaPublicaDeArchivo(f.fotoEvidencia[0].filename):null}));}));
+      fotoEvidenciaPath:f?.fotoEvidencia?.[0]?rutaPublicaDeArchivo(f.fotoEvidencia[0].filename):null},cliente);
+      return{status:201,body:despacho,resourceType:'despacho_marimba',resourceId:despacho.id};}});
+    await limpiarArchivosDeReplay(req,resultado.replayed);if(resultado.replayed)res.set('Idempotency-Replayed','true');
+    res.status(resultado.status).json(resultado.body);}));
 
 const cerrarSchema=z.object({existenciaFisica:z.coerce.number().nonnegative(),
   observaciones:z.string().trim().max(1000).nullish(),kmCierre:z.coerce.number().nonnegative().nullish(),
@@ -72,8 +88,15 @@ recorridosMarimbaRouter.post('/:id/cerrar',requireRole('supervisor') as never,
   asyncHandler(async(req:AuthRequest,res)=>{const d=cerrarSchema.parse(req.body);
     const f=req.files as Record<string,Express.Multer.File[]>|undefined;const cierre=f?.fotoCierre?.[0];const nivel=f?.fotoNivel?.[0];
     if(!cierre||!nivel)throw new ApiError(400,'Las evidencias de cierre y nivel son obligatorias.');
-    res.json(await recorridosService.cerrarRecorrido(req.params.id as string,{...d,
+    const key=leerIdempotencyKey(req,false);const requestHash=fingerprintRequest({...d,recorridoId:req.params.id,
+      actorId:req.usuarioActual!.sub,archivos:await hashesDeArchivos({fotoCierre:f?.fotoCierre,fotoNivel:f?.fotoNivel})});
+    const resultado=await ejecutarIdempotente({usuarioId:req.usuarioActual!.sub,
+      operacion:OPERACIONES_IDEMPOTENTES.cerrarRecorridoMarimba,idempotencyKey:key,requestHash,requestId:requestIdDe(req),
+      ejecutar:async(cliente)=>{const recorrido=await recorridosService.cerrarRecorrido(req.params.id as string,{...d,
       fotoCierrePath:rutaPublicaDeArchivo(cierre.filename),fotoNivelPath:rutaPublicaDeArchivo(nivel.filename)},
-      req.usuarioActual!.sub,req.usuarioActual!.rol));}));
+      req.usuarioActual!.sub,req.usuarioActual!.rol,cliente);return{status:200,body:recorrido,
+        resourceType:'recorrido_marimba',resourceId:recorrido.id};}});
+    await limpiarArchivosDeReplay(req,resultado.replayed);if(resultado.replayed)res.set('Idempotency-Replayed','true');
+    res.status(resultado.status).json(resultado.body);}));
 
 recorridosMarimbaRouter.use(limpiarArchivosAnteError);

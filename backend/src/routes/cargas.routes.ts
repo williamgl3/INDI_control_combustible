@@ -5,6 +5,8 @@ import { requireAuth, requireRole, type AuthRequest } from '../middleware/auth';
 import { ApiError } from '../utils/asyncHandler';
 import {
   limpiarArchivosAnteError,
+  eliminarArchivosNuevos,
+  limpiarArchivosDeReplay,
   upload,
   rutaPublicaDeArchivo,
   verificarMagicBytes,
@@ -12,6 +14,8 @@ import {
 import * as cargasService from '../services/cargasService';
 import * as solicitudesService from '../services/solicitudesService';
 import * as marimbaPartidasService from '../services/marimbaPartidasService';
+import { ejecutarIdempotente, leerIdempotencyKey, OPERACIONES_IDEMPOTENTES, requestIdDe } from '../services/idempotenciaService';
+import { fingerprintRequest, hashesDeArchivos } from '../utils/requestFingerprint';
 
 export const cargasRouter = Router();
 
@@ -131,6 +135,16 @@ cargasRouter.post(
       ? rutaPublicaDeArchivo(archivos.fotoTicket[0].filename) : null;
     const fotoTableroPath = archivos?.fotoTablero?.[0]
       ? rutaPublicaDeArchivo(archivos.fotoTablero[0].filename) : null;
+    const key = leerIdempotencyKey(req, false);
+    const requestHash = fingerprintRequest({ ...datos, actorId: req.usuarioActual!.sub,
+      archivos: await hashesDeArchivos({ fotoTicket: archivos?.fotoTicket, fotoTablero: archivos?.fotoTablero }) });
+    const respuesta = await ejecutarIdempotente<unknown>({
+      usuarioId: req.usuarioActual!.sub,
+      operacion: OPERACIONES_IDEMPOTENTES.registrarCarga,
+      idempotencyKey: key,
+      requestHash,
+      requestId: requestIdDe(req),
+      ejecutar: async (cliente) => {
     if (datos.partidas) {
       if (datos.foliosAdicionales?.length) {
         throw new ApiError(400, 'Usa comprobantes de estaciÃ³n para una carga por partidas.');
@@ -147,9 +161,8 @@ cargasRouter.post(
         fotoTicketPath,
         fotoTableroPath,
         litrosDetectadosOcr: datos.litrosDetectadosOcr,
-      });
-      res.status(201).json(resultado);
-      return;
+      }, cliente);
+      return { status: 201, body: resultado, resourceType: 'carga', resourceId: resultado.carga.id as string };
     }
     const carga = await cargasService.registrarCarga({
       choferId: req.usuarioActual!.sub,
@@ -162,8 +175,13 @@ cargasRouter.post(
       litrosDetectadosOcr: datos.litrosDetectadosOcr,
       fotoTicketPath,
       fotoTableroPath,
+    }, cliente);
+    return { status: 201, body: carga, resourceType: 'carga', resourceId: carga.id };
+      },
     });
-    res.status(201).json(carga);
+    await limpiarArchivosDeReplay(req, respuesta.replayed);
+    if (respuesta.replayed) res.set('Idempotency-Replayed', 'true');
+    res.status(respuesta.status).json(respuesta.body);
   }),
 );
 

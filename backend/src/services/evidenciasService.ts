@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js';
 import { pool } from '../db/pool';
 import { registrarAuditoria } from './auditoriaService';
+import type { PoolClient } from 'pg';
 import { precioDeDecimal } from './preciosService';
 import { ApiError } from '../utils/asyncHandler';
 
@@ -168,7 +169,7 @@ export async function subir(datos: {
   litros?: number | null | undefined;
   precioPorLitro?: number | null | undefined;
   montoPagado?: number | null | undefined;
-}): Promise<Evidencia> {
+}, cliente?: PoolClient): Promise<Evidencia> {
   let requiereRevision = false;
   let desviacionPorcentaje: number | null = null;
   let precioReferenciaComparado: number | null = null;
@@ -182,7 +183,7 @@ export async function subir(datos: {
     precioReferenciaComparado = resultado.referencia;
   }
 
-  const { rows } = await pool.query<FilaEvidencia>(
+  const { rows } = await (cliente ?? pool).query<FilaEvidencia>(
     `INSERT INTO evidencias
        (usuario_id, tipo, foto_url, foto_urls, km, folio_id, carga_id, pendiente_vincular, notas,
         tipo_combustible_cargado, litros, precio_por_litro, monto_pagado,
@@ -211,7 +212,7 @@ export async function subir(datos: {
 
   const evidencia = aEvidencia(rows[0]!);
 
-  void registrarAuditoria({
+  const auditoria = registrarAuditoria({
     usuarioId: datos.usuarioId,
     accion: 'subir_evidencia',
     entidad: 'evidencias',
@@ -229,7 +230,8 @@ export async function subir(datos: {
       requiereRevision,
       desviacionPorcentaje,
     },
-  });
+  }, cliente);
+  if (cliente) await auditoria;
 
   return evidencia;
 }

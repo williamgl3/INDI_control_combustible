@@ -3,17 +3,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../theme/app_breakpoints.dart';
+import '../../theme/app_sizes.dart';
 import '../../widgets/chofer_mobile_wrapper.dart';
 import '../../widgets/sidebar_chofer.dart';
 import 'chofer_home_screen.dart';
 
-class ChoferHomeShell extends ConsumerWidget {
+class ChoferHomeShell extends ConsumerStatefulWidget {
   const ChoferHomeShell({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ChoferHomeShell> createState() => _ChoferHomeShellState();
+}
+
+class _ChoferHomeShellState extends ConsumerState<ChoferHomeShell> {
+  bool _sidebarExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
     final ancho = MediaQuery.sizeOf(context).width;
     final esAncho = AppBreakpoints.isTabletOrDesktop(ancho);
+    final puedeExpandir = ancho >= AppBreakpoints.desktop;
+    final sidebarExpandido = puedeExpandir && _sidebarExpanded;
     final ruta = GoRouterState.of(context).uri.path;
     final indice = indiceDestinoChoferParaRuta(ruta);
     void seleccionar(int destino) =>
@@ -31,10 +41,25 @@ class ChoferHomeShell extends ConsumerWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SidebarChofer(
-                indiceSeleccionado: indice,
-                onSeleccionar: seleccionar,
-                compacto: ancho < AppBreakpoints.desktop,
+              AnimatedContainer(
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(
+                        milliseconds: AppSizes.choferSidebarAnimationMs,
+                      ),
+                curve: Curves.easeOutCubic,
+                width: sidebarExpandido
+                    ? AppSizes.choferSidebarExpanded
+                    : AppSizes.choferSidebarCollapsed,
+                child: SidebarChofer(
+                  indiceSeleccionado: indice,
+                  onSeleccionar: seleccionar,
+                  compacto: !sidebarExpandido,
+                  onToggle: puedeExpandir
+                      ? () =>
+                            setState(() => _sidebarExpanded = !_sidebarExpanded)
+                      : null,
+                ),
               ),
               const Expanded(child: ChoferHomeScreen()),
             ],

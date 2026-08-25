@@ -4,11 +4,14 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { requireAuth, requireRole, type AuthRequest } from '../middleware/auth';
 import {
   eliminarArchivosNuevos,
+  limpiarArchivosDeReplay,
   upload,
   rutaPublicaDeArchivo,
   verificarMagicBytes,
 } from '../middleware/upload';
 import * as evidenciasService from '../services/evidenciasService';
+import { ejecutarIdempotente, leerIdempotencyKey, OPERACIONES_IDEMPOTENTES, requestIdDe } from '../services/idempotenciaService';
+import { fingerprintRequest, hashesDeArchivos } from '../utils/requestFingerprint';
 
 export const evidenciasRouter = Router();
 
@@ -78,7 +81,15 @@ evidenciasRouter.post(
         folioId: datos.folio_id,
         cargaId: datos.carga_id,
       });
-      const evidencia = await evidenciasService.subir({
+      const key = leerIdempotencyKey(req, false);
+      const requestHash = fingerprintRequest({ ...datos, actorId: req.usuarioActual!.sub,
+        archivos: await hashesDeArchivos({ fotos: fotoFiles }) });
+      const resultado = await ejecutarIdempotente({
+        usuarioId: req.usuarioActual!.sub, operacion: OPERACIONES_IDEMPOTENTES.subirEvidencia,
+        idempotencyKey: key, requestHash,
+        requestId: requestIdDe(req),
+        ejecutar: async (cliente) => {
+          const evidencia = await evidenciasService.subir({
       usuarioId: req.usuarioActual!.sub,
       tipo: datos.tipo,
       fotoUrls: fotoFiles.map((f) => rutaPublicaDeArchivo(f.filename)),
@@ -91,9 +102,13 @@ evidenciasRouter.post(
       litros: datos.litros ?? null,
       precioPorLitro: datos.precio_por_litro ?? null,
       montoPagado: datos.monto_pagado ?? null,
-    });
-
-      res.status(201).json(evidencia);
+          }, cliente);
+          return { status: 201, body: evidencia, resourceType: 'evidencia', resourceId: evidencia.id };
+        },
+      });
+      await limpiarArchivosDeReplay(req, resultado.replayed);
+      if (resultado.replayed) res.set('Idempotency-Replayed', 'true');
+      res.status(resultado.status).json(resultado.body);
     } catch (error) {
       await eliminarArchivosNuevos(req);
       throw error;

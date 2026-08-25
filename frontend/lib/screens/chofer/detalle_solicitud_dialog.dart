@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../config/api_config.dart';
 import '../../core/providers.dart';
 import '../../data/api_client.dart';
 import '../../models/solicitud_autorizacion.dart';
@@ -78,7 +77,8 @@ class _DetalleSolicitudDialogState
       setState(() => _errorGeneral = e.mensaje);
     } catch (_) {
       setState(
-        () => _errorGeneral = 'No pudimos cancelar tu solicitud. Intenta de nuevo.',
+        () => _errorGeneral =
+            'No pudimos cancelar tu solicitud. Intenta de nuevo.',
       );
     } finally {
       if (mounted) setState(() => _cancelando = false);
@@ -113,7 +113,7 @@ class _DetalleSolicitudDialogState
           if (widget.vehiculo != null)
             Text(
               '${widget.vehiculo!.tipoUnidad} · '
-                  '${widget.vehiculo!.etiquetaCompleta ?? widget.vehiculo!.etiquetaUnidad}',
+              '${widget.vehiculo!.etiquetaCompleta ?? widget.vehiculo!.etiquetaUnidad}',
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
@@ -142,9 +142,7 @@ class _DetalleSolicitudDialogState
               onPressed: () => VerFotoDialog.show(
                 context,
                 titulo: 'Foto del tablero',
-                url: fotoPath.startsWith('/')
-                    ? '${ApiConfig.baseUrl}$fotoPath'
-                    : null,
+                url: fotoPath.startsWith('/') ? fotoPath : null,
                 rutaLocal: fotoPath.startsWith('/') ? null : fotoPath,
               ),
               icon: const Icon(Icons.photo_outlined),

@@ -29,12 +29,12 @@ export async function requireAuth(req: AuthRequest, _res: Response, next: NextFu
     throw new ApiError(401, 'Token inválido o expirado.');
   }
 
-  const { rows } = await pool.query<{ token_version: number }>(
-    'SELECT token_version FROM usuarios WHERE id = $1',
+  const { rows } = await pool.query<{ token_version: number; activo: boolean }>(
+    'SELECT token_version, activo FROM usuarios WHERE id = $1',
     [payload.sub],
   );
   const usuarioActual = rows[0];
-  if (!usuarioActual || usuarioActual.token_version !== payload.tokenVersion) {
+  if (!usuarioActual || usuarioActual.activo === false || usuarioActual.token_version !== payload.tokenVersion) {
     throw new ApiError(401, 'Token inválido o expirado.');
   }
 

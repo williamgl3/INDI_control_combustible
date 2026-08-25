@@ -3,12 +3,21 @@ import 'package:flutter/material.dart';
 /// Confirmación antes de cerrar sesión — evita que un toque accidental
 /// sobre "Cerrar sesión" en el menú de 3 puntos saque a alguien de la
 /// app en mitad de una solicitud sin querer.
-Future<bool> confirmarCerrarSesion(BuildContext context) async {
+Future<bool> confirmarCerrarSesion(
+  BuildContext context, {
+  bool tienePendientesOffline = false,
+}) async {
   final confirmado = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('¿Cerrar sesión?'),
-      content: const Text('Vas a salir de tu cuenta en este dispositivo.'),
+      content: Text(
+        tienePendientesOffline
+            ? 'Tienes solicitudes guardadas sin conexión. Se conservarán '
+                  'asociadas a esta cuenta y se enviarán cuando vuelvas a '
+                  'iniciar sesión y recuperes conexión.'
+            : 'Vas a salir de tu cuenta en este dispositivo.',
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),

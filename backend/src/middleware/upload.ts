@@ -11,13 +11,9 @@ import { ApiError } from '../utils/asyncHandler';
 // `process.env` al cargar necesita su propio `dotenv.config()`.
 dotenv.config({ quiet: true });
 
-/// Almacenamiento de fotos (tickets, tablero) — HOY guarda en disco local
-/// del servidor y expone la ruta como `/uploads/<archivo>` vía
-/// `express.static` (ver index.ts). Cuando se decida el storage real de
-/// producción (S3, bucket propio, etc.), solo hay que cambiar este
-/// archivo por una implementación que suba ahí y devuelva la URL
-/// resultante — el resto de la app (rutas, DB) ya trabaja con "una URL de
-/// foto" como concepto, no con el mecanismo de guardado.
+/// Directorio privado de fotos (tickets, tablero y evidencias). Ya no se
+/// monta con `express.static`: la lectura pasa por `GET /archivos/:id`, que
+/// resuelve metadata, autoriza al actor y usa `AlmacenamientoPrivado`.
 export const UPLOADS_DIR = process.env.UPLOADS_DIR
   ? join(process.cwd(), process.env.UPLOADS_DIR)
   : join(process.cwd(), 'uploads');
@@ -29,18 +25,50 @@ if (!existsSync(UPLOADS_DIR)) {
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
   filename: (_req, file, cb) => {
-    const ext = extname(file.originalname) || '.jpg';
+    const original = extname(file.originalname).toLowerCase();
+    const extensionesPermitidas = new Set(['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif']);
+    const porMime: Readonly<Record<string, string>> = {
+      'image/jpeg': '.jpg',
+      'image/jpg': '.jpg',
+      'image/png': '.png',
+      'image/webp': '.webp',
+      'image/heic': '.heic',
+      'image/heif': '.heif',
+    };
+    // Nunca conservar una extensión arbitraria proporcionada por el
+    // cliente. `verificarMagicBytes` valida después el contenido real.
+    const ext = extensionesPermitidas.has(original)
+      ? original
+      : (porMime[file.mimetype.toLowerCase()] ?? '.jpg');
     cb(null, `${randomUUID()}${ext}`);
   },
 });
 
-const FORMATOS_PERMITIDOS = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic']);
+// Algunos dispositivos Android (y `MultipartFile.fromPath` cuando la ruta
+// temporal no conserva su extensión) declaran `image/jpg` o
+// `application/octet-stream`. Estos dos valores no son una autorización por
+// sí mismos: `verificarMagicBytes`, ejecutado inmediatamente después de
+// Multer, exige que el contenido tenga una firma real de imagen y elimina el
+// archivo si no la tiene.
+const FORMATOS_PERMITIDOS = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'application/octet-stream',
+]);
+
+export function esMimetypePermitido(mimetype: string): boolean {
+  return FORMATOS_PERMITIDOS.has(mimetype.toLowerCase().trim());
+}
 
 export const upload = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB por foto
   fileFilter: (_req, file, cb) => {
-    if (!FORMATOS_PERMITIDOS.has(file.mimetype)) {
+    if (!esMimetypePermitido(file.mimetype)) {
       cb(new Error('Formato de imagen no soportado.'));
       return;
     }
@@ -56,29 +84,39 @@ export function rutaPublicaDeArchivo(nombreArchivo: string): string {
 // `fileFilter` de multer arriba solo puede ver el mimetype que el
 // CLIENTE declaró en el multipart, y un cliente malicioso puede mandar
 // cualquier archivo diciendo que es "image/jpeg" sin que multer lo note.
-const FIRMAS: Array<(buf: Buffer) => boolean> = [
+const FORMATOS_POR_FIRMA: Array<{ mimeType: string; coincide: (buf: Buffer) => boolean }> = [
   // JPEG
-  (b) => b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  { mimeType: 'image/jpeg', coincide: (b) => b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
   // PNG
-  (b) => b.length >= 4 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47,
+  { mimeType: 'image/png', coincide: (b) => b.length >= 4 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 },
   // WEBP (contenedor RIFF con marca WEBP)
-  (b) =>
-    b.length >= 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP',
+  {
+    mimeType: 'image/webp',
+    coincide: (b) =>
+      b.length >= 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP',
+  },
   // HEIC/HEIF (caja ISO BMFF "ftyp" con alguna de las marcas conocidas)
-  (b) =>
-    b.length >= 12 &&
-    b.toString('ascii', 4, 8) === 'ftyp' &&
-    ['heic', 'heix', 'hevc', 'heim', 'heis', 'hevm', 'hevs', 'mif1', 'msf1'].includes(
-      b.toString('ascii', 8, 12),
-    ),
+  {
+    mimeType: 'image/heic',
+    coincide: (b) =>
+      b.length >= 12 &&
+      b.toString('ascii', 4, 8) === 'ftyp' &&
+      ['heic', 'heix', 'hevc', 'heim', 'heis', 'hevm', 'hevs', 'mif1', 'msf1'].includes(
+        b.toString('ascii', 8, 12),
+      ),
+  },
 ];
+
+export function detectarMimeImagen(buf: Buffer): string | null {
+  return FORMATOS_POR_FIRMA.find((formato) => formato.coincide(buf))?.mimeType ?? null;
+}
 
 async function esImagenValida(rutaArchivo: string): Promise<boolean> {
   const archivo = await open(rutaArchivo, 'r');
   try {
     const encabezado = Buffer.alloc(16);
     const { bytesRead } = await archivo.read(encabezado, 0, 16, 0);
-    return FIRMAS.some((coincide) => coincide(encabezado.subarray(0, bytesRead)));
+    return detectarMimeImagen(encabezado.subarray(0, bytesRead)) !== null;
   } finally {
     await archivo.close();
   }
@@ -102,6 +140,13 @@ export async function eliminarArchivosNuevos(req: Request): Promise<void> {
     if (dentro.startsWith('..') || dentro.includes(':') || dentro === '') return;
     await unlink(objetivo).catch(() => undefined);
   }));
+}
+
+/// Un replay multipart ya tiene un recurso persistido que referencia los
+/// archivos de la primera ejecucion. Multer, sin embargo, escribio copias
+/// nuevas para este request: elimina solo esas copias recibidas ahora.
+export async function limpiarArchivosDeReplay(req: Request, replayed: boolean): Promise<void> {
+  if (replayed) await eliminarArchivosNuevos(req);
 }
 
 export function limpiarArchivosAnteError(

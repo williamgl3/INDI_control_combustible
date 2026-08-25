@@ -3,6 +3,7 @@ import { pool } from '../db/pool';
 import { ApiError } from '../utils/asyncHandler';
 import type { DespachoMarimba, EstadoRecorridoMarimba, RecorridoMarimba, RolUsuario } from '../types';
 import { registrarAuditoria } from './auditoriaService';
+import type { PoolClient } from 'pg';
 import * as despachosService from './despachosMarimbaService';
 import { bloquearInventario } from '../db/inventarioLock';
 
@@ -143,10 +144,10 @@ export async function listarRecorridosAdministrativo(f:{
 
 export async function crearRecorrido(datos:{marimbaId:string;operadorId:string;registradoPor:string;frente:string;
   tipoCombustible:string;
-  kmInicio?:number|null|undefined;horasEquipoMenorInicio?:number|null|undefined;}):Promise<RecorridoMarimba>{
-  const cliente=await pool.connect();
+  kmInicio?:number|null|undefined;horasEquipoMenorInicio?:number|null|undefined;},clienteExterno?:PoolClient):Promise<RecorridoMarimba>{
+  const cliente=clienteExterno??await pool.connect(); const propia=clienteExterno===undefined;
   try{
-    await cliente.query('BEGIN');
+    if(propia)await cliente.query('BEGIN');
     await bloquearInventario(cliente,datos.marimbaId,datos.tipoCombustible);
     const {rows:unidad}=await cliente.query<{tipo_unidad:string;activo:boolean}>(
       'SELECT tipo_unidad,activo FROM vehiculos WHERE id=$1 FOR UPDATE',[datos.marimbaId]);
@@ -163,13 +164,13 @@ export async function crearRecorrido(datos:{marimbaId:string;operadorId:string;r
        VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
       [datos.marimbaId,datos.operadorId,datos.registradoPor,datos.frente,datos.tipoCombustible,
        saldo.toFixed(2),datos.kmInicio??null,datos.horasEquipoMenorInicio??null]);
-    await cliente.query('COMMIT');
     const recorrido=aRecorrido(rows[0]!);
-    void registrarAuditoria({usuarioId:datos.registradoPor,accion:'abrir_recorrido_marimba',
+    await registrarAuditoria({usuarioId:datos.registradoPor,accion:'abrir_recorrido_marimba',
       entidad:'recorrido_marimba',entidadId:recorrido.id,
-      detalle:{operadorId:datos.operadorId,existenciaInicial:saldo.toString()}});
+      detalle:{operadorId:datos.operadorId,existenciaInicial:saldo.toString()}},cliente);
+    if(propia)await cliente.query('COMMIT');
     return recorrido;
-  }catch(e){await cliente.query('ROLLBACK');throw e;}finally{cliente.release();}
+  }catch(e){if(propia)await cliente.query('ROLLBACK');throw e;}finally{if(propia)cliente.release();}
 }
 
 export async function agregarDespacho(recorridoId:string,datos:Omit<Parameters<typeof despachosService.crearDespacho>[0],
@@ -182,10 +183,10 @@ export async function agregarDespacho(recorridoId:string,datos:Omit<Parameters<t
 export async function cerrarRecorrido(recorridoId:string,datos:{existenciaFisica:number;fotoCierrePath:string;
   fotoNivelPath:string;observaciones?:string|null|undefined;kmCierre?:number|null|undefined;
   horasEquipoMenorCierre?:number|null|undefined;},
-  actorId:string,actorRol:RolUsuario):Promise<RecorridoMarimba>{
-  const cliente=await pool.connect();
+  actorId:string,actorRol:RolUsuario,clienteExterno?:PoolClient):Promise<RecorridoMarimba>{
+  const cliente=clienteExterno??await pool.connect(); const propia=clienteExterno===undefined;
   try{
-    await cliente.query('BEGIN');
+    if(propia)await cliente.query('BEGIN');
     const {rows}=await cliente.query<FilaRecorrido>('SELECT * FROM recorridos_marimba WHERE id=$1 FOR UPDATE',[recorridoId]);
     const actual=rows[0]; if(!actual)throw new ApiError(404,'El recorrido no está disponible.');
     if(actorRol==='supervisor'&&actual.operador_id!==actorId)
@@ -215,10 +216,11 @@ export async function cerrarRecorrido(recorridoId:string,datos:{existenciaFisica
       [datos.kmCierre??null,datos.horasEquipoMenorCierre??null,datos.fotoCierrePath,datos.fotoNivelPath,
        totalDespachado.toString(),entradas.toString(),teorico.toString(),fisico.toString(),diferencia.toString(),
        pendiente,pendiente?'diferencia_pendiente':'conciliado',datos.observaciones?.trim()||null,recorridoId]);
-    await cliente.query('COMMIT'); const resultado=aRecorrido(cerrado[0]!);
-    void registrarAuditoria({usuarioId:actorId,accion:'cerrar_recorrido_marimba',entidad:'recorrido_marimba',
+    const resultado=aRecorrido(cerrado[0]!);
+    await registrarAuditoria({usuarioId:actorId,accion:'cerrar_recorrido_marimba',entidad:'recorrido_marimba',
       entidadId:recorridoId,detalle:{operadorId:actual.operador_id,diferencia:diferencia.toString(),
-        estadoConciliacion:resultado.estadoConciliacion}});
+        estadoConciliacion:resultado.estadoConciliacion}},cliente);
+    if(propia)await cliente.query('COMMIT');
     return resultado;
-  }catch(e){await cliente.query('ROLLBACK');throw e;}finally{cliente.release();}
+  }catch(e){if(propia)await cliente.query('ROLLBACK');throw e;}finally{if(propia)cliente.release();}
 }

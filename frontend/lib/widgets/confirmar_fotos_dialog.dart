@@ -50,7 +50,10 @@ class ConfirmarFotosDialog extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Revisa tus fotos', style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            'Revisa tus fotos',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 4),
           Text(
             'Confirma que se ven bien antes de enviar — no podrás cambiarlas '
@@ -63,9 +66,9 @@ class ConfirmarFotosDialog extends StatelessWidget {
           for (final foto in fotos) ...[
             Text(
               foto.etiqueta,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: colors.textSecondary,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(color: colors.textSecondary),
             ),
             const SizedBox(height: 8),
             ClipRRect(

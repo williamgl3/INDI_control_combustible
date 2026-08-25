@@ -1,0 +1,5 @@
+# Copia como key.properties y conserva el archivo real fuera de Git.
+storePassword=CAMBIAR
+keyPassword=CAMBIAR
+keyAlias=indi_release
+storeFile=C:/ruta/segura/indi-release.jks

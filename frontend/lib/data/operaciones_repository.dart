@@ -77,6 +77,8 @@ abstract class OperacionesRepository {
   });
 
   Future<SolicitudAutorizacion> enviarSolicitud({
+    required String idempotencyKey,
+    required String payloadFingerprint,
     required String choferId,
     required Vehiculo vehiculo,
     required double litrosSolicitados,

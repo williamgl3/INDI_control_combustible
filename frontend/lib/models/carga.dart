@@ -138,8 +138,8 @@ class Carga {
       fotoTableroPath: json['fotoTableroPath'] as String?,
       litrosDetectadosOcr: (json['litrosDetectadosOcr'] as num?)?.toDouble(),
       pendienteDeSincronizar: json['pendienteDeSincronizar'] as bool? ?? false,
-      precioReferenciaPorLitro:
-          (json['precioReferenciaPorLitro'] as num?)?.toDouble(),
+      precioReferenciaPorLitro: (json['precioReferenciaPorLitro'] as num?)
+          ?.toDouble(),
       costoReferencia: (json['costoReferencia'] as num?)?.toDouble(),
     );
   }

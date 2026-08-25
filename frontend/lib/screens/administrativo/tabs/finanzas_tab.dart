@@ -75,8 +75,7 @@ class _FinanzasTabState extends ConsumerState<FinanzasTab> {
                 iconoColor: AppSectionColors.finanzas,
                 trailing: InkWell(
                   borderRadius: AppRadii.inputRadius,
-                  onTap: () =>
-                      _editarPresupuesto(repo.presupuestoSemanalTotal),
+                  onTap: () => _editarPresupuesto(repo.presupuestoSemanalTotal),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,

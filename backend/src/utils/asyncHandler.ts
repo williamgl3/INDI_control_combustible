@@ -16,10 +16,18 @@ export function asyncHandler<Req extends Request = Request>(
 /// decidir el status en vez de devolver siempre 500.
 export class ApiError extends Error {
   status: number;
+  codigo: string | undefined;
+  detalles: Record<string, unknown> | undefined;
 
-  constructor(status: number, message: string) {
+  constructor(
+    status: number,
+    message: string,
+    opciones?: { codigo?: string; detalles?: Record<string, unknown> },
+  ) {
     super(message);
     this.status = status;
+    this.codigo = opciones?.codigo;
+    this.detalles = opciones?.detalles;
     this.name = 'ApiError';
   }
 }

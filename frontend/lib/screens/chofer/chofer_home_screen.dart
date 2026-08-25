@@ -24,12 +24,12 @@ import '../../widgets/ayuda_soporte_dialog.dart';
 import '../../widgets/brand_header.dart';
 import '../../widgets/confirmar_cerrar_sesion_dialog.dart';
 import '../../widgets/contenido_responsivo.dart';
+import '../../widgets/chofer_header_menu_button.dart';
 import '../../widgets/fecha_formato.dart';
-import '../../widgets/header_menu_button.dart';
-import '../../widgets/header_glass_button.dart';
 import '../../widgets/logo_glass.dart';
 import '../../widgets/section_label.dart';
 import '../../widgets/tarjeta_accion_sugerida.dart';
+import '../../widgets/selector_tema_dialog.dart';
 import 'detalle_solicitud_dialog.dart';
 
 class ChoferHomeScreen extends ConsumerStatefulWidget {
@@ -58,7 +58,12 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
     if (_cerrandoSesion) return;
     setState(() => _cerrandoSesion = true);
     try {
-      final confirmado = await confirmarCerrarSesion(context);
+      final pendientes = await ref.read(totalPendientesOfflineProvider.future);
+      if (!mounted) return;
+      final confirmado = await confirmarCerrarSesion(
+        context,
+        tienePendientesOffline: pendientes > 0,
+      );
       if (confirmado && mounted) {
         final router = GoRouter.of(context);
         setState(() => _procesandoLogout = true);
@@ -103,8 +108,10 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
         : vehiculosRepo.porId(cargaAbiertaDeHoy.vehiculoId);
 
     final sinSolicitudes = solicitudes.isEmpty;
+    final esPantallaAncha = AppBreakpoints.isTabletOrDesktop(
+      MediaQuery.sizeOf(context).width,
+    );
     return Scaffold(
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       // Mismo padding/maxWidth que `ContenidoResponsivo` (ver
       // `_buildMovil`), calculado directo con `MediaQuery` en vez de
       // `ContenidoResponsivo` en sí: el FAB vive fuera del `body` (via
@@ -112,23 +119,11 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
       // tamaño intrínseco de su hijo para la animación de entrada del FAB
       // — algo que el `LayoutBuilder` interno de `ContenidoResponsivo` no
       // soporta bien (rompía el hit-test de tarjetas cercanas).
-      floatingActionButton: sinSolicitudes
-          ? null
-          : Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: ContenidoResponsivo.paddingHorizontalPara(
-                  MediaQuery.sizeOf(context).width,
-                ),
-              ),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: AppBreakpoints.wideContentMaxWidth,
-                ),
-                child: _FabSolicitar(
-                  onPressed: () => context.go(RoutePaths.choferTipoOperacion),
-                ),
-              ),
-            ),
+      bottomNavigationBar: !sinSolicitudes && !esPantallaAncha
+          ? _BarraSolicitarCarga(
+              onPressed: () => context.go(RoutePaths.choferTipoOperacion),
+            )
+          : null,
       body: SafeArea(
         child: _buildMovil(
           perfil: perfil,
@@ -137,24 +132,29 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
           vehiculoDeHoy: vehiculoDeHoy,
           folioPendiente: folioPendiente,
           cargaAbiertaDeHoy: cargaAbiertaDeHoy,
+          mostrarAccionInline: !sinSolicitudes && esPantallaAncha,
         ),
       ),
     );
   }
 
   Widget _buildHeader(BuildContext context, Perfil perfil) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
     return BrandHeader(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          LogoGlass(size: AppSizes.logoHeaderSize),
-          const SizedBox(width: 12),
+          IndiLogo(width: internalHeaderLogoWidth(screenWidth)),
+          SizedBox(width: internalHeaderLogoGap(screenWidth)),
           Expanded(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Hola, ${perfil.nombreCompleto.split(' ').first}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.displayLarge?.copyWith(
                     color: BrandHeader.onColor,
                   ),
@@ -162,6 +162,8 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
                 const SizedBox(height: 2),
                 Text(
                   'Control de combustible en obra',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: BrandHeader.onColorMuted,
                   ),
@@ -169,31 +171,33 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
               ],
             ),
           ),
-          HeaderGlassButton(
-            tooltip: 'Cerrar sesión',
-            onPressed: _cerrandoSesion ? null : _cerrarSesion,
-            icon: _procesandoLogout
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: BrandHeader.onColor,
-                    ),
-                  )
-                : const Icon(Icons.logout, color: BrandHeader.onColor),
-          ),
-          const SizedBox(width: 12),
-          HeaderMenuButton(
+          ChoferHeaderMenuButton(
             items: [
-              HeaderMenuItem(
-                icon: Icons.info_outline,
-                label: 'Acerca de',
-                onTap: () => AcercaDeDialog.show(context),
+              ChoferHeaderMenuItem(
+                icon: Icons.person_outline_rounded,
+                label: 'Perfil',
+                onSelected: () => context.go(RoutePaths.choferPerfil),
               ),
-              HeaderMenuItem(
-                icon: Icons.help_outline,
+              ChoferHeaderMenuItem(
+                icon: Icons.palette_outlined,
+                label: 'Cambiar tema',
+                onSelected: () => SelectorTemaDialog.show(context),
+              ),
+              ChoferHeaderMenuItem(
+                icon: Icons.help_outline_rounded,
                 label: 'Ayuda y soporte',
-                onTap: () => AyudaSoporteDialog.show(context),
+                onSelected: () => AyudaSoporteDialog.show(context),
+              ),
+              ChoferHeaderMenuItem(
+                icon: Icons.info_outline_rounded,
+                label: 'Acerca de',
+                onSelected: () => AcercaDeDialog.show(context),
+              ),
+              ChoferHeaderMenuItem(
+                icon: Icons.logout_rounded,
+                label: _procesandoLogout ? 'Cerrando sesión…' : 'Cerrar sesión',
+                destructive: true,
+                onSelected: _cerrandoSesion ? () {} : _cerrarSesion,
               ),
             ],
           ),
@@ -210,7 +214,9 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
   }) {
     final colors = context.colors;
     return AnimatedSize(
-      duration: AppMotion.base,
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : AppMotion.base,
       curve: AppMotion.curve,
       alignment: Alignment.topCenter,
       child: Column(
@@ -273,50 +279,80 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
     required BuildContext context,
     required List<SolicitudAutorizacion> solicitudes,
     required VehiculosRepository vehiculosRepo,
+    required bool mostrarAccionInline,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Actividad reciente',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 12),
-        if (solicitudes.isEmpty)
-          _EstadoVacioSolicitudes(
-            onSolicitar: () => context.go(RoutePaths.choferTipoOperacion),
-          )
-        else ...[
-          for (final grupo in agruparPorFecha(
-            solicitudes.take(5).toList(),
-            (s) => s.creadaEn,
-          ))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SectionLabel(grupo.etiqueta),
-                  for (final s in grupo.items)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: _SolicitudTile(
-                        solicitud: s,
-                        vehiculo: vehiculosRepo.porId(s.vehiculoId),
-                      ),
-                    ),
-                ],
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Actividad reciente',
+                style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () => context.go(RoutePaths.choferSolicitudes),
-              icon: const Icon(Icons.history_rounded, size: 18),
-              label: const Text('Ver historial'),
-            ),
-          ),
-        ],
+            if (mostrarAccionInline) ...[
+              const SizedBox(width: 16),
+              SizedBox(
+                width: AppSizes.choferPrimaryActionDesktopWidth,
+                child: _BotonSolicitarCarga(
+                  onPressed: () => context.go(RoutePaths.choferTipoOperacion),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 12),
+        AnimatedSwitcher(
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : AppMotion.base,
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          child: solicitudes.isEmpty
+              ? _EstadoVacioSolicitudes(
+                  key: const ValueKey('actividad-vacia'),
+                  onSolicitar: () => context.go(RoutePaths.choferTipoOperacion),
+                )
+              : Column(
+                  key: const ValueKey('actividad-con-datos'),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final grupo in agruparPorFecha(
+                      solicitudes.take(5).toList(),
+                      (s) => s.creadaEn,
+                    ))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SectionLabel(grupo.etiqueta),
+                            for (final s in grupo.items)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: _SolicitudTile(
+                                  key: ValueKey('solicitud-${s.id}'),
+                                  solicitud: s,
+                                  vehiculo: vehiculosRepo.porId(s.vehiculoId),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () =>
+                            context.go(RoutePaths.choferSolicitudes),
+                        icon: const Icon(Icons.history_rounded, size: 18),
+                        label: const Text('Ver historial'),
+                      ),
+                    ),
+                  ],
+                ),
+        ),
       ],
     );
   }
@@ -328,6 +364,7 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
     required Vehiculo? vehiculoDeHoy,
     required String? folioPendiente,
     required dynamic cargaAbiertaDeHoy,
+    required bool mostrarAccionInline,
   }) {
     return Column(
       children: [
@@ -338,7 +375,7 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
           // un tope de 480px, cada una controla el suyo).
           child: ContenidoResponsivo(
             paddingSuperior: 16,
-            paddingInferior: 88,
+            paddingInferior: 20,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -353,6 +390,7 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
                   context: context,
                   solicitudes: solicitudes,
                   vehiculosRepo: vehiculosRepo,
+                  mostrarAccionInline: mostrarAccionInline,
                 ),
               ],
             ),
@@ -363,8 +401,36 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
   }
 }
 
-class _FabSolicitar extends StatelessWidget {
-  const _FabSolicitar({required this.onPressed});
+class _BarraSolicitarCarga extends StatelessWidget {
+  const _BarraSolicitarCarga({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final horizontal = ContenidoResponsivo.paddingHorizontalPara(
+      MediaQuery.sizeOf(context).width,
+    );
+    return Material(
+      color: colors.surface,
+      elevation: 3,
+      child: SafeArea(
+        top: false,
+        minimum: EdgeInsets.fromLTRB(
+          horizontal,
+          AppSizes.choferPrimaryActionVerticalPadding,
+          horizontal,
+          AppSizes.choferPrimaryActionVerticalPadding,
+        ),
+        child: _BotonSolicitarCarga(onPressed: onPressed),
+      ),
+    );
+  }
+}
+
+class _BotonSolicitarCarga extends StatelessWidget {
+  const _BotonSolicitarCarga({required this.onPressed});
 
   final VoidCallback onPressed;
 
@@ -380,8 +446,11 @@ class _FabSolicitar extends StatelessWidget {
     return Align(
       alignment: esEscritorio ? Alignment.centerRight : Alignment.center,
       child: SizedBox(
-        width: esEscritorio ? 280 : double.infinity,
-        height: 52,
+        key: const ValueKey('accion-solicitar-carga'),
+        width: esEscritorio
+            ? AppSizes.choferPrimaryActionDesktopWidth
+            : double.infinity,
+        height: AppSizes.choferPrimaryActionHeight,
         child: FloatingActionButton.extended(
           onPressed: onPressed,
           backgroundColor: colors.primary,
@@ -407,7 +476,7 @@ class _FabSolicitar extends StatelessWidget {
 }
 
 class _EstadoVacioSolicitudes extends StatelessWidget {
-  const _EstadoVacioSolicitudes({required this.onSolicitar});
+  const _EstadoVacioSolicitudes({super.key, required this.onSolicitar});
 
   final VoidCallback onSolicitar;
 
@@ -471,7 +540,11 @@ class _EstadoVacioSolicitudes extends StatelessWidget {
 }
 
 class _SolicitudTile extends StatelessWidget {
-  const _SolicitudTile({required this.solicitud, required this.vehiculo});
+  const _SolicitudTile({
+    super.key,
+    required this.solicitud,
+    required this.vehiculo,
+  });
 
   final SolicitudAutorizacion solicitud;
   final Vehiculo? vehiculo;
@@ -526,6 +599,13 @@ class _SolicitudTile extends StatelessWidget {
                     context,
                   ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  'Programada: ${formatearFecha(solicitud.fechaProgramada)}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
+                ),
                 if (solicitud.comentario != null) ...[
                   const SizedBox(height: 4),
                   Text(
@@ -579,27 +659,35 @@ class _BadgeEstado extends StatelessWidget {
       ),
     };
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icono, size: 14, color: color),
-          const SizedBox(width: 4),
-          Text(
-            texto.toUpperCase(),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.3,
+    return AnimatedSwitcher(
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : AppMotion.fast,
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: Container(
+        key: ValueKey(estadoVisual),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icono, size: 14, color: color),
+            const SizedBox(width: 4),
+            Text(
+              texto.toUpperCase(),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.3,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

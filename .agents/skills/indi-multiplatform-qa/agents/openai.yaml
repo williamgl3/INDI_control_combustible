@@ -1,0 +1,4 @@
+interface:
+  display_name: "INDI Multiplatform QA"
+  short_description: "Validación móvil, web y escritorio por riesgo"
+  default_prompt: "Usa $indi-multiplatform-qa para validar este cambio de INDI Combustible en las plataformas afectadas."

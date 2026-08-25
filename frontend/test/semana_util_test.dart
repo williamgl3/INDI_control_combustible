@@ -26,11 +26,17 @@ void main() {
 
     test('el lunes y el domingo de la misma semana cuentan', () {
       expect(estaEnSemanaDe(DateTime(2026, 7, 13), referencia), isTrue);
-      expect(estaEnSemanaDe(DateTime(2026, 7, 19, 23, 59, 59), referencia), isTrue);
+      expect(
+        estaEnSemanaDe(DateTime(2026, 7, 19, 23, 59, 59), referencia),
+        isTrue,
+      );
     });
 
     test('el domingo anterior y el lunes siguiente NO cuentan', () {
-      expect(estaEnSemanaDe(DateTime(2026, 7, 12, 23, 59, 59), referencia), isFalse);
+      expect(
+        estaEnSemanaDe(DateTime(2026, 7, 12, 23, 59, 59), referencia),
+        isFalse,
+      );
       expect(estaEnSemanaDe(DateTime(2026, 7, 20), referencia), isFalse);
     });
   });

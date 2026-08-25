@@ -23,7 +23,10 @@ class AyudaSoporteDialog extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Ayuda y soporte', style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            'Ayuda y soporte',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 12),
           const Text(
             'Si tienes un problema con la app o con una solicitud, '
@@ -32,9 +35,9 @@ class AyudaSoporteDialog extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             _correoSoporte,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 20),
           OutlinedButton(

@@ -136,12 +136,85 @@ class MockAuthRepository implements AuthRepository {
 
   /// Ya están "cargados" desde el constructor — no hace nada.
   @override
-  Future<void> cargarChoferes() async {}
+  Future<PaginaChoferes> cargarChoferes({
+    String buscar = '',
+    String estado = 'todos',
+    int pagina = 1,
+    int limite = 25,
+  }) async {
+    var datos = listarChoferes()
+        .where(
+          (p) =>
+              (estado == 'todos' || (estado == 'activo') == p.activo) &&
+              (buscar.isEmpty ||
+                  p.nombreCompleto.toLowerCase().contains(
+                    buscar.toLowerCase(),
+                  ) ||
+                  p.usuario.toLowerCase().contains(buscar.toLowerCase())),
+        )
+        .toList();
+    return (
+      datos: datos,
+      pagina: pagina,
+      limite: limite,
+      total: datos.length,
+      totalPaginas: datos.isEmpty ? 0 : 1,
+    );
+  }
 
   @override
-  Future<void> cambiarEstado({
+  Future<DetalleChofer> obtenerChofer(String usuarioId) async {
+    final p = listarChoferes().firstWhere(
+      (p) => p.id == usuarioId,
+      orElse: () => throw AuthException('Chofer no encontrado.'),
+    );
+    return (
+      chofer: p,
+      actividad: (
+        solicitudes: 0,
+        cargas: 0,
+        evidencias: 0,
+        incidencias: 0,
+        cierres: 0,
+        recorridos: 0,
+        despachos: 0,
+        auditoria: 0,
+      ),
+    );
+  }
+
+  @override
+  Future<Perfil> editarChofer({
+    required String usuarioId,
+    required String version,
+    required Map<String, dynamic> cambios,
+  }) async {
+    final entrada = _usuarios.entries.firstWhere(
+      (e) => e.value.perfil.id == usuarioId,
+      orElse: () => throw AuthException('Chofer no encontrado.'),
+    );
+    final p = entrada.value.perfil;
+    final actualizado = p.copyWith(
+      nombre: cambios['nombre'] as String?,
+      apellidoPaterno: cambios['apellidoPaterno'] as String?,
+      apellidoMaterno: cambios['apellidoMaterno'] as String?,
+      correo: cambios['correo'] as String?,
+      usuario: cambios['usuario'] as String?,
+      version: '${int.tryParse(p.version) ?? 0 + 1}',
+    );
+    _usuarios.remove(entrada.key);
+    _usuarios[actualizado.usuario] = (
+      password: entrada.value.password,
+      perfil: actualizado,
+    );
+    return actualizado;
+  }
+
+  @override
+  Future<Perfil> cambiarEstado({
     required String usuarioId,
     required bool activo,
+    required String motivo,
   }) async {
     await Future.delayed(const Duration(milliseconds: 200));
     final entrada = _usuarios.entries.firstWhere(
@@ -152,22 +225,41 @@ class MockAuthRepository implements AuthRepository {
       password: entrada.value.password,
       perfil: entrada.value.perfil.copyWith(activo: activo),
     );
+    return _usuarios[entrada.key]!.perfil;
   }
 
   @override
-  Future<void> resetearPassword({
+  Future<String> resetearPassword({
     required String usuarioId,
-    required String passwordNueva,
+    required String motivo,
   }) async {
     await Future.delayed(const Duration(milliseconds: 200));
-    final entrada = _usuarios.entries.firstWhere(
+    _usuarios.entries.firstWhere(
       (e) => e.value.perfil.id == usuarioId,
       orElse: () => throw AuthException('Usuario no encontrado.'),
     );
-    _usuarios[entrada.key] = (
-      password: passwordNueva,
-      perfil: entrada.value.perfil,
+    return 'La solicitud quedó registrada. El envío seguro aún no está configurado; la contraseña no fue modificada.';
+  }
+
+  @override
+  Future<ElegibilidadEliminacion> consultarElegibilidadEliminacion(
+    String usuarioId,
+  ) async => (elegible: true, tieneRelaciones: false);
+
+  @override
+  Future<void> eliminarChofer({
+    required String usuarioId,
+    required String usuarioConfirmado,
+    required String motivo,
+  }) async {
+    final entrada = _usuarios.entries.firstWhere(
+      (e) => e.value.perfil.id == usuarioId,
+      orElse: () => throw AuthException('Chofer no encontrado.'),
     );
+    if ('@${entrada.value.perfil.usuario}' != usuarioConfirmado) {
+      throw AuthException('La confirmación no coincide.');
+    }
+    _usuarios.remove(entrada.key);
   }
 
   @override

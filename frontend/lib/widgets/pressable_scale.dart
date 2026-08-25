@@ -32,8 +32,12 @@ class _PressableScaleState extends State<PressableScale> {
       onTapCancel: () => _setPresionado(false),
       onTapUp: (_) => _setPresionado(false),
       child: AnimatedScale(
-        scale: _presionado ? 0.97 : 1.0,
-        duration: AppMotion.fast,
+        scale: _presionado && !MediaQuery.disableAnimationsOf(context)
+            ? 0.98
+            : 1.0,
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : AppMotion.fast,
         curve: AppMotion.curve,
         child: widget.child,
       ),

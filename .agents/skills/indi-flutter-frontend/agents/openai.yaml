@@ -1,0 +1,5 @@
+interface:
+  display_name: "INDI Flutter Frontend"
+  short_description: "Desarrollo Flutter consistente y multiplataforma"
+  default_prompt: "Usa $indi-flutter-frontend para implementar este cambio en el frontend Flutter de INDI Combustible."
+

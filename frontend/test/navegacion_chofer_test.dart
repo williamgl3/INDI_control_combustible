@@ -7,9 +7,35 @@ import 'package:indi_combustible/models/perfil.dart';
 import 'package:indi_combustible/router/route_paths.dart';
 import 'package:indi_combustible/screens/chofer/chofer_home_shell.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
+import 'package:indi_combustible/widgets/brand_sub_header.dart';
 import 'package:indi_combustible/widgets/sidebar_chofer.dart';
 
 void main() {
+  testWidgets('el encabezado anuncia el botón de regreso', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: BrandSubHeader(titulo: 'Historial', onBack: () {}),
+        ),
+      ),
+    );
+
+    expect(find.byTooltip('Atrás'), findsOneWidget);
+    expect(
+      tester.getSemantics(find.byTooltip('Atrás')),
+      matchesSemantics(
+        tooltip: 'Atrás',
+        isButton: true,
+        hasEnabledState: true,
+        isEnabled: true,
+        isFocusable: true,
+        hasFocusAction: true,
+        hasTapAction: true,
+      ),
+    );
+  });
+
   testWidgets('los destinos principales no se acumulan en el historial', (
     tester,
   ) async {
@@ -52,11 +78,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(router.state.uri.path, RoutePaths.choferSolicitudes);
     expect(router.canPop(), isFalse);
-
-    await tester.tap(find.byKey(const ValueKey('destino-4')));
-    await tester.pumpAndSettle();
-    expect(router.state.uri.path, RoutePaths.choferPerfil);
-    expect(router.canPop(), isFalse);
   });
 
   test('cada ruta del chofer selecciona exactamente un destino', () {
@@ -73,18 +94,52 @@ void main() {
       RoutePaths.choferComprobar: 3,
       RoutePaths.choferSubirEvidencias: 3,
       RoutePaths.choferCerrarDia: 3,
-      RoutePaths.choferPerfil: 4,
+      RoutePaths.choferPerfil: 0,
     };
 
     for (final entry in rutas.entries) {
       final indice = indiceDestinoChoferParaRuta(entry.key);
       expect(indice, entry.value, reason: entry.key);
       expect(
-        List.generate(5, (i) => i == indice).where((activo) => activo),
+        List.generate(4, (i) => i == indice).where((activo) => activo),
         hasLength(1),
         reason: entry.key,
       );
     }
+  });
+
+  testWidgets('el sidebar se expande y contrae solo con su control', (
+    tester,
+  ) async {
+    var expandido = false;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [sessionProvider.overrideWith(() => _Sesion(_chofer))],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: StatefulBuilder(
+            builder: (context, setState) => SizedBox(
+              width: expandido ? 232 : 80,
+              child: SidebarChofer(
+                indiceSeleccionado: 0,
+                compacto: !expandido,
+                onSeleccionar: _sinAccion,
+                onToggle: () => setState(() => expandido = !expandido),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byTooltip('Expandir menú'), findsOneWidget);
+    await tester.tap(find.byTooltip('Expandir menú'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Contraer menú'), findsOneWidget);
+    expect(find.text('Inicio'), findsOneWidget);
+    await tester.tap(find.byTooltip('Contraer menú'));
+    await tester.pumpAndSettle();
+    expect(find.text('Inicio'), findsNothing);
   });
 
   for (final perfil in [_chofer, _supervisor]) {
@@ -99,6 +154,7 @@ void main() {
               home: Scaffold(
                 body: SidebarChofer(
                   indiceSeleccionado: 1,
+                  compacto: false,
                   onSeleccionar: _sinAccion,
                 ),
               ),
@@ -123,10 +179,7 @@ void main() {
         );
         expect(
           find.byWidgetPredicate(
-            (widget) =>
-                widget is Tooltip &&
-                widget.message ==
-                    'Perfil de ${perfil.nombreCompleto.split(' ').first}',
+            (widget) => widget is Tooltip && widget.message == 'Ver perfil',
           ),
           findsOneWidget,
         );
@@ -141,7 +194,10 @@ void main() {
           );
           final activo = i == 1;
 
-          expect(material.color, activo ? scheme.primary : Colors.transparent);
+          expect(
+            material.color,
+            activo ? context.colors.primaryHover : Colors.transparent,
+          );
           expect(
             icon.color,
             activo ? scheme.onPrimary : context.colors.sidebarTextMuted,
@@ -149,12 +205,6 @@ void main() {
           expect(icon.color, isNot(material.color));
         }
 
-        expect(
-          find.byWidgetPredicate(
-            (widget) => widget is Material && widget.color == scheme.primary,
-          ),
-          findsOneWidget,
-        );
         expect(tester.takeException(), isNull);
       },
     );
@@ -172,6 +222,7 @@ void main() {
           home: Scaffold(
             body: SidebarChofer(
               indiceSeleccionado: 4,
+              compacto: false,
               onSeleccionar: (indice) => seleccionado = indice,
             ),
           ),
@@ -224,7 +275,7 @@ void main() {
     expect(find.byIcon(Icons.person_outline), findsOneWidget);
     expect(
       find.byWidgetPredicate(
-        (widget) => widget is Tooltip && widget.message == 'Abrir perfil',
+        (widget) => widget is Tooltip && widget.message == 'Ver perfil',
       ),
       findsOneWidget,
     );

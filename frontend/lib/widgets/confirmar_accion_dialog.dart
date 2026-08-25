@@ -71,9 +71,7 @@ class ConfirmarAccionDialog extends StatelessWidget {
               Expanded(
                 child: ElevatedButton(
                   style: destructivo
-                      ? ElevatedButton.styleFrom(
-                          backgroundColor: colors.error,
-                        )
+                      ? ElevatedButton.styleFrom(backgroundColor: colors.error)
                       : null,
                   onPressed: () => Navigator.of(context).pop(true),
                   child: Text(textoConfirmar),

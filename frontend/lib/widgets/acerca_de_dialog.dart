@@ -30,7 +30,10 @@ class AcercaDeDialog extends StatelessWidget {
         children: [
           const LogoGlass(size: 56),
           const SizedBox(height: 16),
-          Text('INDI Combustible', style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            'INDI Combustible',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 4),
           Text(
             'Versión $_version',

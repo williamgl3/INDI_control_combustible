@@ -62,6 +62,11 @@ class AppTheme {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: colors.background,
       textTheme: textTheme,
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: colors.primary,
+        selectionColor: colors.primary.withValues(alpha: 0.18),
+        selectionHandleColor: colors.primary,
+      ),
       extensions: [colors, shadows, statusColors],
       visualDensity: VisualDensity.standard,
       // Transición de plataforma consistente estilo iOS (slide desde la
@@ -80,6 +85,7 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: colors.surfaceAlt,
+        constraints: const BoxConstraints(minHeight: 52),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
           vertical: 16,
@@ -146,7 +152,7 @@ class AppTheme {
         // el mismo texto solo encogido) sin necesidad de un borde visible
         // en reposo (esa decisión de diseño no se toca aquí).
         floatingLabelStyle: textTheme.labelSmall?.copyWith(
-          color: colors.textSecondary,
+          color: colors.primary,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -170,7 +176,7 @@ class AppTheme {
                 borderRadius: AppRadii.buttonRadius,
               ),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-              minimumSize: const Size(48, 48),
+              minimumSize: const Size(48, 52),
               textStyle: textTheme.labelLarge,
             ).copyWith(
               overlayColor: WidgetStatePropertyAll(
@@ -189,10 +195,10 @@ class AppTheme {
                 width: AppBorders.standard,
               ),
               shape: RoundedRectangleBorder(
-                borderRadius: AppRadii.navButtonRadius,
+                borderRadius: AppRadii.buttonRadius,
               ),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-              minimumSize: const Size(48, 48),
+              minimumSize: const Size(48, 52),
               textStyle: textTheme.labelLarge,
             ).copyWith(
               overlayColor: WidgetStatePropertyAll(

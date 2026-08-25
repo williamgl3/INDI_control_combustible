@@ -156,7 +156,8 @@ List<DesgloseCombustible> desglosarPorCombustible(
 ) {
   final litrosPorTipo = <String, double>{};
   for (final carga in cargasDelPeriodo) {
-    final tipo = tipoCombustiblePorVehiculo[carga.vehiculoId] ?? 'Sin especificar';
+    final tipo =
+        tipoCombustiblePorVehiculo[carga.vehiculoId] ?? 'Sin especificar';
     litrosPorTipo[tipo] = (litrosPorTipo[tipo] ?? 0) + carga.litrosCargados;
   }
   final total = litrosPorTipo.values.fold(0.0, (s, v) => s + v);

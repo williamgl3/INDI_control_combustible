@@ -2,15 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_sizes.dart';
 import '../theme/app_theme.dart';
-import 'blob_background.dart';
 import 'logo_glass.dart';
-import 'wave_clipper.dart';
 
-/// Encabezado de marca exclusivo de las pantallas públicas de autenticación.
-///
-/// La curva se pinta dentro de la altura asignada por `AuthScreenShell`.
-/// El formulario permanece en el siguiente elemento del layout y nunca puede
-/// ser invadido por esta decoración, incluso cuando aparece el teclado.
+/// Cabecera sobria y compartida por todas las pantallas de autenticación.
+/// La marca se construye con una superficie navy, tipografía y proporción;
+/// no usa ondas, blobs ni gradientes decorativos.
 class AuthSShapeHeader extends StatelessWidget {
   const AuthSShapeHeader({
     super.key,
@@ -21,10 +17,11 @@ class AuthSShapeHeader extends StatelessWidget {
     this.showLogo = true,
     this.showBrand = true,
     this.logoSize = AppSizes.logoHeaderSize,
-    this.compactLogoSize = 40,
+    this.compactLogoSize = 70,
     this.title,
     this.subtitle,
     this.onBack,
+    this.clipper,
   });
 
   final double height;
@@ -39,97 +36,47 @@ class AuthSShapeHeader extends StatelessWidget {
   final String? subtitle;
   final VoidCallback? onBack;
 
+  /// Se conserva por compatibilidad con llamadas antiguas; la cabecera ya no
+  /// dibuja una ola ni acepta un clipper decorativo.
+  final CustomClipper<Path>? clipper;
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final middle = Color.lerp(
-      colors.brandHeaderStart,
-      colors.brandHeaderEnd,
-      0.5,
-    )!;
-    // Texto y decoración ocupan zonas distintas. Antes ambos llenaban el
-    // mismo Stack y el extremo alto de la curva podía quedar detrás del
-    // título o la descripción, especialmente con SafeArea de Android.
-    final waveHeight = compact ? 42.0 : 56.0;
-    const safetyGap = 24.0;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final defaultLogoSize = compact ? 64.0 : AppSizes.logoHeaderSize;
+    final requestedLogoSize = compact ? compactLogoSize : logoSize;
+    final logoWidth = requestedLogoSize == defaultLogoSize
+        ? authLogoWidth(screenWidth, compact: compact)
+        : requestedLogoSize;
 
-    return SizedBox(
+    return Container(
       key: const Key('auth-s-shape-header'),
       width: double.infinity,
       height: height,
+      color: colors.primary,
       child: Stack(
         alignment: AlignmentDirectional.topCenter,
-        clipBehavior: Clip.hardEdge,
         children: [
-          Positioned.fill(
-            child: BlobBackground(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  colors.brandHeaderStart,
-                  middle,
-                  colors.brandHeaderEnd,
-                ],
-                stops: const [0, 0.55, 1],
-              ),
-            ),
-          ),
-          Positioned(
-            key: const Key('auth-header-wave-zone'),
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: waveHeight,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ClipPath(
-                  key: const Key('auth-s-shape-blue-clip'),
-                  clipper: SShapeHeaderClipper(
-                    leftHeightFactor: leftHeightFactor,
-                    rightHeightFactor: rightHeightFactor,
-                  ),
-                  child: BlobBackground(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        colors.brandHeaderStart,
-                        middle,
-                        colors.brandHeaderEnd,
-                      ],
-                      stops: const [0, 0.55, 1],
-                    ),
-                  ),
-                ),
-                ClipPath(
-                  key: const Key('auth-s-shape-surface-clip'),
-                  clipper: SShapeSurfaceClipper(
-                    leftHeightFactor: leftHeightFactor,
-                    rightHeightFactor: rightHeightFactor,
-                  ),
-                  child: ColoredBox(color: colors.surface),
-                ),
-              ],
-            ),
-          ),
           if (showLogo)
-            Positioned(
+            Positioned.fill(
               key: const Key('auth-header-content-zone'),
-              top: 0,
-              left: 24,
-              right: 24,
-              bottom: waveHeight + safetyGap,
               child: Align(
                 alignment: Alignment.topCenter,
-                child: _AuthBrand(
-                  title: title,
-                  subtitle: subtitle,
-                  compact: compact,
-                  showBrand: showBrand,
-                  logoSize: logoSize,
-                  compactLogoSize: compactLogoSize,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(
+                    width: screenWidth,
+                    child: _AuthBrand(
+                      title: title,
+                      subtitle: subtitle,
+                      compact: compact,
+                      showBrand: showBrand,
+                      logoSize: logoWidth,
+                      compactLogoSize: logoWidth,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -174,18 +121,20 @@ class _AuthBrand extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: EdgeInsets.only(top: compact ? 4 : 8),
+        // La zona visible del encabezado puede ser menor que [height] en el
+        // layout partido de tablet/escritorio. Este margen compacto evita
+        // que logo y textos desborden por pocos píxeles a 1024 px y con
+        // escalado de texto, sin recortar contenido.
+        padding: EdgeInsets.fromLTRB(24, compact ? 8 : 12, 24, 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Semantics(
               label: 'Logo de INDI',
               image: true,
-              child: LogoGlass(size: compact ? compactLogoSize : logoSize),
+              child: IndiLogo(width: compact ? compactLogoSize : logoSize),
             ),
-            SizedBox(
-              height: showBrand ? (compact ? 4 : 8) : (compact ? 10 : 18),
-            ),
+            SizedBox(height: showBrand ? (compact ? 8 : 12) : 12),
             if (showBrand) ...[
               Text(
                 'INDI Combustible',
@@ -196,7 +145,7 @@ class _AuthBrand extends StatelessWidget {
                 ),
               ),
               if (!compact) ...[
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
                   'Control de combustible en obra',
                   textAlign: TextAlign.center,
@@ -207,7 +156,7 @@ class _AuthBrand extends StatelessWidget {
               ],
             ],
             if (title != null) ...[
-              if (showBrand) SizedBox(height: compact ? 3 : 8),
+              if (showBrand) SizedBox(height: compact ? 8 : 12),
               Text(
                 title!,
                 textAlign: TextAlign.center,
@@ -221,7 +170,7 @@ class _AuthBrand extends StatelessWidget {
               ),
             ],
             if (subtitle != null && !compact) ...[
-              SizedBox(height: showBrand ? 4 : 7),
+              const SizedBox(height: 6),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 360),
                 child: Text(

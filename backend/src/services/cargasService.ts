@@ -2,6 +2,7 @@ import Decimal from 'decimal.js';
 import { pool } from '../db/pool';
 import { ApiError } from '../utils/asyncHandler';
 import { registrarAuditoria } from './auditoriaService';
+import type { PoolClient } from 'pg';
 import { precioDeDecimal } from './preciosService';
 import { buscarVehiculoPorId } from './vehiculosService';
 import type { Carga } from '../types';
@@ -58,7 +59,7 @@ export async function registrarCarga(datos: {
   fotoTicketPath?: string | null | undefined;
   fotoTableroPath?: string | null | undefined;
   litrosDetectadosOcr?: number | null | undefined;
-}): Promise<Carga> {
+}, cliente?: PoolClient): Promise<Carga> {
   // Snapshot de referencia — mismo patrón que `solicitudesService.
   // enviarSolicitud` (costoEstimado) y `despachosMarimbaService`
   // (precioReferenciaUsado): si el vehículo no tiene `tipoCombustible`
@@ -75,7 +76,7 @@ export async function registrarCarga(datos: {
       .toDecimalPlaces(2);
   }
 
-  const { rows } = await pool.query<FilaCarga>(
+  const { rows } = await (cliente ?? pool).query<FilaCarga>(
     `INSERT INTO cargas
        (chofer_id, vehiculo_id, folio_autorizacion, folios_adicionales, litros_cargados,
         km_al_cargar, gasolinera, foto_ticket_path, foto_tablero_path, litros_detectados_ocr,

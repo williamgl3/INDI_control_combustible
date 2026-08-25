@@ -128,10 +128,9 @@ class AuthController {
         }
       }),
       if (perfil.esAdministrativo) ...[
-        aislada(
-          'usuarios',
-          () => _ref.read(authRepositoryProvider).cargarChoferes(),
-        ),
+        aislada('usuarios', () async {
+          await _ref.read(authRepositoryProvider).cargarChoferes();
+        }),
         aislada(
           'incidencias',
           () => _ref

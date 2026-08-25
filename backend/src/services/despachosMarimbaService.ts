@@ -3,6 +3,7 @@ import { pool } from '../db/pool';
 import { ApiError } from '../utils/asyncHandler';
 import type { DespachoMarimba, EstadoDespacho, RolUsuario } from '../types';
 import { registrarAuditoria } from './auditoriaService';
+import type { PoolClient } from 'pg';
 import { bloquearInventario } from '../db/inventarioLock';
 
 interface FilaDespacho {
@@ -65,10 +66,11 @@ export async function crearDespacho(datos: {
   fotoMedidorPath?: string | null | undefined; fotoEvidenciaPath?: string | null | undefined;
   ubicacion?: string | null | undefined; observaciones?: string | null | undefined;
   estado?: EstadoDespacho | undefined;
-}): Promise<DespachoMarimba> {
-  const cliente = await pool.connect();
+}, clienteExterno?: PoolClient): Promise<DespachoMarimba> {
+  const cliente = clienteExterno ?? await pool.connect();
+  const propia = clienteExterno === undefined;
   try {
-    await cliente.query('BEGIN');
+    if (propia) await cliente.query('BEGIN');
     await bloquearInventario(cliente, datos.marimbaId, datos.tipoCombustible);
     const { rows: recorridos } = await cliente.query<{
       marimba_id: string; operador_id: string; frente: string; estado: string;
@@ -155,16 +157,16 @@ export async function crearDespacho(datos: {
     if ((await saldoDeMarimba(datos.marimbaId, datos.tipoCombustible, cliente)).isNegative()) {
       throw new ApiError(409, 'La operación produciría inventario negativo.');
     }
-    await cliente.query('COMMIT');
     const despacho = aDespacho(rows[0]!);
-    void registrarAuditoria({ usuarioId: datos.registradoPor, accion: 'registrar_despacho_marimba',
+    await registrarAuditoria({ usuarioId: datos.registradoPor, accion: 'registrar_despacho_marimba',
       entidad: 'despacho_marimba', entidadId: despacho.id,
-      detalle: { responsableId: datos.responsableId, litros: litros.toString() } });
+      detalle: { responsableId: datos.responsableId, litros: litros.toString() } }, cliente);
+    if (propia) await cliente.query('COMMIT');
     return despacho;
   } catch (error) {
-    await cliente.query('ROLLBACK');
+    if (propia) await cliente.query('ROLLBACK');
     throw error;
-  } finally { cliente.release(); }
+  } finally { if (propia) cliente.release(); }
 }
 
 export async function listarDespachosDeMarimba(marimbaId: string): Promise<DespachoMarimba[]> {

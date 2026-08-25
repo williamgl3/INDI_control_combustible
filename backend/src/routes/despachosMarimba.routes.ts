@@ -2,9 +2,11 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, ApiError } from '../utils/asyncHandler';
 import { requireAuth, requireRole, type AuthRequest } from '../middleware/auth';
-import { limpiarArchivosAnteError, upload, rutaPublicaDeArchivo, verificarMagicBytes } from '../middleware/upload';
+import { eliminarArchivosNuevos, limpiarArchivosAnteError, limpiarArchivosDeReplay, upload, rutaPublicaDeArchivo, verificarMagicBytes } from '../middleware/upload';
 import * as despachosService from '../services/despachosMarimbaService';
 import * as recorridosService from '../services/recorridosMarimbaService';
+import { ejecutarIdempotente, leerIdempotencyKey, OPERACIONES_IDEMPOTENTES, requestIdDe } from '../services/idempotenciaService';
+import { fingerprintRequest, hashesDeArchivos } from '../utils/requestFingerprint';
 
 export const despachosMarimbaRouter = Router();
 despachosMarimbaRouter.use(requireAuth as never);
@@ -43,14 +45,24 @@ despachosMarimbaRouter.post('/', requireRole('supervisor') as never,
     if (!fotoHorometro) throw new ApiError(400, 'La foto del horómetro es obligatoria.');
     const fotoMedidor = archivos?.fotoMedidor?.[0];
     const fotoEvidencia = archivos?.fotoEvidencia?.[0];
-    const despacho = await despachosService.crearDespacho({
+    const key = leerIdempotencyKey(req, false);
+    const requestHash = fingerprintRequest({ ...datos, actorId: req.usuarioActual!.sub,
+      archivos: await hashesDeArchivos({ fotoHorometro: archivos?.fotoHorometro,
+        fotoMedidor: archivos?.fotoMedidor, fotoEvidencia: archivos?.fotoEvidencia }) });
+    const resultado = await ejecutarIdempotente({ usuarioId: req.usuarioActual!.sub,
+      operacion: OPERACIONES_IDEMPOTENTES.crearDespachoMarimba, idempotencyKey: key, requestHash,
+      requestId: requestIdDe(req),
+      ejecutar: async (cliente) => { const despacho = await despachosService.crearDespacho({
       ...datos, responsableId: recorrido.operadorId, registradoPor: req.usuarioActual!.sub,
       actorRol: req.usuarioActual!.rol,
       fotoHorometroPath: rutaPublicaDeArchivo(fotoHorometro.filename),
       fotoMedidorPath: fotoMedidor ? rutaPublicaDeArchivo(fotoMedidor.filename) : null,
       fotoEvidenciaPath: fotoEvidencia ? rutaPublicaDeArchivo(fotoEvidencia.filename) : null,
+    }, cliente); return { status: 201, body: despacho, resourceType: 'despacho_marimba', resourceId: despacho.id }; },
     });
-    res.status(201).json(despacho);
+    await limpiarArchivosDeReplay(req, resultado.replayed);
+    if (resultado.replayed) res.set('Idempotency-Replayed', 'true');
+    res.status(resultado.status).json(resultado.body);
   }));
 
 despachosMarimbaRouter.use(limpiarArchivosAnteError);

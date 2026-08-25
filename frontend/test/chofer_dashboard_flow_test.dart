@@ -40,7 +40,10 @@ void main() {
       expect(find.text('Mi consumo'), findsWidgets);
       expect(find.text('LITROS CONSUMIDOS'), findsOneWidget);
       expect(find.text('0'), findsWidgets);
-      expect(find.byType(IosSegmentedControl<PeriodoDashboard>), findsOneWidget);
+      expect(
+        find.byType(IosSegmentedControl<PeriodoDashboard>),
+        findsOneWidget,
+      );
       expect(
         find.text('Todavía no registras cargas en este periodo.'),
         findsOneWidget,

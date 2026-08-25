@@ -99,7 +99,11 @@ class SkeletonRow extends StatelessWidget {
               children: [
                 const SkeletonLoader(width: 160),
                 const SizedBox(height: AppSpacing.xs),
-                SkeletonLoader(width: 100, height: 11, borderRadius: BorderRadius.circular(4)),
+                SkeletonLoader(
+                  width: 100,
+                  height: 11,
+                  borderRadius: BorderRadius.circular(4),
+                ),
               ],
             ),
           ),

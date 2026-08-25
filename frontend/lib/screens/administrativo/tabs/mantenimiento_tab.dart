@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../config/api_config.dart';
 import '../../../core/providers.dart';
 import '../../../models/incidencia_vehiculo.dart';
 import '../../../models/vehiculo.dart';
@@ -516,7 +515,7 @@ class _IncidenciaTile extends StatelessWidget {
                         onTap: () => VerFotoDialog.show(
                           context,
                           titulo: 'Foto de la incidencia',
-                          url: '${ApiConfig.baseUrl}${incidencia.fotoPath}',
+                          url: incidencia.fotoPath,
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,

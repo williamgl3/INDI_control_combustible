@@ -65,11 +65,8 @@ class BarraPresupuesto extends StatelessWidget {
                             child: Text(
                               'Semana del $etiquetaSemana',
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodySmall?.copyWith(
-                                color: colors.textMuted,
-                              ),
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(color: colors.textMuted),
                             ),
                           ),
                         ],

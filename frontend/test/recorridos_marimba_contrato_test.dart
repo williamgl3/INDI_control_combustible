@@ -32,6 +32,7 @@ class _ApiCapturable extends ApiClient {
   Future<dynamic> postMultipart(
     String path, {
     required Map<String, String> campos,
+    Map<String, String> headers = const {},
     Map<String, String?> archivos = const {},
     Map<String, List<String>> archivosMultiples = const {},
   }) async {

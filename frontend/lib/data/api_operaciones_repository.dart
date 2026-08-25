@@ -34,6 +34,18 @@ class ApiOperacionesRepository implements OperacionesRepository {
   final Map<String, List<({DateTime fecha, double lectura})>>
   _historialPorVehiculo = {};
 
+  /// El id remoto es la unica identidad valida para deduplicar. Solicitudes
+  /// distintas conservan su representacion aunque coincidan visualmente.
+  static List<SolicitudAutorizacion> _unicasPorId(
+    Iterable<SolicitudAutorizacion> solicitudes,
+  ) {
+    final unicas = <String, SolicitudAutorizacion>{};
+    for (final solicitud in solicitudes) {
+      unicas[solicitud.id] = solicitud;
+    }
+    return List<SolicitudAutorizacion>.unmodifiable(unicas.values);
+  }
+
   @override
   double presupuestoSemanalTotal = 0;
 
@@ -61,9 +73,11 @@ class ApiOperacionesRepository implements OperacionesRepository {
           .toDouble();
 
       final solicitudesData = await _client.get('/solicitudes') as List;
-      _solicitudes = solicitudesData
-          .map((j) => SolicitudAutorizacion.fromJson(j as Map<String, dynamic>))
-          .toList();
+      _solicitudes = _unicasPorId(
+        solicitudesData.map(
+          (j) => SolicitudAutorizacion.fromJson(j as Map<String, dynamic>),
+        ),
+      );
 
       final cargasData = await _client.get('/cargas') as List;
       _cargas = cargasData
@@ -76,9 +90,11 @@ class ApiOperacionesRepository implements OperacionesRepository {
           .toList();
     } else {
       final solicitudesData = await _client.get('/solicitudes/mias') as List;
-      _solicitudes = solicitudesData
-          .map((j) => SolicitudAutorizacion.fromJson(j as Map<String, dynamic>))
-          .toList();
+      _solicitudes = _unicasPorId(
+        solicitudesData.map(
+          (j) => SolicitudAutorizacion.fromJson(j as Map<String, dynamic>),
+        ),
+      );
 
       final cargasData = await _client.get('/cargas/mias') as List;
       _cargas = cargasData
@@ -203,6 +219,8 @@ class ApiOperacionesRepository implements OperacionesRepository {
 
   @override
   Future<SolicitudAutorizacion> enviarSolicitud({
+    required String idempotencyKey,
+    required String payloadFingerprint,
     required String choferId,
     required Vehiculo vehiculo,
     required double litrosSolicitados,
@@ -216,6 +234,7 @@ class ApiOperacionesRepository implements OperacionesRepository {
     final data = await _client.postMultipart(
       '/solicitudes',
       campos: {
+        'payloadFingerprint': payloadFingerprint,
         'vehiculoId': vehiculo.id,
         if (partidas == null) 'litrosSolicitados': '$litrosSolicitados',
         if (partidas != null)
@@ -228,11 +247,15 @@ class ApiOperacionesRepository implements OperacionesRepository {
         'fechaProgramada': fechaProgramada.toIso8601String(),
       },
       archivos: {'fotoTablero': fotoTableroPath},
+      headers: {'Idempotency-Key': idempotencyKey},
     );
     final solicitud = SolicitudAutorizacion.fromJson(
       data as Map<String, dynamic>,
     );
-    _solicitudes = [..._solicitudes, solicitud];
+    final indice = _solicitudes.indexWhere((s) => s.id == solicitud.id);
+    _solicitudes = indice == -1
+        ? [..._solicitudes, solicitud]
+        : ([..._solicitudes]..[indice] = solicitud);
     return solicitud;
   }
 

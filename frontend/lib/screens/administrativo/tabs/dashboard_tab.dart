@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
+import '../../../theme/app_breakpoints.dart';
 import '../../../theme/app_motion.dart';
 import '../../../theme/app_radii.dart';
 import '../../../theme/app_section_colors.dart';
 import '../../../theme/app_spacing.dart';
 import '../../../theme/app_theme.dart';
+import '../../../widgets/app_card.dart';
 import '../../../widgets/estado_vacio.dart';
 import '../../../widgets/formato_numero.dart';
 import '../../../widgets/ios_segmented_control.dart';
@@ -32,6 +34,7 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final esMovil = AppBreakpoints.isMobile(MediaQuery.sizeOf(context).width);
     final repo = ref.watch(operacionesRepositoryProvider);
     final vehiculosRepo = ref.watch(vehiculosRepositoryProvider);
     ref.watch(operacionesTickProvider);
@@ -81,28 +84,55 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
             ).textTheme.bodyMedium?.copyWith(color: colors.textSecondary),
           ),
           const SizedBox(height: 20),
-          StatTileRow(
-            tiles: [
-              StatTile(
-                icono: Icons.local_gas_station_outlined,
-                valor: totalLitros.toStringAsFixed(0),
-                etiqueta: 'Litros cargados',
-                color: AppSectionColors.autorizaciones,
-              ),
-              StatTile(
-                icono: Icons.payments_outlined,
-                valor: formatearMoneda(totalImporte),
-                etiqueta: 'Importe',
-                color: AppSectionColors.finanzas,
-              ),
-              StatTile(
-                icono: Icons.receipt_long_outlined,
-                valor: cargas.length.toString(),
-                etiqueta: 'Cargas',
-                color: AppSectionColors.dashboard,
-              ),
-            ],
-          ),
+          if (esMovil)
+            _MetricasMoviles(
+              tiles: [
+                StatTile(
+                  compacta: true,
+                  icono: Icons.local_gas_station_outlined,
+                  valor: totalLitros.toStringAsFixed(0),
+                  etiqueta: 'Litros cargados',
+                  color: AppSectionColors.autorizaciones,
+                ),
+                StatTile(
+                  compacta: true,
+                  icono: Icons.payments_outlined,
+                  valor: formatearMoneda(totalImporte),
+                  etiqueta: 'Importe',
+                  color: AppSectionColors.finanzas,
+                ),
+                StatTile(
+                  compacta: true,
+                  icono: Icons.receipt_long_outlined,
+                  valor: cargas.length.toString(),
+                  etiqueta: 'Cargas',
+                  color: AppSectionColors.dashboard,
+                ),
+              ],
+            )
+          else
+            StatTileRow(
+              tiles: [
+                StatTile(
+                  icono: Icons.local_gas_station_outlined,
+                  valor: totalLitros.toStringAsFixed(0),
+                  etiqueta: 'Litros cargados',
+                  color: AppSectionColors.autorizaciones,
+                ),
+                StatTile(
+                  icono: Icons.payments_outlined,
+                  valor: formatearMoneda(totalImporte),
+                  etiqueta: 'Importe',
+                  color: AppSectionColors.finanzas,
+                ),
+                StatTile(
+                  icono: Icons.receipt_long_outlined,
+                  valor: cargas.length.toString(),
+                  etiqueta: 'Cargas',
+                  color: AppSectionColors.dashboard,
+                ),
+              ],
+            ),
           const SizedBox(height: 20),
           IosSegmentedControl<PeriodoDashboard>(
             valor: _periodo,
@@ -145,7 +175,14 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
               key: ValueKey(_periodo),
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (cargas.isEmpty)
+                if (cargas.isEmpty && esMovil)
+                  const AppCard(
+                    child: EstadoVacio(
+                      icono: Icons.bar_chart_outlined,
+                      mensaje: 'Sin datos para este período',
+                    ),
+                  )
+                else if (cargas.isEmpty)
                   // Le da presencia vertical real al estado vacío en vez
                   // de dejarlo compacto pegado arriba con un vacío
                   // grande debajo — mismo criterio que en
@@ -175,21 +212,93 @@ class _DashboardTabState extends ConsumerState<DashboardTab> {
   }
 }
 
+class _MetricasMoviles extends StatelessWidget {
+  const _MetricasMoviles({required this.tiles});
+
+  final List<Widget> tiles;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = AppSpacing.md;
+        final half = (constraints.maxWidth - spacing) / 2;
+        return Wrap(
+          key: const ValueKey('dashboard-mobile-metrics'),
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            SizedBox(
+              key: const ValueKey('dashboard-mobile-metric-0'),
+              width: half,
+              child: tiles[0],
+            ),
+            SizedBox(
+              key: const ValueKey('dashboard-mobile-metric-1'),
+              width: half,
+              child: tiles[1],
+            ),
+            SizedBox(
+              key: const ValueKey('dashboard-mobile-metric-2'),
+              width: constraints.maxWidth,
+              child: tiles[2],
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _TarjetaDesglose extends StatelessWidget {
   const _TarjetaDesglose({required this.desglose});
 
   final List<DesgloseCombustible> desglose;
 
-  static const _colores = [
-    Color(0xFF0165F9),
-    Color(0xFF4C7EE0),
-    Color(0xFF146C3C),
-    Color(0xFF92610C),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final colores = [
+      colors.primary,
+      colors.primary.withValues(alpha: 0.68),
+      const Color(0xFF146C3C),
+      const Color(0xFF92610C),
+    ];
+    final apilado = MediaQuery.sizeOf(context).width < 380;
+    final leyenda = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < desglose.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: colores[i % colores.length],
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    desglose[i].tipo,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+                Text(
+                  '${desglose[i].porcentaje.toStringAsFixed(0)}%',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(color: colors.textPrimary),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -206,7 +315,8 @@ class _TarjetaDesglose extends StatelessWidget {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 16),
-          Row(
+          Flex(
+            direction: apilado ? Axis.vertical : Axis.horizontal,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               SizedBox(
@@ -220,7 +330,7 @@ class _TarjetaDesglose extends StatelessWidget {
                       for (var i = 0; i < desglose.length; i++)
                         PieChartSectionData(
                           value: desglose[i].litros,
-                          color: _colores[i % _colores.length],
+                          color: colores[i % colores.length],
                           radius: 32,
                           showTitle: false,
                         ),
@@ -228,42 +338,11 @@ class _TarjetaDesglose extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (var i = 0; i < desglose.length; i++)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 10,
-                              height: 10,
-                              decoration: BoxDecoration(
-                                color: _colores[i % _colores.length],
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                desglose[i].tipo,
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                            ),
-                            Text(
-                              '${desglose[i].porcentaje.toStringAsFixed(0)}%',
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(color: colors.textPrimary),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
+              SizedBox(
+                width: apilado ? 0 : 20,
+                height: apilado ? AppSpacing.lg : 0,
               ),
+              if (apilado) leyenda else Expanded(child: leyenda),
             ],
           ),
         ],

@@ -67,9 +67,7 @@ class MyApp extends ConsumerWidget {
         localizationsDelegates: _localizationsDelegates,
         supportedLocales: _localesSoportados,
         locale: _localeApp,
-        home: const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        ),
+        home: const Scaffold(body: Center(child: CircularProgressIndicator())),
       );
     }
 
@@ -132,11 +130,7 @@ class _ConAvisoDeConectividad extends ConsumerWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
-                      Icons.wifi_off,
-                      color: Colors.white,
-                      size: 16,
-                    ),
+                    const Icon(Icons.wifi_off, color: Colors.white, size: 16),
                     const SizedBox(width: 8),
                     Text(
                       'Sin conexión a internet',

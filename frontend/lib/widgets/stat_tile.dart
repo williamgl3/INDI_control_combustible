@@ -27,6 +27,7 @@ class StatTile extends StatelessWidget {
     this.color,
     this.onTap,
     this.destacado = false,
+    this.compacta = false,
   });
 
   final IconData icono;
@@ -40,6 +41,7 @@ class StatTile extends StatelessWidget {
   /// vaya ahí primero, en vez de pesar lo mismo que una tarjeta puramente
   /// informativa.
   final bool destacado;
+  final bool compacta;
 
   @override
   Widget build(BuildContext context) {
@@ -50,13 +52,14 @@ class StatTile extends StatelessWidget {
     return AppCard(
       onTap: onTap,
       rippleColor: colorInsignia,
+      padding: EdgeInsets.all(compacta ? AppSpacing.md : AppSpacing.lg),
       border: destacado ? Border.all(color: colorInsignia, width: 1.5) : null,
       child: Stack(
         children: [
           Column(
             children: [
               IconBadge(icono: icono, color: colorInsignia),
-              const SizedBox(height: AppSpacing.md),
+              SizedBox(height: compacta ? AppSpacing.sm : AppSpacing.md),
               AnimatedSwitcher(
                 duration: AppMotion.fast,
                 switchInCurve: AppMotion.curve,

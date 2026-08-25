@@ -70,10 +70,8 @@ class _RecuperarPasswordScreenState
           'Ingresa tu usuario o correo y te enviaremos instrucciones '
           'para restablecer tu contraseña.',
       mostrarMarca: false,
-      logoSize: 48,
-      compactLogoSize: 36,
-      waveLeftHeightFactor: 0.96,
-      waveRightHeightFactor: 0.78,
+      logoSize: 84,
+      compactLogoSize: 72,
       centrarContenido: false,
       child: _enviado ? _buildConfirmacion(context) : _buildFormulario(context),
     );

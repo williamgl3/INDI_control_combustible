@@ -6,8 +6,7 @@ import '../theme/app_theme.dart';
 import 'auth_s_shape_header.dart';
 
 /// Envoltura visual compartida por login / registro / recuperar
-/// contraseña: header con degradado de marca (mismo tratamiento que
-/// [BrandHeader]) y borde inferior ondulado, logo y nombre de la empresa
+/// contraseña: header navy sólido con separador inferior mínimo, logo y nombre de la empresa
 /// siempre visibles, seguido —en
 /// flujo normal, sin superponerse— por el área blanca con el formulario
 /// de cada pantalla.
@@ -42,6 +41,7 @@ class AuthScreenShell extends StatelessWidget {
     this.titulo,
     this.subtitulo,
     this.centrarContenido = true,
+    this.loginWave = false,
   });
 
   final Widget child;
@@ -63,6 +63,7 @@ class AuthScreenShell extends StatelessWidget {
   /// entre la onda y el primer campo. Con `centrarContenido: false` el
   /// contenido se ancla arriba, pegado al padding fijo bajo el header.
   final bool centrarContenido;
+  final bool loginWave;
 
   /// Título y subtítulo (p. ej. "Bienvenido" / "Ingresa tus datos para
   /// continuar") — reemplazan el tagline genérico de la empresa ("Control
@@ -80,12 +81,15 @@ class AuthScreenShell extends StatelessWidget {
   // fijo en píxeles) para que la diagonal de la onda tenga espacio real
   // donde cruzar la pantalla, con límites absolutos para pantallas muy
   // chicas o muy altas.
-  static const double _headerHeightFraction = 0.38;
-  static const double _headerMinHeightPx = 256;
+  static const double _headerHeightFraction = 0.30;
+  static const double _headerMinHeightPx = 220;
   static const double _headerMaxHeightPx = 280;
-  static const double _compactHeaderHeightPx = 216;
-  static const double _waveLeftHeightFactor = 0.88;
-  static const double _waveRightHeightFactor = 0.48;
+  // Altura del contenido compacto sin el inset superior del sistema. El
+  // inset se suma abajo para que SafeArea no reduzca el espacio del logo y
+  // del tÃ­tulo ni produzca un overflow en pantallas bajas.
+  static const double _compactHeaderContentHeightPx = 160;
+  static const double _waveLeftHeightFactor = 0.94;
+  static const double _waveRightHeightFactor = 0.80;
 
   @override
   Widget build(BuildContext context) {
@@ -104,10 +108,11 @@ class AuthScreenShell extends StatelessWidget {
       headerHeightFraction: _headerHeightFraction,
       headerMinHeightPx: _headerMinHeightPx,
       headerMaxHeightPx: _headerMaxHeightPx,
-      compactHeaderHeightPx: _compactHeaderHeightPx,
+      compactHeaderContentHeightPx: _compactHeaderContentHeightPx,
       waveLeftHeightFactor: waveLeftHeightFactor ?? _waveLeftHeightFactor,
       waveRightHeightFactor: waveRightHeightFactor ?? _waveRightHeightFactor,
       centrarContenido: centrarContenido,
+      loginWave: loginWave,
       child: child,
     );
 
@@ -190,10 +195,11 @@ class _Cuerpo extends StatelessWidget {
     required this.headerHeightFraction,
     required this.headerMinHeightPx,
     required this.headerMaxHeightPx,
-    required this.compactHeaderHeightPx,
+    required this.compactHeaderContentHeightPx,
     required this.waveLeftHeightFactor,
     required this.waveRightHeightFactor,
     required this.centrarContenido,
+    required this.loginWave,
     required this.child,
   });
 
@@ -207,10 +213,11 @@ class _Cuerpo extends StatelessWidget {
   final double headerHeightFraction;
   final double headerMinHeightPx;
   final double headerMaxHeightPx;
-  final double compactHeaderHeightPx;
+  final double compactHeaderContentHeightPx;
   final double waveLeftHeightFactor;
   final double waveRightHeightFactor;
   final bool centrarContenido;
+  final bool loginWave;
   final Widget child;
 
   @override
@@ -233,11 +240,10 @@ class _Cuerpo extends StatelessWidget {
           // Alto real del header: fracción del alto total disponible (no un
           // valor fijo en píxeles), acotado por límites absolutos para no
           // desbordar en pantallas muy chicas ni verse absurdo en muy altas.
+          final safeTop = MediaQuery.paddingOf(context).top;
           final headerHeight = isCompact
-              ? (compactHeaderHeightPx + textScaleAllowance).clamp(
-                  0.0,
-                  totalHeight,
-                )
+              ? (compactHeaderContentHeightPx + safeTop + textScaleAllowance)
+                    .clamp(0.0, totalHeight)
               : (totalHeight * headerHeightFraction).clamp(
                       headerMinHeightPx,
                       headerMaxHeightPx,
@@ -264,12 +270,16 @@ class _Cuerpo extends StatelessWidget {
                   showLogo: mostrarLogo,
                   showBrand: mostrarMarca,
                   logoSize: logoSize ?? AppSizes.logoHeaderSize,
-                  compactLogoSize: compactLogoSize ?? 40,
+                  compactLogoSize: compactLogoSize ?? 70,
                   title: titulo,
                   subtitle: subtitulo,
                   onBack: onBack,
-                  leftHeightFactor: isCompact ? 0.92 : waveLeftHeightFactor,
-                  rightHeightFactor: isCompact ? 0.68 : waveRightHeightFactor,
+                  leftHeightFactor: waveLeftHeightFactor,
+                  rightHeightFactor: waveRightHeightFactor,
+                  // Todas las pantallas de autenticación comparten la misma
+                  // silueta orgánica; `loginWave` queda aceptado por
+                  // compatibilidad con llamadas existentes.
+                  clipper: null,
                 ),
               ),
               Expanded(

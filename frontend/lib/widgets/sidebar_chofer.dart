@@ -6,6 +6,8 @@ import '../core/session_provider.dart';
 import '../models/perfil.dart';
 import '../router/route_paths.dart';
 import '../theme/app_radii.dart';
+import '../theme/app_sizes.dart';
+import '../theme/app_spacing.dart';
 import '../theme/app_theme.dart';
 
 /// Un destino de la navegación de chofer (compartido por [SidebarChofer] y
@@ -46,16 +48,9 @@ const destinosOperativosChofer = [
   ),
 ];
 
-/// La barra móvil conserva Perfil como quinto destino. En escritorio y
-/// tablet el avatar de cuenta ocupa ese papel sin duplicarlo en la lista.
-const destinosChofer = [
-  ...destinosOperativosChofer,
-  DestinoChofer(
-    icono: Icons.person_outline,
-    iconoSeleccionado: Icons.person_rounded,
-    etiqueta: 'Perfil',
-  ),
-];
+/// La navegación móvil conserva únicamente los destinos operativos. El
+/// perfil se abre desde el avatar del shell, evitando un destino duplicado.
+const destinosChofer = destinosOperativosChofer;
 
 /// Devuelve el único destino activo para una ruta del módulo del chofer.
 int indiceDestinoChoferParaRuta(String ruta) {
@@ -74,7 +69,7 @@ int indiceDestinoChoferParaRuta(String ruta) {
       ruta == RoutePaths.choferCerrarDia) {
     return 3;
   }
-  if (ruta == RoutePaths.choferPerfil) return 4;
+  if (ruta == RoutePaths.choferPerfil) return 0;
   return 0;
 }
 
@@ -93,12 +88,14 @@ class SidebarChofer extends ConsumerWidget {
     super.key,
     required this.indiceSeleccionado,
     required this.onSeleccionar,
-    this.compacto = false,
+    this.compacto = true,
+    this.onToggle,
   });
 
   final int indiceSeleccionado;
   final ValueChanged<int> onSeleccionar;
   final bool compacto;
+  final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -106,42 +103,45 @@ class SidebarChofer extends ConsumerWidget {
     final perfil = ref.watch(sessionProvider);
 
     return Container(
-      width: compacto ? 88 : 240,
-      color: colors.sidebarBackground,
+      width: compacto
+          ? AppSizes.choferSidebarCollapsed
+          : AppSizes.choferSidebarExpanded,
+      color: colors.primary,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: AppRadii.inputRadius,
-                  child: Image.asset(
-                    'assets/images/logo_indi.jpeg',
-                    width: 36,
-                    height: 36,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                if (!compacto) ...[
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'INDI Combustible',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: colors.sidebarText,
+          if (onToggle != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Align(
+                alignment: compacto ? Alignment.center : Alignment.centerRight,
+                child: Semantics(
+                  button: true,
+                  toggled: !compacto,
+                  label: compacto ? 'Expandir menú' : 'Contraer menú',
+                  child: Tooltip(
+                    message: compacto ? 'Expandir menú' : 'Contraer menú',
+                    child: IconButton(
+                      tooltip: null,
+                      onPressed: onToggle,
+                      icon: Icon(
+                        compacto
+                            ? Icons.chevron_right_rounded
+                            : Icons.chevron_left_rounded,
                       ),
-                      overflow: TextOverflow.ellipsis,
+                      color: colors.sidebarText,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 48,
+                        height: 48,
+                      ),
                     ),
                   ),
-                ],
-              ],
+                ),
+              ),
             ),
-          ),
           Expanded(
             child: ListView(
-              padding: EdgeInsets.zero,
+              padding: const EdgeInsets.only(top: AppSpacing.md),
               children: [
                 for (var i = 0; i < destinosOperativosChofer.length; i++)
                   _ItemSidebarChofer(
@@ -188,9 +188,7 @@ class _AccesoPerfilChofer extends StatelessWidget {
     final inicial = nombre.isEmpty
         ? null
         : nombre.substring(0, 1).toUpperCase();
-    final tooltip = nombre.isEmpty
-        ? 'Abrir perfil'
-        : 'Perfil de ${nombre.split(RegExp(r'\s+')).first}';
+    const tooltip = 'Ver perfil';
 
     final avatar = Material(
       key: const ValueKey('sidebar-chofer-perfil'),
@@ -281,7 +279,9 @@ class _AccesoPerfilChofer extends StatelessWidget {
       child: Tooltip(
         message: tooltip,
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: compacto
+              ? const EdgeInsets.symmetric(horizontal: 16, vertical: 14)
+              : const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: compacto ? Center(child: contenido) : contenido,
         ),
       ),
@@ -305,6 +305,7 @@ class _ItemSidebarChofer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     final colorScheme = Theme.of(context).colorScheme;
     final colorContenido = seleccionado
         ? colorScheme.onPrimary
@@ -348,7 +349,7 @@ class _ItemSidebarChofer extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       child: Material(
-        color: seleccionado ? colorScheme.primary : Colors.transparent,
+        color: seleccionado ? colors.primaryHover : Colors.transparent,
         borderRadius: AppRadii.navButtonRadius,
         child: InkWell(
           onTap: onTap,

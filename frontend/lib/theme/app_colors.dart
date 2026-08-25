@@ -11,6 +11,10 @@ import 'package:flutter/material.dart';
 /// para que el texto pase contraste AA sobre blanco.
 @immutable
 class AppColors extends ThemeExtension<AppColors> {
+  /// Única fuente de verdad para el azul corporativo de INDI.
+  static const brandBlue = Color(0xFF1F63D8);
+  static const brandBlueDark = Color(0xFF174EA6);
+
   const AppColors({
     required this.background,
     required this.surface,
@@ -73,42 +77,41 @@ class AppColors extends ThemeExtension<AppColors> {
 
   static const light = AppColors(
     // systemGroupedBackground de iOS.
-    background: Color(0xFFF2F2F7),
+    background: Color(0xFFF8FAFC),
     // secondarySystemGroupedBackground — el blanco de los contenedores de
     // lista agrupada.
     surface: Color(0xFFFFFFFF),
     // systemGray6 — relleno de inputs y filas inactivas.
-    surfaceAlt: Color(0xFFF2F2F7),
+    surfaceAlt: Color(0xFFF1F5F9),
     // separator de iOS.
-    border: Color(0xFFC6C6C8),
+    border: Color(0xFFE2E8F0),
     // label.
-    textPrimary: Color(0xFF000000),
+    textPrimary: Color(0xFF111827),
     // secondaryLabel (aprox. sólido de #3C3C43 al 60%).
-    textSecondary: Color(0xFF6C6C70),
+    textSecondary: Color(0xFF6B7280),
     // tertiaryLabel / systemGray — placeholders, captions.
-    textMuted: Color(0xFF8E8E93),
-    // Azul de marca INDI (#1463FF) — único en toda la app: botones, acentos,
-    // header y sidebar usan el mismo tono.
-    primary: Color(0xFF1463FF),
-    primaryHover: Color(0xFF0D4FCC),
+    textMuted: Color(0xFF94A3B8),
+    // Azul de marca INDI — único tono base para botones, acentos y estados.
+    primary: brandBlue,
+    primaryHover: brandBlueDark,
     primaryOn: Color(0xFFFFFFFF),
-    headerBackground: Color(0xFFF2F2F7),
+    headerBackground: Color(0xFFF8FAFC),
     // systemGreen/systemOrange/systemRed de iOS, oscurecidos lo justo para
     // pasar WCAG AA como texto sobre blanco (el tono de sistema puro falla
     // contraste en texto pequeño).
-    success: Color(0xFF1F8A3D),
-    warning: Color(0xFFC26A00),
-    error: Color(0xFFD70015),
-    info: Color(0xFF0A84FF),
-    sidebarBackground: Color(0xFF0B1F3A),
+    success: Color(0xFF16A34A),
+    warning: Color(0xFFF59E0B),
+    error: Color(0xFFDC2626),
+    info: brandBlue,
+    sidebarBackground: brandBlue,
     // Azul suave (systemBlue al ~12% sobre blanco) — misma fila
     // seleccionada que usa el sidebar de Ajustes en iPad.
-    sidebarSurfaceAlt: Color(0xFF173A67),
+    sidebarSurfaceAlt: brandBlueDark,
     sidebarText: Color(0xFFFFFFFF),
     sidebarTextMuted: Color(0xFFC4D2E5),
-    brandHeaderStart: Color(0xFF0A2A54),
-    brandHeaderEnd: Color(0xFF1463FF),
-    brandHeaderDot: Color(0xFF5B8AFF),
+    brandHeaderStart: brandBlueDark,
+    brandHeaderEnd: brandBlue,
+    brandHeaderDot: Color(0xFF6B96E8),
   );
 
   /// Paleta oscura — 3 niveles de superficie con separación clara en vez
@@ -135,21 +138,21 @@ class AppColors extends ThemeExtension<AppColors> {
     // Mismo azul que en el tema claro (`brandHeaderEnd` es fijo en ambos
     // temas) — ya tiene suficiente contraste sobre las superficies oscuras
     // de arriba, no necesita un tono más claro aparte.
-    primary: Color(0xFF1463FF),
-    primaryHover: Color(0xFF5B8AFF),
+    primary: brandBlue,
+    primaryHover: brandBlueDark,
     primaryOn: Color(0xFFFFFFFF),
     headerBackground: Color(0xFF000000),
     success: Color(0xFF32D74B),
     warning: Color(0xFFFF9F0A),
     error: Color(0xFFFF453A),
-    info: Color(0xFF0A84FF),
-    sidebarBackground: Color(0xFF1C1C1E),
-    sidebarSurfaceAlt: Color(0xFF0A3A75),
+    info: brandBlue,
+    sidebarBackground: brandBlue,
+    sidebarSurfaceAlt: brandBlueDark,
     sidebarText: Color(0xFFFFFFFF),
     sidebarTextMuted: Color(0xFFAEAEB2),
-    brandHeaderStart: Color(0xFF0A2A54),
-    brandHeaderEnd: Color(0xFF1463FF),
-    brandHeaderDot: Color(0xFF5B8AFF),
+    brandHeaderStart: brandBlueDark,
+    brandHeaderEnd: brandBlue,
+    brandHeaderDot: Color(0xFF6B96E8),
   );
 
   @override
