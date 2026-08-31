@@ -1,12 +1,20 @@
 import bcrypt from 'bcrypt';
+import { createHash, randomBytes } from 'node:crypto';
 import { pool } from '../db/pool';
 import { ApiError } from '../utils/asyncHandler';
 import { firmarToken } from '../utils/jwt';
+import { logger } from '../utils/logger';
 import { registrarAuditoria } from './auditoriaService';
+import { enviarRecuperacionPassword } from './correoService';
 import * as refreshTokenService from './refreshTokenService';
 import type { Perfil, RolUsuario } from '../types';
 
 const SALT_ROUNDS = 12;
+const RESET_TOKEN_MINUTOS = Number(process.env.PASSWORD_RESET_EXPIRES_MINUTES ?? 30);
+
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
 
 interface FilaUsuario {
   id: string;
@@ -131,14 +139,83 @@ async function crearUsuario(datos: {
 // devuelve el mismo status/shape en ambos casos. Si la cuenta no existe,
 // simplemente no se dispara ningún envío.
 export async function recuperarPassword(usuarioOCorreo: string): Promise<void> {
-  const { rows } = await pool.query(
-    'SELECT 1 FROM usuarios WHERE usuario = $1 OR correo = $1',
+  const { rows } = await pool.query<{ id: string; correo: string }>(
+    'SELECT id, correo FROM usuarios WHERE activo = true AND (usuario = $1 OR correo = $1)',
     [usuarioOCorreo],
   );
-  if ((rows.length ?? 0) > 0) {
-    // TODO-BACKEND: aquí se dispararía el envío real de correo/SMS de
-    // recuperación una vez que se decida el proveedor (no implementado en
-    // el mock original tampoco).
+  const usuario = rows[0];
+  if (!usuario?.id || !usuario.correo) return;
+
+  const token = randomBytes(32).toString('base64url');
+  const cliente = await pool.connect();
+  try {
+    await cliente.query('BEGIN');
+    await cliente.query(
+      `UPDATE password_reset_tokens SET usado_en = NOW()
+         WHERE usuario_id = $1 AND usado_en IS NULL`,
+      [usuario.id],
+    );
+    await cliente.query(
+      `INSERT INTO password_reset_tokens (usuario_id, token_hash, expira_en)
+         VALUES ($1, $2, NOW() + ($3 * INTERVAL '1 minute'))`,
+      [usuario.id, hashToken(token), RESET_TOKEN_MINUTOS],
+    );
+    await cliente.query('COMMIT');
+  } catch (error) {
+    await cliente.query('ROLLBACK');
+    throw error;
+  } finally {
+    cliente.release();
+  }
+  try {
+    await enviarRecuperacionPassword(usuario.correo, token);
+  } catch (error) {
+    logger.error(
+      { usuarioId: usuario.id, error },
+      'No se pudo enviar la recuperación de contraseña',
+    );
+  }
+}
+
+export async function restablecerPassword(token: string, passwordNueva: string): Promise<void> {
+  const cliente = await pool.connect();
+  try {
+    await cliente.query('BEGIN');
+    const { rows } = await cliente.query<{ usuario_id: string }>(
+      `SELECT usuario_id FROM password_reset_tokens
+        WHERE token_hash = $1 AND usado_en IS NULL AND expira_en > NOW()
+        FOR UPDATE`,
+      [hashToken(token)],
+    );
+    const recuperacion = rows[0];
+    if (!recuperacion) {
+      throw new ApiError(400, 'El enlace de recuperación es inválido o ya expiró.');
+    }
+    const nuevoHash = await bcrypt.hash(passwordNueva, SALT_ROUNDS);
+    await cliente.query(
+      'UPDATE usuarios SET password_hash = $1, token_version = token_version + 1 WHERE id = $2',
+      [nuevoHash, recuperacion.usuario_id],
+    );
+    await cliente.query(
+      'UPDATE password_reset_tokens SET usado_en = NOW() WHERE usuario_id = $1 AND usado_en IS NULL',
+      [recuperacion.usuario_id],
+    );
+    await cliente.query(
+      'UPDATE refresh_tokens SET revocado = true WHERE usuario_id = $1 AND revocado = false',
+      [recuperacion.usuario_id],
+    );
+    await cliente.query('COMMIT');
+    await registrarAuditoria({
+      usuarioId: recuperacion.usuario_id,
+      accion: 'restablecer_password',
+      entidad: 'usuario',
+      entidadId: recuperacion.usuario_id,
+    });
+  } catch (error) {
+    await cliente.query('ROLLBACK');
+    throw error;
+  } finally {
+    cliente.release();
   }
 }
 

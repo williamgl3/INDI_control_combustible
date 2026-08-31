@@ -112,6 +112,21 @@ authRouter.post(
   }),
 );
 
+const restablecerPasswordSchema = z.object({
+  token: z.string().trim().min(32, 'El token de recuperación no es válido.'),
+  passwordNueva: passwordSchema,
+});
+
+authRouter.post(
+  '/restablecer-password',
+  authStrictLimiter,
+  asyncHandler(async (req, res) => {
+    const { token, passwordNueva } = restablecerPasswordSchema.parse(req.body);
+    await authService.restablecerPassword(token, passwordNueva);
+    res.status(204).send();
+  }),
+);
+
 /// Lista de choferes registrados — panel administrativo (`ChoferesTab`,
 /// `AutorizacionesTab`, `ConcentradoTab`).
 authRouter.get(

@@ -28,7 +28,7 @@ suite('ledger idempotente con PostgreSQL real', () => {
   beforeAll(async () => {
     protegerBaseAislada();
     const migraciones = await pool.query<{ total: string }>('SELECT count(*) total FROM schema_migrations');
-    expect(Number(migraciones.rows[0]!.total)).toBe(33);
+    expect(Number(migraciones.rows[0]!.total)).toBe(34);
     await pool.query(`INSERT INTO usuarios(id,usuario,password_hash,nombre,correo,rol) VALUES
       ($1,$2,'x','Supervisor','supervisor-idem@test.invalid','supervisor'),
       ($3,$4,'x','Supervisor dos','supervisor2-idem@test.invalid','supervisor')`,
