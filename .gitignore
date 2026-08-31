@@ -1,4 +1,11 @@
 graphify-out/
 .env
+.env.*
+!.env.example
 .claude/settings.local.json
 respaldos/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
