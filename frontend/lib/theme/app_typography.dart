@@ -55,7 +55,7 @@ class AppTypography {
   static TextTheme textTheme(Color baseColor) {
     return TextTheme(
       displayLarge: inter(
-        fontSize: 34,
+        fontSize: 30,
         fontWeight: FontWeight.w700,
         color: baseColor,
       ),
@@ -95,7 +95,7 @@ class AppTypography {
         color: baseColor,
       ),
       bodyLarge: inter(
-        fontSize: 17,
+        fontSize: 16,
         fontWeight: FontWeight.w400,
         color: baseColor,
       ),

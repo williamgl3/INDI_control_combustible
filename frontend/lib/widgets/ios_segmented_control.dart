@@ -1,6 +1,7 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../theme/app_radii.dart';
+import '../theme/app_spacing.dart';
 import '../theme/app_theme.dart';
 
 /// Control segmentado nativo de iOS (`UISegmentedControl`) para filtros de
@@ -31,20 +32,35 @@ class IosSegmentedControl<T extends Object> extends StatelessWidget {
       context,
     ).textTheme.bodyMedium?.copyWith(color: colors.textPrimary);
 
-    final control = CupertinoSlidingSegmentedControl<T>(
-      groupValue: valor,
-      backgroundColor: colors.surfaceAlt,
-      thumbColor: colors.surface,
-      onValueChanged: (nuevo) {
-        if (nuevo != null) onChanged(nuevo);
-      },
-      children: {
-        for (final entrada in opciones.entries)
-          entrada.key: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-            child: Text(entrada.value, style: estilo, softWrap: false),
-          ),
-      },
+    final control = Container(
+      padding: const EdgeInsets.all(AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: colors.surfaceAlt,
+        borderRadius: AppRadii.inputRadius,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final entrada in opciones.entries)
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.xs),
+              child: ChoiceChip(
+                label: Text(entrada.value, softWrap: false),
+                selected: entrada.key == valor,
+                onSelected: (_) => onChanged(entrada.key),
+                selectedColor: colors.primary,
+                backgroundColor: Colors.transparent,
+                side: BorderSide.none,
+                showCheckmark: false,
+                labelStyle: estilo?.copyWith(
+                  color: entrada.key == valor
+                      ? colors.primaryOn
+                      : colors.textSecondary,
+                ),
+              ),
+            ),
+        ],
+      ),
     );
 
     return LayoutBuilder(

@@ -4,7 +4,6 @@ import '../theme/app_motion.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_theme.dart';
 import 'app_card.dart';
-import 'icon_badge.dart';
 
 /// Tarjeta compacta de una métrica (ícono + valor + etiqueta), reutilizada
 /// en las pestañas del panel administrativo. El valor hace una transición
@@ -58,7 +57,7 @@ class StatTile extends StatelessWidget {
         children: [
           Column(
             children: [
-              IconBadge(icono: icono, color: colorInsignia),
+              Icon(icono, color: colorInsignia, size: 22),
               SizedBox(height: compacta ? AppSpacing.sm : AppSpacing.md),
               AnimatedSwitcher(
                 duration: AppMotion.fast,
@@ -69,7 +68,7 @@ class StatTile extends StatelessWidget {
                 child: Text(
                   valor,
                   key: ValueKey(valor),
-                  style: Theme.of(context).textTheme.headlineSmall,
+                  style: Theme.of(context).textTheme.headlineLarge,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

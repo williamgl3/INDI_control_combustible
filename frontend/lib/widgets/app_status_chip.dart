@@ -21,19 +21,18 @@ class AppStatusChip extends StatelessWidget {
     label: label,
     child: Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.11),
         borderRadius: AppRadii.badgeRadius,
-        border: Border.all(color: color.withValues(alpha: 0.35)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: AppSpacing.sm),
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: AppSpacing.xs),
           Flexible(
             child: Text(
               label,

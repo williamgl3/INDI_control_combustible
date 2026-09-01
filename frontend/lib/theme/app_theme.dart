@@ -84,7 +84,7 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: colors.surfaceAlt,
+        fillColor: colors.surface,
         constraints: const BoxConstraints(minHeight: 52),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
@@ -108,21 +108,11 @@ class AppTheme {
         // El contorno de foco/error se mantiene igual en ambos temas.
         border: OutlineInputBorder(
           borderRadius: AppRadii.inputRadius,
-          borderSide: brightness == Brightness.dark
-              ? BorderSide(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  width: AppBorders.hairline,
-                )
-              : BorderSide.none,
+          borderSide: BorderSide(color: colors.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: AppRadii.inputRadius,
-          borderSide: brightness == Brightness.dark
-              ? BorderSide(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  width: AppBorders.hairline,
-                )
-              : BorderSide.none,
+          borderSide: BorderSide(color: colors.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: AppRadii.inputRadius,
@@ -175,7 +165,7 @@ class AppTheme {
               shape: RoundedRectangleBorder(
                 borderRadius: AppRadii.buttonRadius,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               minimumSize: const Size(48, 52),
               textStyle: textTheme.labelLarge,
             ).copyWith(
@@ -251,13 +241,12 @@ class AppTheme {
       navigationBarTheme: NavigationBarThemeData(
         height: 68,
         backgroundColor: colors.surface,
-        indicatorColor: colorScheme.primary,
-        indicatorShape: const StadiumBorder(),
+        indicatorColor: Colors.transparent,
         elevation: 0,
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
             color: states.contains(WidgetState.selected)
-                ? colorScheme.onPrimary
+                ? colorScheme.primary
                 : colorScheme.onSurfaceVariant,
           ),
         ),

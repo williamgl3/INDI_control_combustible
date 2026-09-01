@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_borders.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_radii.dart';
 import '../theme/app_spacing.dart';
@@ -71,17 +70,13 @@ class _AppCardState extends State<AppCard> {
     final radius = widget.floating
         ? AppRadii.floatingRadius
         : AppRadii.cardRadius;
-    final shadows = widget.floating
-        ? (_hover ? context.shadows.raised : context.shadows.floating)
-        : (_hover ? context.shadows.raised : context.shadows.card);
+    final shadows = _hover ? context.shadows.floating : context.shadows.card;
 
     // En floating: si no se pasó un border explícito, se usa el borde
     // sutil del tema (blanco al 6% en oscuro, invisible en claro).
     final effectiveBorder =
         widget.border ??
-        (widget.floating
-            ? Border.all(color: colors.border, width: AppBorders.floating)
-            : null);
+        Border.all(color: colors.border.withValues(alpha: 0.7));
 
     final tarjeta = AnimatedContainer(
       duration: AppMotion.fast,

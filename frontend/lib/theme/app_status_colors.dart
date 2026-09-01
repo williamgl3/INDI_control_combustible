@@ -26,7 +26,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
   final Color measured;
 
   static const light = AppStatusColors(
-    pending: Color(0xFF9A5A00),
+    pending: Color(0xFF5F6B7A),
     approved: Color(0xFF147A38),
     rejected: Color(0xFFC62828),
     offline: Color(0xFF5F6368),
@@ -37,7 +37,7 @@ class AppStatusColors extends ThemeExtension<AppStatusColors> {
   );
 
   static const dark = AppStatusColors(
-    pending: Color(0xFFFFB74D),
+    pending: Color(0xFFB8BDC5),
     approved: Color(0xFF66D48A),
     rejected: Color(0xFFFF7B72),
     offline: Color(0xFFB8BDC5),

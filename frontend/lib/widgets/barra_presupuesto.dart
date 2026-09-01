@@ -36,7 +36,7 @@ class BarraPresupuesto extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: AppRadii.cardRadius,
-        boxShadow: context.shadows.card,
+        border: Border.all(color: colors.border.withValues(alpha: 0.7)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -48,8 +48,11 @@ class BarraPresupuesto extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Presupuesto semanal',
-                      style: Theme.of(context).textTheme.titleMedium,
+                      'PRESUPUESTO SEMANAL',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: colors.textSecondary,
+                        letterSpacing: 0.6,
+                      ),
                     ),
                     if (etiquetaSemana != null) ...[
                       const SizedBox(height: 2),
@@ -75,11 +78,20 @@ class BarraPresupuesto extends StatelessWidget {
                   ],
                 ),
               ),
-              Text(
-                '${formatearMoneda(restante)} restantes',
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(color: color),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    formatearMoneda(restante),
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  Text(
+                    'Disponibles',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

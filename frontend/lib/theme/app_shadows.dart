@@ -30,17 +30,13 @@ class AppShadows extends ThemeExtension<AppShadows> {
 
   static const light = AppShadows(
     card: [
-      BoxShadow(color: Color(0x0F000000), blurRadius: 8, offset: Offset(0, 2)),
+      BoxShadow(color: Color(0x0A0F172A), blurRadius: 8, offset: Offset(0, 2)),
     ],
     raised: [
-      BoxShadow(color: Color(0x26000000), blurRadius: 24, offset: Offset(0, 8)),
+      BoxShadow(color: Color(0x1A0F172A), blurRadius: 18, offset: Offset(0, 6)),
     ],
     floating: [
-      BoxShadow(
-        color: Color(0x1F000000),
-        blurRadius: 24,
-        offset: Offset(0, 10),
-      ),
+      BoxShadow(color: Color(0x0F0F172A), blurRadius: 12, offset: Offset(0, 4)),
     ],
   );
 
@@ -52,11 +48,7 @@ class AppShadows extends ThemeExtension<AppShadows> {
       BoxShadow(color: Color(0x59000000), blurRadius: 24, offset: Offset(0, 8)),
     ],
     floating: [
-      BoxShadow(
-        color: Color(0x66000000),
-        blurRadius: 24,
-        offset: Offset(0, 10),
-      ),
+      BoxShadow(color: Color(0x40000000), blurRadius: 12, offset: Offset(0, 4)),
     ],
   );
 
