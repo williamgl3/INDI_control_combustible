@@ -11,6 +11,7 @@ import '../models/solicitud_autorizacion.dart';
 import '../screens/administrativo/administrativo_home_screen.dart';
 import '../screens/administrativo/chofer_detalle_screen.dart';
 import '../screens/bienvenida/bienvenida_screen.dart';
+import '../screens/chofer/centro_sincronizacion_screen.dart';
 import '../screens/chofer/cerrar_dia_screen.dart';
 import '../screens/chofer/chofer_dashboard_screen.dart';
 import '../screens/chofer/chofer_home_shell.dart';
@@ -290,6 +291,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.choferSubirEvidencias,
         pageBuilder: (context, state) =>
             _paginaPrincipal(context, state, const SubirEvidenciasScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.choferCentroSincronizacion,
+        pageBuilder: (context, state) => _paginaPrincipal(
+          context,
+          state,
+          const CentroSincronizacionScreen(),
+        ),
       ),
       GoRoute(
         path: RoutePaths.administrativo,
