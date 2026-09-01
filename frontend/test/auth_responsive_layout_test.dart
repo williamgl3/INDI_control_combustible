@@ -2,11 +2,53 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:indi_combustible/screens/bienvenida/bienvenida_screen.dart';
 import 'package:indi_combustible/screens/login/login_screen.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
 import 'package:indi_combustible/widgets/auth_screen_shell.dart';
 
 void main() {
+  testWidgets('bienvenida conserva contenido dentro del viewport', (
+    tester,
+  ) async {
+    for (final size in const [
+      Size(390, 844),
+      Size(412, 915),
+      Size(1366, 768),
+      Size(1920, 1080),
+    ]) {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _pumpShell(
+        tester,
+        size: size,
+        child: const BienvenidaScreen(),
+        directChild: true,
+      );
+
+      for (final finder in [
+        find.text(
+          'Registra y controla el combustible de forma rápida y sencilla.',
+        ),
+        find.widgetWithText(ElevatedButton, 'Iniciar sesión'),
+        find.widgetWithText(OutlinedButton, 'Crear cuenta'),
+      ]) {
+        expect(finder, findsOneWidget, reason: 'size=$size');
+        final rect = tester.getRect(finder);
+        expect(rect.left, greaterThanOrEqualTo(0), reason: 'size=$size');
+        expect(rect.right, lessThanOrEqualTo(size.width), reason: 'size=$size');
+      }
+
+      if (size.width >= 700) {
+        expect(
+          tester.getSize(find.byKey(const Key('auth-screen-shell-card'))).width,
+          lessThanOrEqualTo(440),
+          reason: 'size=$size',
+        );
+      }
+      expect(tester.takeException(), isNull, reason: 'size=$size');
+    }
+  });
+
   testWidgets('login conserva campos y acciones en escritorio y tablet', (
     tester,
   ) async {

@@ -45,5 +45,8 @@ jobs:
       - name: Run tests
         run: flutter test
 
+      - name: Run IndexedDB browser tests
+        run: flutter test test/offline_almacenamiento_web_test.dart --platform chrome
+
       - name: Build Web
         run: flutter build web --dart-define=API_BASE_URL=https://ci-placeholder.invalid
