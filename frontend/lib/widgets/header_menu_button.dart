@@ -163,7 +163,7 @@ class _HeaderMenuButtonState extends State<HeaderMenuButton>
           );
         },
         child: HeaderGlassButton(
-          icon: const Icon(Icons.more_vert, color: BrandHeader.onColor),
+          icon: const Icon(Icons.menu, color: BrandHeader.onColor),
           tooltip: widget.tooltip,
           onPressed: _abrir,
         ),

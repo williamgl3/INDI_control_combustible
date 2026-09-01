@@ -282,11 +282,11 @@ void main() {
       expect(find.byType(EstadoSolicitudBadge), findsOneWidget);
       expect(find.text('RECHAZADO'), findsOneWidget);
 
-      await tester.ensureVisible(find.text('Pendientes'));
-      await tester.tap(find.text('Pendientes'));
+      await tester.ensureVisible(find.text('Por autorizar'));
+      await tester.tap(find.text('Por autorizar'));
       await tester.pumpAndSettle();
       expect(find.byType(EstadoSolicitudBadge), findsNothing);
-      expect(find.text('No hay solicitudes con este filtro.'), findsOneWidget);
+      expect(find.text('No hay solicitudes por autorizar.'), findsOneWidget);
 
       await tester.ensureVisible(find.text('Todas'));
       await tester.tap(find.text('Todas'));

@@ -19,6 +19,8 @@ class NotificacionItem {
     required this.titulo,
     required this.subtitulo,
     required this.icono,
+    this.solicitudId,
+    this.estadoSolicitud,
   });
 
   final String id;
@@ -28,6 +30,11 @@ class NotificacionItem {
   /// Nombre del ícono de Material — se resuelve a `IconData` en la UI
   /// para no acoplar este archivo (sin Flutter) a `package:flutter`.
   final String icono;
+
+  /// Identificador estructurado para navegar a la solicitud exacta desde
+  /// una notificación administrativa. No se infiere desde el texto visible.
+  final String? solicitudId;
+  final String? estadoSolicitud;
 }
 
 /// Guarda qué solicitudes ya "vio" el chofer en el centro de
@@ -151,6 +158,8 @@ final notificacionesAdminProvider = FutureProvider<List<NotificacionItem>>((
         titulo: 'Nueva solicitud por revisar',
         subtitulo: '${s.litrosSolicitados.toStringAsFixed(1)} L solicitados',
         icono: 'assignment_outlined',
+        solicitudId: s.id,
+        estadoSolicitud: s.estado.name,
       ),
   ];
 

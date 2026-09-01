@@ -36,7 +36,12 @@ const _idsNoDescartables = {
 /// administrativo (`notificacionesAdminProvider`) — cada rol pasa su
 /// propio [provider].
 class NotificacionesBell extends ConsumerWidget {
-  const NotificacionesBell({super.key, required this.provider, this.color});
+  const NotificacionesBell({
+    super.key,
+    required this.provider,
+    this.color,
+    this.onNotificationTap,
+  });
 
   final FutureProvider<List<NotificacionItem>> provider;
 
@@ -44,6 +49,7 @@ class NotificacionesBell extends ConsumerWidget {
   /// sobre superficies claras); pásalo explícito (ej. blanco) cuando se
   /// use sobre un [BrandHeader].
   final Color? color;
+  final ValueChanged<NotificacionItem>? onNotificationTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -52,7 +58,12 @@ class NotificacionesBell extends ConsumerWidget {
 
     return HeaderGlassButton(
       tooltip: 'Notificaciones',
-      onPressed: () => mostrar(context, ref, provider),
+      onPressed: () => mostrar(
+        context,
+        ref,
+        provider: provider,
+        onNotificationTap: onNotificationTap,
+      ),
       icon: Badge(
         isLabelVisible: notificaciones.isNotEmpty,
         label: Text('${notificaciones.length}'),
@@ -71,7 +82,10 @@ class NotificacionesBell extends ConsumerWidget {
   static Future<void> mostrar(
     BuildContext context,
     WidgetRef ref,
-    FutureProvider<List<NotificacionItem>> provider,
+    {
+    required FutureProvider<List<NotificacionItem>> provider,
+    ValueChanged<NotificacionItem>? onNotificationTap,
+    }
   ) async {
     final notificaciones = ref.read(provider).valueOrNull ?? const [];
 
@@ -97,6 +111,7 @@ class NotificacionesBell extends ConsumerWidget {
                 height: double.infinity,
                 child: _ContenidoNotificaciones(
                   notificaciones: notificaciones,
+                  onNotificationTap: onNotificationTap,
                   mostrarCerrar: true,
                 ),
               ),
@@ -125,6 +140,7 @@ class NotificacionesBell extends ConsumerWidget {
         builder: (context) => _HojaNotificaciones(
           key: const ValueKey('hoja-notificaciones-movil'),
           notificaciones: notificaciones,
+          onNotificationTap: onNotificationTap,
         ),
       );
     }
@@ -144,23 +160,35 @@ class NotificacionesBell extends ConsumerWidget {
 }
 
 class _HojaNotificaciones extends StatelessWidget {
-  const _HojaNotificaciones({super.key, required this.notificaciones});
+  const _HojaNotificaciones({
+    super.key,
+    required this.notificaciones,
+    this.onNotificationTap,
+  });
 
   final List<NotificacionItem> notificaciones;
+  final ValueChanged<NotificacionItem>? onNotificationTap;
 
   @override
   Widget build(BuildContext context) =>
-      SafeArea(child: _ContenidoNotificaciones(notificaciones: notificaciones));
+      SafeArea(
+        child: _ContenidoNotificaciones(
+          notificaciones: notificaciones,
+          onNotificationTap: onNotificationTap,
+        ),
+      );
 }
 
 class _ContenidoNotificaciones extends StatelessWidget {
   const _ContenidoNotificaciones({
     required this.notificaciones,
     this.mostrarCerrar = false,
+    this.onNotificationTap,
   });
 
   final List<NotificacionItem> notificaciones;
   final bool mostrarCerrar;
+  final ValueChanged<NotificacionItem>? onNotificationTap;
 
   @override
   Widget build(BuildContext context) {
@@ -204,9 +232,16 @@ class _ContenidoNotificaciones extends StatelessWidget {
                 separatorBuilder: (_, _) => const Divider(height: 1),
                 itemBuilder: (context, i) {
                   final n = notificaciones[i];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    child: Row(
+                  return InkWell(
+                    onTap: onNotificationTap == null
+                        ? null
+                        : () {
+                            Navigator.of(context).pop();
+                            onNotificationTap!(n);
+                          },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(
                       children: [
                         Container(
                           padding: const EdgeInsets.all(8),
@@ -238,6 +273,7 @@ class _ContenidoNotificaciones extends StatelessWidget {
                           ),
                         ),
                       ],
+                      ),
                     ),
                   );
                 },

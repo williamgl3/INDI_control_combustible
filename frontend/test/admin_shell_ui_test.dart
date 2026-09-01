@@ -5,12 +5,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:indi_combustible/core/providers.dart';
 import 'package:indi_combustible/core/session_provider.dart';
 import 'package:indi_combustible/data/auth_repository.dart';
+import 'package:indi_combustible/models/perfil.dart';
 import 'package:indi_combustible/router/app_router.dart';
 import 'package:indi_combustible/router/route_paths.dart';
+import 'package:indi_combustible/screens/administrativo/revisar_solicitud_dialog.dart';
 import 'package:indi_combustible/widgets/brand_header.dart';
+import 'package:indi_combustible/widgets/header_menu_button.dart';
 import 'package:indi_combustible/widgets/logo_glass.dart';
 
 import 'mocks/mock_auth_repository.dart';
+import 'mocks/mock_operaciones_repository.dart';
+import 'mocks/mock_vehiculos_repository.dart';
 import 'test_helpers.dart';
 
 void main() {
@@ -67,6 +72,14 @@ void main() {
       expect(find.byTooltip('Notificaciones'), findsOneWidget);
       expect(find.byTooltip('Cerrar sesión'), findsOneWidget);
       expect(find.byTooltip('Más opciones'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(HeaderMenuButton),
+          matching: find.byIcon(Icons.menu),
+        ),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.more_vert), findsNothing);
       await tester.tap(
         find.descendant(of: sidebar, matching: find.text('Finanzas')),
       );
@@ -281,6 +294,74 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('las secciones conservan filtros al cambiar de destino', (
+    tester,
+  ) async {
+    await _fijarSuperficie(tester, const Size(1440, 900));
+    final container = makeTestContainer();
+    addTearDown(container.dispose);
+    await _iniciarComoAdmin(tester, container);
+
+    await tester.tap(find.text('Ajustadas'));
+    await tester.pumpAndSettle();
+    expect(find.text('No hay solicitudes con este filtro.'), findsOneWidget);
+
+    final sidebar = find.byKey(const ValueKey('sidebar-administrativo'));
+    await tester.tap(
+      find.descendant(of: sidebar, matching: find.text('Finanzas')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(of: sidebar, matching: find.text('Autorizaciones')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No hay solicitudes con este filtro.'), findsOneWidget);
+    expect(container.read(appRouterProvider).canPop(), isFalse);
+  });
+
+  testWidgets(
+    'deep link abre la solicitud y al cerrar conserva Autorizaciones',
+    (tester) async {
+      await _fijarSuperficie(tester, const Size(1440, 900));
+      final operaciones = MockOperacionesRepository();
+      final vehiculos = MockVehiculosRepository();
+      final solicitud = await tester.runAsync(
+        () => operaciones.enviarSolicitud(
+          idempotencyKey: 'ux-notificacion',
+          payloadFingerprint: 'ux-notificacion',
+          choferId: 'mock-chofer-1',
+          vehiculo: vehiculos.todos.first,
+          litrosSolicitados: 40,
+          actividad: 'Prueba de navegaciÃ³n',
+          fechaProgramada: DateTime(2026, 9, 1),
+        ),
+      );
+      expect(solicitud, isNotNull);
+      final container = makeTestContainer(
+        overridesExtra: [
+          operacionesRepositoryProvider.overrideWithValue(operaciones),
+          vehiculosRepositoryProvider.overrideWithValue(vehiculos),
+        ],
+      );
+      addTearDown(container.dispose);
+      final router = await pumpTestApp(tester, container: container);
+      container.read(sessionProvider.notifier).iniciarSesion(_adminUx);
+
+      router.go(
+        RoutePaths.administrativoAutorizacion(solicitudId: solicitud!.id),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(RevisarSolicitudDialog), findsOneWidget);
+
+      Navigator.of(tester.element(find.byType(RevisarSolicitudDialog))).pop();
+      await tester.pumpAndSettle();
+      expect(router.state.uri.path, RoutePaths.administrativo);
+      expect(router.state.uri.queryParameters['seccion'], 'autorizaciones');
+      expect(find.text('Autorizaciones'), findsWidgets);
+    },
+  );
+
   testWidgets(
     'el cierre visible confirma, evita duplicados y dirige al login',
     (tester) async {
@@ -382,3 +463,12 @@ class _AuthContado extends MockAuthRepository implements AuthRepository {
     cierres++;
   }
 }
+
+const _adminUx = Perfil(
+  id: 'mock-admin-1',
+  usuario: 'admin1',
+  nombre: 'Ana',
+  apellidoPaterno: 'Torres',
+  correo: 'admin1@example.com',
+  rol: RolUsuario.administrativo,
+);

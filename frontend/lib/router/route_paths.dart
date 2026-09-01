@@ -42,6 +42,14 @@ class RoutePaths {
     queryParameters: {'seccion': seccion},
   ).toString();
 
+  static String administrativoAutorizacion({String? solicitudId}) => Uri(
+    path: administrativo,
+    queryParameters: {
+      'seccion': 'autorizaciones',
+      ...?solicitudId == null ? null : {'solicitudId': solicitudId},
+    },
+  ).toString();
+
   /// Rutas accesibles sin sesión iniciada.
   static const publicas = {
     bienvenida,

@@ -21,12 +21,14 @@ import '../../../widgets/stat_tile.dart';
 import '../../../widgets/stat_tile_row.dart';
 import '../revisar_solicitud_dialog.dart';
 
-enum _FiltroEstado { todas, pendientes, aprobadas, rechazadas }
+enum _FiltroEstado { todas, pendientes, aprobadas, ajustadas, rechazadas }
 
 /// Pestaña "Autorizaciones": solicitudes de todos los choferes, filtrables
 /// por estado, con acción de revisión manual para las pendientes.
 class AutorizacionesTab extends ConsumerStatefulWidget {
-  const AutorizacionesTab({super.key});
+  const AutorizacionesTab({super.key, this.solicitudIdInicial});
+
+  final String? solicitudIdInicial;
 
   @override
   ConsumerState<AutorizacionesTab> createState() => _AutorizacionesTabState();
@@ -36,6 +38,26 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
   static const _limiteMostradas = 30;
 
   _FiltroEstado _filtroVista = _FiltroEstado.todas;
+  String? _solicitudInicialAtendida;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.solicitudIdInicial != null) {
+      _filtroVista = _FiltroEstado.pendientes;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AutorizacionesTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.solicitudIdInicial != oldWidget.solicitudIdInicial) {
+      _solicitudInicialAtendida = null;
+      if (widget.solicitudIdInicial != null) {
+        _filtroVista = _FiltroEstado.pendientes;
+      }
+    }
+  }
 
   /// Ids de solicitudes pendientes marcadas para una acción en lote — se
   /// vacía cada vez que se cambia de filtro para no arrastrar selección
@@ -44,11 +66,14 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
   bool _procesandoLote = false;
 
   /// `null` representa el filtro "Todas".
-  EstadoSolicitud? get _filtro => switch (_filtroVista) {
-    _FiltroEstado.todas => null,
-    _FiltroEstado.pendientes => EstadoSolicitud.pendiente,
-    _FiltroEstado.aprobadas => EstadoSolicitud.aprobada,
-    _FiltroEstado.rechazadas => EstadoSolicitud.rechazada,
+  bool _coincideFiltro(SolicitudAutorizacion s) => switch (_filtroVista) {
+    _FiltroEstado.todas => true,
+    _FiltroEstado.pendientes => s.estado == EstadoSolicitud.pendiente,
+    _FiltroEstado.aprobadas =>
+      s.estadoVisual == EstadoVisualSolicitud.autorizada,
+    _FiltroEstado.ajustadas => s.estadoVisual == EstadoVisualSolicitud.ajustada,
+    _FiltroEstado.rechazadas =>
+      s.estadoVisual == EstadoVisualSolicitud.rechazada,
   };
 
   Future<void> _revisar(
@@ -169,6 +194,22 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
     final nombresPorChoferId = {
       for (final c in choferes) c.id: c.nombreCompleto,
     };
+    final solicitudInicialId = widget.solicitudIdInicial;
+    if (solicitudInicialId != null &&
+        _solicitudInicialAtendida != solicitudInicialId) {
+      _solicitudInicialAtendida = solicitudInicialId;
+      final indice = solicitudes.indexWhere((s) => s.id == solicitudInicialId);
+      if (indice >= 0) {
+        final solicitud = solicitudes[indice];
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _revisar(
+            solicitud,
+            nombresPorChoferId[solicitud.choferId] ?? solicitud.choferId,
+          );
+        });
+      }
+    }
 
     final pendientes = solicitudes
         .where((s) => s.estado == EstadoSolicitud.pendiente)
@@ -181,9 +222,7 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
       (suma, s) => suma + (s.litrosAutorizados ?? s.litrosSolicitados),
     );
 
-    final filtradas = _filtro == null
-        ? solicitudes
-        : solicitudes.where((s) => s.estado == _filtro).toList();
+    final filtradas = solicitudes.where(_coincideFiltro).toList();
     final mostradas = filtradas.take(_limiteMostradas).toList();
 
     return ContenidoResponsivo(
@@ -208,7 +247,7 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
                 icono: Icons.hourglass_top_outlined,
                 valor: '$pendientes',
                 etiqueta: 'Por revisar',
-                color: colors.warning,
+                color: colors.textSecondary,
                 destacado: pendientes > 0,
                 onTap: () =>
                     setState(() => _filtroVista = _FiltroEstado.pendientes),
@@ -234,8 +273,9 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
             valor: _filtroVista,
             opciones: const {
               _FiltroEstado.todas: 'Todas',
-              _FiltroEstado.pendientes: 'Pendientes',
+              _FiltroEstado.pendientes: 'Por autorizar',
               _FiltroEstado.aprobadas: 'Aprobadas',
+              _FiltroEstado.ajustadas: 'Ajustadas',
               _FiltroEstado.rechazadas: 'Rechazadas',
             },
             onChanged: (f) => setState(() {
@@ -261,14 +301,16 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
             transitionBuilder: (child, animation) =>
                 FadeTransition(opacity: animation, child: child),
             child: Column(
-              key: ValueKey(_filtro),
+              key: ValueKey(_filtroVista),
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (filtradas.isEmpty)
                   EstadoVacio(
                     icono: Icons.assignment_outlined,
-                    mensaje: _filtro == null
+                    mensaje: _filtroVista == _FiltroEstado.todas
                         ? 'Aún no hay solicitudes registradas.'
+                        : _filtroVista == _FiltroEstado.pendientes
+                        ? 'No hay solicitudes por autorizar.'
                         : 'No hay solicitudes con este filtro.',
                   )
                 else ...[
@@ -283,6 +325,7 @@ class _AutorizacionesTabState extends ConsumerState<AutorizacionesTab> {
                         children: [
                           for (final s in grupo.items)
                             _SolicitudTile(
+                              key: ValueKey('solicitud-${s.id}'),
                               solicitud: s,
                               nombreChofer:
                                   nombresPorChoferId[s.choferId] ?? s.choferId,
@@ -478,6 +521,7 @@ class _BarraAccionesLote extends StatelessWidget {
 
 class _SolicitudTile extends StatelessWidget {
   const _SolicitudTile({
+    super.key,
     required this.solicitud,
     required this.nombreChofer,
     required this.onRevisar,
@@ -545,7 +589,7 @@ class _SolicitudTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      formatearHora(solicitud.creadaEn),
+                      'Solicitud: ${formatearFechaCorta(solicitud.creadaEn)}',
                       style: Theme.of(
                         context,
                       ).textTheme.bodySmall?.copyWith(color: colors.textMuted),

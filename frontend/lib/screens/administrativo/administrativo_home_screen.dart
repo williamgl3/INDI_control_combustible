@@ -9,7 +9,6 @@ import '../../core/session_provider.dart';
 import '../../models/solicitud_autorizacion.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_breakpoints.dart';
-import '../../theme/app_motion.dart';
 import '../../theme/app_radii.dart';
 import '../../theme/app_section_colors.dart';
 import '../../theme/app_spacing.dart';
@@ -20,7 +19,6 @@ import '../../widgets/brand_header.dart';
 import '../../widgets/confirmar_cerrar_sesion_dialog.dart';
 import '../../widgets/header_glass_button.dart';
 import '../../widgets/header_menu_button.dart';
-import '../../widgets/icon_badge.dart';
 import '../../widgets/logo_glass.dart';
 import '../../widgets/notificaciones_bell.dart';
 import '../../widgets/selector_tema_dialog.dart';
@@ -181,10 +179,12 @@ class AdministrativoHomeScreen extends ConsumerStatefulWidget {
     super.key,
     this.mostrarMarimba = false,
     this.seccionInicial,
+    this.solicitudIdInicial,
   });
 
   final bool mostrarMarimba;
   final String? seccionInicial;
+  final String? solicitudIdInicial;
 
   @override
   ConsumerState<AdministrativoHomeScreen> createState() =>
@@ -196,6 +196,7 @@ class _AdministrativoHomeScreenState
   bool? _sidebarContraida;
   bool _cerrandoSesion = false;
   bool _procesandoLogout = false;
+  final Set<_SeccionAdmin> _seccionesVisitadas = {_SeccionAdmin.autorizaciones};
 
   _SeccionAdmin get _seccion {
     if (widget.mostrarMarimba) return _SeccionAdmin.marimba;
@@ -246,7 +247,7 @@ class _AdministrativoHomeScreenState
       case _SeccionAdmin.dashboard:
         return const DashboardTab();
       case _SeccionAdmin.autorizaciones:
-        return const AutorizacionesTab();
+        return AutorizacionesTab(solicitudIdInicial: widget.solicitudIdInicial);
       case _SeccionAdmin.concentrado:
         return const ConcentradoTab();
       case _SeccionAdmin.finanzas:
@@ -288,6 +289,7 @@ class _AdministrativoHomeScreenState
         .length;
     final destinoActual = _destinos[indiceSeleccionado];
     final sidebarContraida = _sidebarContraida ?? ancho < 1200;
+    _seccionesVisitadas.add(_seccion);
 
     final contenido = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -340,6 +342,14 @@ class _AdministrativoHomeScreenState
               NotificacionesBell(
                 provider: notificacionesAdminProvider,
                 color: BrandHeader.onColor,
+                onNotificationTap: (notificacion) {
+                  if (notificacion.solicitudId == null) return;
+                  context.go(
+                    RoutePaths.administrativoAutorizacion(
+                      solicitudId: notificacion.solicitudId,
+                    ),
+                  );
+                },
               ),
               if (esAncho) ...[
                 const SizedBox(width: 8),
@@ -398,24 +408,17 @@ class _AdministrativoHomeScreenState
           ),
         ),
         Expanded(
-          child: AnimatedSwitcher(
-            duration: AppMotion.base,
-            switchInCurve: AppMotion.curve,
-            switchOutCurve: AppMotion.curve,
-            transitionBuilder: (child, animation) => FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0, 0.02),
-                  end: Offset.zero,
-                ).animate(animation),
-                child: child,
-              ),
-            ),
-            child: KeyedSubtree(
-              key: ValueKey(_seccion),
-              child: _cuerpoDe(_seccion),
-            ),
+          child: IndexedStack(
+            index: _seccion.index,
+            children: [
+              for (final seccion in _SeccionAdmin.values)
+                KeyedSubtree(
+                  key: ValueKey(seccion),
+                  child: _seccionesVisitadas.contains(seccion)
+                      ? _cuerpoDe(seccion)
+                      : const SizedBox.shrink(),
+                ),
+            ],
           ),
         ),
       ],
@@ -462,9 +465,7 @@ class _AdministrativoHomeScreenState
       bottomNavigationBar: NavigationBarTheme(
         data: NavigationBarThemeData(
           height: 68,
-          indicatorColor: Theme.of(
-            context,
-          ).colorScheme.primary.withValues(alpha: 0.12),
+          indicatorColor: Colors.transparent,
           iconTheme: WidgetStateProperty.resolveWith(
             (states) => IconThemeData(
               size: 23,
@@ -532,7 +533,12 @@ class _AdministrativoHomeScreenState
           children: [
             for (final d in destinos)
               ListTile(
-                leading: IconBadge(icono: d.icono, color: d.color),
+                leading: Icon(
+                  d.icono,
+                  color: d.seccion == _seccion
+                      ? context.colors.primary
+                      : context.colors.textSecondary,
+                ),
                 title: Text(d.etiqueta),
                 selected: d.seccion == _seccion,
                 onTap: () => Navigator.of(context).pop(d.seccion),

@@ -313,6 +313,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           state,
           AdministrativoHomeScreen(
             seccionInicial: state.uri.queryParameters['seccion'],
+            solicitudIdInicial: state.uri.queryParameters['solicitudId'],
           ),
         ),
       ),
