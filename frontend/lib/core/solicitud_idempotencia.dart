@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:uuid/uuid.dart';
@@ -13,12 +14,47 @@ String nuevaIdempotencyKey() => _uuid.v4();
 String _texto(String? valor) =>
     (valor ?? '').trim().replaceAll(RegExp(r'\s+'), ' ');
 
+/// Calcula SHA-256 de los bytes dados. Usado para archivos durables
+/// donde los bytes ya están en memoria.
+String sha256DeBytes(Uint8List bytes) => sha256.convert(bytes).toString();
+
+/// Calcula SHA-256 de un archivo en disco. Se mantiene para backward
+/// compatibility con código existente que aún usa rutas.
 Future<String> sha256DeArchivo(String? ruta) async {
   if (ruta == null) return '';
-  // La evidencia ya esta limitada a 10 MB. Leerla en una sola operacion
-  // evita que un reintento dependa del scheduler (y que dos consumidores
-  // calculen identidades en momentos distintos) antes de persistir la cola.
-  return sha256.convert(File(ruta).readAsBytesSync()).toString();
+  return sha256DeBytes(File(ruta).readAsBytesSync());
+}
+
+Future<String> fingerprintEvidencia({
+  required String usuarioId,
+  required String tipo,
+  double? km,
+  String? folioId,
+  String? cargaId,
+  bool pendienteVincular = false,
+  String? notas,
+  String? tipoCombustibleCargado,
+  double? litros,
+  double? precioPorLitro,
+  double? montoPagado,
+  required List<String> fotosSha256,
+}) async {
+  final canonico = <String, Object>{
+    'usuarioId': usuarioId,
+    'tipo': tipo,
+    if (km != null) 'km': km.toStringAsFixed(2),
+    'folioId': ?folioId,
+    'cargaId': ?cargaId,
+    'pendienteVincular': pendienteVincular,
+    'notas': _texto(notas),
+    'tipoCombustibleCargado': _texto(tipoCombustibleCargado),
+    if (litros != null) 'litros': litros.toStringAsFixed(2),
+    if (precioPorLitro != null)
+      'precioPorLitro': precioPorLitro.toStringAsFixed(2),
+    if (montoPagado != null) 'montoPagado': montoPagado.toStringAsFixed(2),
+    'fotosSha256': fotosSha256,
+  };
+  return sha256.convert(utf8.encode(jsonEncode(canonico))).toString();
 }
 
 Future<String> fingerprintSolicitud({
@@ -31,10 +67,11 @@ Future<String> fingerprintSolicitud({
   required DateTime fechaProgramada,
   required String? fotoTableroPath,
   List<SolicitudPartida>? partidas,
+  String? fotoTableroSha256,
 }) async {
   final partidasCanonicas = [...?partidas]
     ..sort((a, b) => a.tipoApi.compareTo(b.tipoApi));
-  final fotoSha256 = await sha256DeArchivo(fotoTableroPath);
+  final fotoSha256 = fotoTableroSha256 ?? await sha256DeArchivo(fotoTableroPath);
   final canonico = <String, Object>{
     'choferId': choferId,
     'vehiculoId': vehiculoId,
