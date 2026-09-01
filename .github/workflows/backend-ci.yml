@@ -1,0 +1,119 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main, dev-frontend, feature-backend]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    branches: [main, dev-frontend, feature-backend]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: TypeScript build
+        run: npm run build
+        working-directory: backend
+
+      - name: Unit tests
+        run: npm test
+        working-directory: backend
+
+      - name: Security audit
+        run: npm audit --audit-level=high
+        working-directory: backend
+
+  integration:
+    name: PostgreSQL Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci_test_user
+          POSTGRES_PASSWORD: ci_test_pass
+          POSTGRES_DB: indi_ci_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_test_user -d indi_ci_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://ci_test_user:ci_test_pass@127.0.0.1:5433/indi_ci_test
+      DATABASE_SSL: 'false'
+      JWT_SECRET: ci-test-jwt-secret-not-real
+      JWT_EXPIRES_IN: 1h
+      ACCESS_TOKEN_EXPIRES_IN: 15m
+      REFRESH_TOKEN_EXPIRES_IN_DAYS: 30
+      AUTH_RATE_LIMIT_WINDOW_MS: '60000'
+      AUTH_RATE_LIMIT_MAX: '100'
+      AUTH_RATE_LIMIT_MAX_NORMAL: '100'
+      SMTP_HOST: localhost
+      SMTP_PORT: '1025'
+      SMTP_USER: ''
+      SMTP_PASS: ''
+      PASSWORD_RESET_PUBLIC_URL: http://localhost:3000
+      CORS_ORIGIN: 'http://localhost:*'
+      LOG_LEVEL: warn
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: backend
+
+      - name: Run migrations (apply all)
+        run: npm run migrate
+        working-directory: backend
+
+      - name: Verify no pending migrations
+        run: npm run migrate
+        working-directory: backend
+
+      - name: Integration tests (Marimba + Idempotencia + Password reset)
+        env:
+          RUN_MARIMBA_INTEGRATION: '1'
+          RUN_IDEMPOTENCY_INTEGRATION: '1'
+          RUN_PASSWORD_RESET_INTEGRATION: '1'
+        run: npm test
+        working-directory: backend

@@ -2,32 +2,48 @@ name: Frontend CI
 
 on:
   push:
+    branches: [main, dev-frontend, feature-backend]
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend-ci.yml'
   pull_request:
+    branches: [main, dev-frontend, feature-backend]
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend-ci.yml'
 
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  analyze-and-test:
+  analyze-test-build:
+    name: Analyze, Test & Web Build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
-      - name: Instalar dependencias
+      - name: Install dependencies
         run: flutter pub get
 
-      - name: flutter analyze
+      - name: Analyze code
         run: flutter analyze
 
-      - name: flutter test
+      - name: Run tests
         run: flutter test
+
+      - name: Build Web
+        run: flutter build web --dart-define=API_BASE_URL=https://ci-placeholder.invalid
