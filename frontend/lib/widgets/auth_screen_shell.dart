@@ -81,13 +81,13 @@ class AuthScreenShell extends StatelessWidget {
   // fijo en píxeles) para que la diagonal de la onda tenga espacio real
   // donde cruzar la pantalla, con límites absolutos para pantallas muy
   // chicas o muy altas.
-  static const double _headerHeightFraction = 0.30;
-  static const double _headerMinHeightPx = 220;
-  static const double _headerMaxHeightPx = 280;
+  static const double _headerHeightFraction = 0.27;
+  static const double _headerMinHeightPx = 190;
+  static const double _headerMaxHeightPx = 240;
   // Altura del contenido compacto sin el inset superior del sistema. El
   // inset se suma abajo para que SafeArea no reduzca el espacio del logo y
   // del tÃ­tulo ni produzca un overflow en pantallas bajas.
-  static const double _compactHeaderContentHeightPx = 160;
+  static const double _compactHeaderContentHeightPx = 144;
   static const double _waveLeftHeightFactor = 0.94;
   static const double _waveRightHeightFactor = 0.80;
 

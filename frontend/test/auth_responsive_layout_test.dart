@@ -56,7 +56,7 @@ void main() {
 
     expect(
       tester.getSize(find.byKey(const Key('auth-responsive-header'))).height,
-      160,
+      144,
     );
     expect(find.text('Control de combustible en obra'), findsNothing);
 

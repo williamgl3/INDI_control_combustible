@@ -75,7 +75,9 @@ class IndiLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final image = Image.asset(
-      'assets/images/logo_indi_mark.png',
+      // Variante ya recortada para headers. Conserva el mismo isotipo y
+      // proporción, pero evita el padding transparente del asset adaptativo.
+      'assets/images/logo_indi_mark_header.png',
       width: _responsiveWidth(context),
       fit: BoxFit.contain,
       filterQuality: FilterQuality.high,

@@ -29,6 +29,16 @@ void main() {
       expect(find.text('INDI Combustible'), findsOneWidget);
       expect(find.text('Control de combustible en obra'), findsOneWidget);
       expect(find.byType(IndiLogo), findsOneWidget);
+      final logoImage = tester.widget<Image>(
+        find.descendant(
+          of: find.byType(IndiLogo),
+          matching: find.byType(Image),
+        ),
+      );
+      expect(
+        (logoImage.image as AssetImage).assetName,
+        'assets/images/logo_indi_mark_header.png',
+      );
       expect(find.byType(ClipPath), findsNothing);
       final header = tester.widget<Container>(
         find.byKey(const Key('auth-s-shape-header')),

@@ -43,58 +43,64 @@ class AuthSShapeHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final defaultLogoSize = compact ? 64.0 : AppSizes.logoHeaderSize;
-    final requestedLogoSize = compact ? compactLogoSize : logoSize;
-    final logoWidth = requestedLogoSize == defaultLogoSize
-        ? authLogoWidth(screenWidth, compact: compact)
-        : requestedLogoSize;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final defaultLogoSize = compact ? 70.0 : AppSizes.logoHeaderSize;
+        final requestedLogoSize = compact ? compactLogoSize : logoSize;
+        final logoWidth = requestedLogoSize == defaultLogoSize
+            ? authLogoWidth(availableWidth, compact: compact)
+            : requestedLogoSize;
 
-    return Container(
-      key: const Key('auth-s-shape-header'),
-      width: double.infinity,
-      height: height,
-      color: colors.primary,
-      child: Stack(
-        alignment: AlignmentDirectional.topCenter,
-        children: [
-          if (showLogo)
-            Positioned.fill(
-              key: const Key('auth-header-content-zone'),
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(
-                    width: screenWidth,
-                    child: _AuthBrand(
-                      title: title,
-                      subtitle: subtitle,
-                      compact: compact,
-                      showBrand: showBrand,
-                      logoSize: logoWidth,
-                      compactLogoSize: logoWidth,
+        return Container(
+          key: const Key('auth-s-shape-header'),
+          width: double.infinity,
+          height: height,
+          color: colors.primary,
+          child: Stack(
+            alignment: AlignmentDirectional.topCenter,
+            children: [
+              if (showLogo)
+                Positioned.fill(
+                  key: const Key('auth-header-content-zone'),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        width: availableWidth,
+                        child: _AuthBrand(
+                          title: title,
+                          subtitle: subtitle,
+                          compact: compact,
+                          showBrand: showBrand,
+                          logoSize: logoWidth,
+                          compactLogoSize: logoWidth,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          if (onBack != null)
-            Positioned(
-              top: 4,
-              left: 4,
-              child: SafeArea(
-                bottom: false,
-                child: IconButton(
-                  onPressed: onBack,
-                  tooltip: 'Volver',
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+              if (onBack != null)
+                Positioned(
+                  top: 4,
+                  left: 4,
+                  child: SafeArea(
+                    bottom: false,
+                    child: IconButton(
+                      onPressed: onBack,
+                      tooltip: 'Volver',
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-        ],
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

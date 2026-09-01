@@ -30,7 +30,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(tester.widget<IndiLogo>(find.byType(IndiLogo)).width, 96);
+    expect(tester.widget<IndiLogo>(find.byType(IndiLogo)).width, 100);
 
     final header = tester.getRect(
       find.byKey(const Key('auth-responsive-header')),
@@ -88,7 +88,7 @@ void main() {
 
     expect(find.text('INDI Combustible'), findsNothing);
     expect(find.text('Recuperar contraseña'), findsOneWidget);
-    expect(tester.widget<IndiLogo>(find.byType(IndiLogo)).width, 72);
+    expect(tester.widget<IndiLogo>(find.byType(IndiLogo)).width, 78);
     expect(tester.takeException(), isNull);
   });
 }

@@ -134,8 +134,6 @@ class _RegistroChoferScreenState extends ConsumerState<RegistroChoferScreen> {
       titulo: 'Regístrate',
       subtitulo: 'Primero tus datos personales.',
       mostrarMarca: false,
-      logoSize: 96,
-      compactLogoSize: 76,
       centrarContenido: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

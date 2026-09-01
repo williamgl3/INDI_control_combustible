@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
 import 'package:indi_combustible/widgets/auth_s_shape_header.dart';
 import 'package:indi_combustible/widgets/auth_screen_shell.dart';
+import 'package:indi_combustible/widgets/logo_glass.dart';
 
 void main() {
   testWidgets('en escritorio, la tarjeta nunca excede la ventana', (
@@ -67,6 +68,24 @@ void main() {
       findsNothing,
     );
     expect(find.textContaining('Primero tus datos'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('el logo conserva presencia dentro de la tarjeta Web', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1366, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: const AuthScreenShell(child: SizedBox.shrink()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.getSize(find.byType(IndiLogo)).width, greaterThanOrEqualTo(90));
     expect(tester.takeException(), isNull);
   });
   testWidgets('el titulo de login queda debajo del header en movil', (
