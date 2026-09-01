@@ -37,9 +37,7 @@ void main() {
           await tester.tap(find.text('Ingresar'));
           await tester.pumpAndSettle();
 
-          final cta = find.byKey(
-            const ValueKey('solicitar-desde-estado-vacio'),
-          );
+          final cta = find.byKey(const ValueKey('accion-solicitar-carga'));
           expect(cta, findsOneWidget);
           final anchoCta = tester.getSize(cta).width;
           if (size.width < 700) {
@@ -56,7 +54,7 @@ void main() {
           );
           expect(
             find.text('Crea tu primera solicitud para comenzar.'),
-            findsOneWidget,
+            findsNothing,
           );
           expect(
             find.widgetWithText(FloatingActionButton, 'Solicitar carga'),

@@ -8,9 +8,89 @@ import 'package:indi_combustible/router/route_paths.dart';
 import 'package:indi_combustible/screens/chofer/chofer_home_shell.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
 import 'package:indi_combustible/widgets/brand_sub_header.dart';
+import 'package:indi_combustible/widgets/chofer_header_menu_button.dart';
 import 'package:indi_combustible/widgets/sidebar_chofer.dart';
 
+import 'test_helpers.dart';
+
 void main() {
+  testWidgets('la barra inferior del chofer tiene solo sus cuatro destinos', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: const Scaffold(
+          bottomNavigationBar: NavegacionInferiorChofer(
+            indiceSeleccionado: 0,
+            onSeleccionar: _sinAccion,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Inicio'), findsOneWidget);
+    expect(find.text('Historial'), findsOneWidget);
+    expect(find.text('Evidencias'), findsOneWidget);
+    expect(find.text('Perfil'), findsOneWidget);
+    expect(find.text('Solicitar'), findsNothing);
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).destinations,
+      hasLength(4),
+    );
+  });
+
+  testWidgets('el encabezado abre el menÃº simplificado con hamburguesa', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: ChoferHeaderMenuButton(
+            items: [
+              ChoferHeaderMenuItem(
+                icon: Icons.local_gas_station_outlined,
+                label: 'Mi consumo',
+                onSelected: _sinAccionMenu,
+              ),
+              ChoferHeaderMenuItem(
+                icon: Icons.assignment_outlined,
+                label: 'Mis solicitudes',
+                onSelected: _sinAccionMenu,
+              ),
+              ChoferHeaderMenuItem(
+                icon: Icons.info_outline,
+                label: 'Acerca de',
+                onSelected: _sinAccionMenu,
+              ),
+              ChoferHeaderMenuItem(
+                icon: Icons.logout,
+                label: 'Cerrar sesiÃ³n',
+                destructive: true,
+                onSelected: _sinAccionMenu,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(Icons.menu), findsOneWidget);
+    expect(find.byIcon(Icons.more_vert_rounded), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('chofer-header-menu-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mi consumo'), findsOneWidget);
+    expect(find.text('Mis solicitudes'), findsOneWidget);
+    expect(find.text('Acerca de'), findsOneWidget);
+    expect(find.text('Cerrar sesiÃ³n'), findsOneWidget);
+    expect(find.text('Solicitar carga'), findsNothing);
+    expect(find.text('SincronizaciÃ³n'), findsNothing);
+    expect(find.text('Ayuda'), findsNothing);
+    expect(find.text('Perfil'), findsNothing);
+  });
+
   testWidgets('el encabezado anuncia el botón de regreso', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -79,6 +159,36 @@ void main() {
     expect(router.state.uri.path, RoutePaths.choferSolicitudes);
     expect(router.canPop(), isFalse);
   });
+
+  testWidgets(
+    'Historial conserva su filtro al cambiar de tab y no apila destinos',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final container = makeTestContainer();
+      addTearDown(container.dispose);
+      final router = await pumpTestApp(tester, container: container);
+      container.read(sessionProvider.notifier).iniciarSesion(_chofer);
+
+      router.go(RoutePaths.choferSolicitudes);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Ajustadas'));
+      await tester.tap(find.text('Ajustadas'));
+      await tester.pumpAndSettle();
+      expect(find.text('No hay solicitudes con este filtro.'), findsOneWidget);
+
+      await tester.tap(find.text('Evidencias'));
+      await tester.pumpAndSettle();
+      expect(router.state.uri.path, RoutePaths.choferSubirEvidencias);
+      await tester.tap(find.text('Historial'));
+      await tester.pumpAndSettle();
+
+      expect(router.state.uri.path, RoutePaths.choferSolicitudes);
+      expect(find.text('No hay solicitudes con este filtro.'), findsOneWidget);
+      expect(router.canPop(), isFalse);
+    },
+  );
 
   test('cada ruta del chofer selecciona exactamente un destino', () {
     final rutas = <String, int>{
@@ -305,10 +415,10 @@ void main() {
       final navTheme = NavigationBarTheme.of(context);
       final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
       expect(bar.selectedIndex, 2);
-      expect(navTheme.indicatorColor, scheme.primary);
+      expect(navTheme.indicatorColor, Colors.transparent);
       expect(
         navTheme.iconTheme!.resolve({WidgetState.selected})!.color,
-        scheme.onPrimary,
+        scheme.primary,
       );
       expect(navTheme.iconTheme!.resolve({})!.color, scheme.onSurfaceVariant);
       expect(
@@ -348,6 +458,8 @@ void main() {
 }
 
 void _sinAccion(int _) {}
+
+void _sinAccionMenu() {}
 
 const _chofer = Perfil(
   id: 'chofer-sidebar',

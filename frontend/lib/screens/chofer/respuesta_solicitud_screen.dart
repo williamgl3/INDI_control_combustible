@@ -34,7 +34,7 @@ class RespuestaSolicitudScreen extends StatelessWidget {
         'Solicitud rechazada',
       ),
       EstadoSolicitud.pendiente => (
-        colors.warning,
+        colors.textSecondary,
         Icons.hourglass_top,
         'En revisión',
       ),

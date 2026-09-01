@@ -9,12 +9,14 @@ class ChoferHeaderMenuItem {
     required this.label,
     required this.onSelected,
     this.destructive = false,
+    this.dividerBefore = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onSelected;
   final bool destructive;
+  final bool dividerBefore;
 }
 
 /// Menu Material 3 anclado al boton de opciones del encabezado del chofer.
@@ -47,7 +49,8 @@ class _ChoferHeaderMenuButtonState extends State<ChoferHeaderMenuButton> {
       expanded: _abierto,
       child: PopupMenuButton<ChoferHeaderMenuItem>(
         key: const ValueKey('chofer-header-menu-button'),
-        tooltip: 'Más opciones',
+        useRootNavigator: true,
+        tooltip: 'Abrir menú',
         requestFocus: true,
         position: PopupMenuPosition.under,
         offset: const Offset(0, 8),
@@ -75,14 +78,15 @@ class _ChoferHeaderMenuButtonState extends State<ChoferHeaderMenuButton> {
           final entries = <PopupMenuEntry<ChoferHeaderMenuItem>>[];
           var separadorAgregado = false;
           for (final item in widget.items) {
-            if (item.destructive && !separadorAgregado) {
+            if (item.dividerBefore ||
+                (item.destructive && !separadorAgregado)) {
               entries.add(
-                const PopupMenuDivider(
-                  key: ValueKey('chofer-menu-logout-divider'),
+                PopupMenuDivider(
+                  key: ValueKey('chofer-menu-${item.label}-divider'),
                   height: 9,
                 ),
               );
-              separadorAgregado = true;
+              if (item.destructive) separadorAgregado = true;
             }
             final color = item.destructive ? scheme.error : scheme.onSurface;
             entries.add(
@@ -118,11 +122,7 @@ class _ChoferHeaderMenuButtonState extends State<ChoferHeaderMenuButton> {
               ? Duration.zero
               : const Duration(milliseconds: 180),
           curve: Curves.easeOutCubic,
-          child: const Icon(
-            Icons.more_vert_rounded,
-            size: 24,
-            color: BrandHeader.onColor,
-          ),
+          child: const Icon(Icons.menu, size: 24, color: BrandHeader.onColor),
         ),
         style: IconButton.styleFrom(
           fixedSize: const Size.square(48),

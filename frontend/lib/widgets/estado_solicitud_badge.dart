@@ -19,20 +19,23 @@ class EstadoSolicitudBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final (color, texto) = switch (estadoVisual) {
-      EstadoVisualSolicitud.pendiente => (colors.warning, 'En espera'),
+      EstadoVisualSolicitud.pendiente => (
+        colors.textSecondary,
+        'Por autorizar',
+      ),
       EstadoVisualSolicitud.autorizada => (colors.success, 'Autorizado'),
       // Mismo tono que "En espera" (ámbar = advertencia en la paleta
       // semántica de la app) — se distinguen por el texto, no por el
       // color: "ajustado" no es un error, es información que el chofer
       // debe notar antes de ir a cargar.
-      EstadoVisualSolicitud.ajustada => (colors.warning, 'Ajustado'),
+      EstadoVisualSolicitud.ajustada => (colors.textSecondary, 'Ajustado'),
       EstadoVisualSolicitud.rechazada => (colors.error, 'Rechazado'),
     };
 
     return Semantics(
       label: 'Estado de la solicitud: $texto',
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.14),
           borderRadius: AppRadii.badgeRadius,

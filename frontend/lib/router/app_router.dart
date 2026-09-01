@@ -14,6 +14,7 @@ import '../screens/bienvenida/bienvenida_screen.dart';
 import '../screens/chofer/centro_sincronizacion_screen.dart';
 import '../screens/chofer/cerrar_dia_screen.dart';
 import '../screens/chofer/chofer_dashboard_screen.dart';
+import '../screens/chofer/chofer_home_screen.dart';
 import '../screens/chofer/chofer_home_shell.dart';
 import '../screens/chofer/comprobar_carga_screen.dart';
 import '../screens/chofer/estadisticas_carga_screen.dart';
@@ -164,10 +165,59 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ),
       ),
-      GoRoute(
-        path: RoutePaths.chofer,
-        pageBuilder: (context, state) =>
-            _paginaPrincipal(context, state, const ChoferHomeShell()),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) =>
+            ChoferHomeShell(navigationShell: navigationShell),
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RoutePaths.chofer,
+                pageBuilder: (context, state) =>
+                    _paginaPrincipal(context, state, const ChoferHomeScreen()),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RoutePaths.choferSolicitudes,
+                pageBuilder: (context, state) => _paginaPrincipal(
+                  context,
+                  state,
+                  const MisSolicitudesScreen(mostrarComoTab: true),
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RoutePaths.choferSubirEvidencias,
+                pageBuilder: (context, state) => _paginaPrincipal(
+                  context,
+                  state,
+                  const SubirEvidenciasScreen(mostrarComoTab: true),
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RoutePaths.choferPerfil,
+                pageBuilder: (context, state) => _paginaPrincipal(
+                  context,
+                  state,
+                  const MiPerfilScreen(
+                    mostrarComoTab: true,
+                    mostrarCerrarSesion: true,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       GoRoute(
         path: RoutePaths.choferTipoOperacion,
@@ -272,26 +322,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: RoutePaths.choferSolicitudes,
-        // Ya trae su propio `SidebarChofer` + `ContenidoResponsivo` en su
-        // rama standalone (ver `MisSolicitudesScreen.build`).
-        pageBuilder: (context, state) =>
-            _paginaPrincipal(context, state, const MisSolicitudesScreen()),
-      ),
-      GoRoute(
-        path: RoutePaths.choferPerfil,
-        pageBuilder: (context, state) =>
-            _paginaPrincipal(context, state, const MiPerfilScreen()),
-      ),
-      GoRoute(
         path: RoutePaths.choferDashboard,
         pageBuilder: (context, state) =>
             _paginaPrincipal(context, state, const ChoferDashboardScreen()),
-      ),
-      GoRoute(
-        path: RoutePaths.choferSubirEvidencias,
-        pageBuilder: (context, state) =>
-            _paginaPrincipal(context, state, const SubirEvidenciasScreen()),
       ),
       GoRoute(
         path: RoutePaths.choferCentroSincronizacion,

@@ -8,6 +8,7 @@ import 'package:indi_combustible/core/providers.dart';
 import 'package:indi_combustible/models/perfil.dart';
 import 'package:indi_combustible/models/panel_marimba.dart';
 import 'package:indi_combustible/router/app_router.dart';
+import 'package:indi_combustible/router/route_paths.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
 import 'mocks/mock_vehiculos_repository.dart';
 
@@ -367,6 +368,42 @@ void main() {
     await tester.tap(find.byIcon(Icons.arrow_back));
     await tester.pumpAndSettle();
     expect(router.routeInformationProvider.value.uri.path, '/chofer');
+  });
+
+  testWidgets('Inicio abre Solicitar con historial y AtrÃ¡s regresa a Inicio', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        vehiculosRepositoryProvider.overrideWithValue(
+          MockVehiculosRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .iniciarSesion(
+          const Perfil(
+            id: '1',
+            usuario: 'chofer1',
+            nombre: 'Juan',
+            correo: 'juan@example.com',
+            rol: RolUsuario.chofer,
+          ),
+        );
+    final router = await pumpApp(tester, container: container);
+    router.go(RoutePaths.chofer);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Solicitar carga'));
+    await tester.pumpAndSettle();
+    expect(router.state.uri.path, RoutePaths.choferTipoOperacion);
+    expect(router.canPop(), isTrue);
+
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(router.state.uri.path, RoutePaths.chofer);
   });
 
   testWidgets(

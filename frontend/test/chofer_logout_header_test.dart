@@ -32,24 +32,29 @@ void main() {
       await _iniciarComoChofer(tester, container, themeMode: caso.$2);
 
       expect(find.byTooltip('Cerrar sesión'), findsNothing);
-      expect(find.byTooltip('Más opciones'), findsOneWidget);
-      expect(find.byIcon(Icons.more_vert_rounded), findsOneWidget);
+      expect(find.byTooltip('Abrir menú'), findsOneWidget);
+      expect(find.byIcon(Icons.menu), findsOneWidget);
       expect(
         tester.getSize(find.byKey(const ValueKey('chofer-header-menu-button'))),
         const Size.square(48),
       );
 
-      await tester.tap(find.byTooltip('Más opciones'));
+      await tester.tap(find.byTooltip('Abrir menú'));
       await tester.pumpAndSettle();
-      expect(find.text('Perfil'), findsOneWidget);
-      expect(find.text('Cambiar tema'), findsOneWidget);
-      expect(find.text('Ayuda y soporte'), findsOneWidget);
-      expect(find.text('Acerca de'), findsOneWidget);
-      expect(find.text('Cerrar sesión'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('chofer-menu-logout-divider')),
+        find.byKey(const ValueKey('chofer-menu-Mi consumo')),
         findsOneWidget,
       );
+      expect(
+        find.byKey(const ValueKey('chofer-menu-Mis solicitudes')),
+        findsOneWidget,
+      );
+      expect(find.text('Acerca de'), findsOneWidget);
+      expect(find.text('Cerrar sesión'), findsOneWidget);
+      expect(find.byKey(const ValueKey('chofer-menu-Perfil')), findsNothing);
+      expect(find.text('Cambiar tema'), findsNothing);
+      expect(find.text('Ayuda y soporte'), findsNothing);
+      expect(find.byType(PopupMenuDivider), findsNWidgets(2));
       expect(tester.takeException(), isNull);
     });
   }
@@ -62,54 +67,38 @@ void main() {
     await _iniciarComoChofer(tester, container);
     final ruta = container.read(appRouterProvider).state.uri.path;
 
-    await tester.tap(find.byTooltip('Más opciones'));
+    await tester.tap(find.byTooltip('Abrir menú'));
     await tester.pumpAndSettle();
     expect(container.read(appRouterProvider).state.uri.path, ruta);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(find.text('Cambiar tema'), findsNothing);
+    expect(find.byKey(const ValueKey('chofer-menu-Mi consumo')), findsNothing);
 
-    await tester.tap(find.byTooltip('Más opciones'));
+    await tester.tap(find.byTooltip('Abrir menú'));
     await tester.pumpAndSettle();
     await tester.tapAt(const Offset(8, 500));
     await tester.pumpAndSettle();
-    expect(find.text('Cambiar tema'), findsNothing);
+    expect(find.byKey(const ValueKey('chofer-menu-Mi consumo')), findsNothing);
 
-    await tester.tap(find.byTooltip('Más opciones'));
+    await tester.tap(find.byTooltip('Abrir menú'));
     await tester.pumpAndSettle();
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('Cambiar tema'), findsNothing);
+    expect(find.byKey(const ValueKey('chofer-menu-Mi consumo')), findsNothing);
     expect(container.read(appRouterProvider).state.uri.path, ruta);
   });
 
-  testWidgets('acciones reales reutilizan perfil, tema, ayuda y acerca de', (
-    tester,
-  ) async {
+  testWidgets('acciones reales reutilizan acerca de', (tester) async {
     final container = makeTestContainer();
     addTearDown(container.dispose);
     await _iniciarComoChofer(tester, container);
-
-    await _elegir(tester, 'Cambiar tema');
-    expect(find.text('Tema'), findsOneWidget);
-    await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
-
-    await _elegir(tester, 'Ayuda y soporte');
-    expect(find.text('Ayuda y soporte'), findsWidgets);
-    await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
 
     await _elegir(tester, 'Acerca de');
     expect(find.text('INDI Combustible'), findsOneWidget);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
 
-    await _elegir(tester, 'Perfil');
-    expect(
-      container.read(appRouterProvider).state.uri.path,
-      RoutePaths.choferPerfil,
-    );
+    expect(container.read(appRouterProvider).state.uri.path, RoutePaths.chofer);
   });
 
   testWidgets('cancelar logout conserva sesion', (tester) async {
@@ -188,7 +177,7 @@ void main() {
 }
 
 Future<void> _elegir(WidgetTester tester, String etiqueta) async {
-  await tester.tap(find.byTooltip('Más opciones'));
+  await tester.tap(find.byTooltip('Abrir menú'));
   await tester.pumpAndSettle();
   await tester.tap(find.text(etiqueta));
   await tester.pumpAndSettle();

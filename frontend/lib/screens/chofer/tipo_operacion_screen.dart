@@ -57,7 +57,7 @@ class TipoOperacionScreen extends ConsumerWidget {
         if (puedeOperarGranel) ...[
           _TarjetaTipoOperacion(
             icono: Icons.local_shipping_rounded,
-            color: context.colors.success,
+            color: context.colors.primary,
             titulo: 'Cargar la marimba',
             subtitulo: 'Solicitud y comprobación de la carga a granel',
             onTap: () =>
@@ -66,7 +66,7 @@ class TipoOperacionScreen extends ConsumerWidget {
           const SizedBox(height: AppSpacing.lg),
           _TarjetaTipoOperacion(
             icono: Icons.local_gas_station_rounded,
-            color: context.colors.warning,
+            color: context.colors.primary,
             titulo: 'Registrar despacho',
             subtitulo: 'Recorrido con varios despachos a maquinaria en campo',
             onTap: () => context.push(RoutePaths.choferRecorridoMarimba),
@@ -83,7 +83,7 @@ class TipoOperacionScreen extends ConsumerWidget {
           const SizedBox(height: AppSpacing.lg),
           _TarjetaTipoOperacion(
             icono: Icons.precision_manufacturing_rounded,
-            color: context.colors.warning,
+            color: context.colors.primary,
             titulo: 'Maquinaria Pesada',
             subtitulo:
                 'Excavadoras, retro y camiones (horómetro y '

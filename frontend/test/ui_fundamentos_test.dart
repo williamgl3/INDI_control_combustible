@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:indi_combustible/core/session_provider.dart';
 import 'package:indi_combustible/models/perfil.dart';
+import 'package:indi_combustible/models/solicitud_autorizacion.dart';
 import 'package:indi_combustible/screens/bienvenida/bienvenida_screen.dart';
 import 'package:indi_combustible/theme/app_radii.dart';
 import 'package:indi_combustible/theme/app_colors.dart';
@@ -10,6 +11,7 @@ import 'package:indi_combustible/theme/app_status_colors.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
 import 'package:indi_combustible/widgets/app_status_chip.dart';
 import 'package:indi_combustible/widgets/brand_header.dart';
+import 'package:indi_combustible/widgets/estado_solicitud_badge.dart';
 import 'package:indi_combustible/widgets/logo_glass.dart';
 import 'package:indi_combustible/widgets/sidebar_chofer.dart';
 
@@ -76,6 +78,56 @@ void main() {
       expect(find.byIcon(Icons.cloud_off_outlined), findsOneWidget);
       expect(find.text('Sin conexión'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final mode in [ThemeMode.light, ThemeMode.dark]) {
+    testWidgets('los estados de solicitud conservan semÃ¡ntica en $mode', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: mode,
+          home: const Scaffold(
+            body: Column(
+              children: [
+                EstadoSolicitudBadge(
+                  estadoVisual: EstadoVisualSolicitud.pendiente,
+                ),
+                EstadoSolicitudBadge(
+                  estadoVisual: EstadoVisualSolicitud.autorizada,
+                ),
+                EstadoSolicitudBadge(
+                  estadoVisual: EstadoVisualSolicitud.ajustada,
+                ),
+                EstadoSolicitudBadge(
+                  estadoVisual: EstadoVisualSolicitud.rechazada,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final context = tester.element(find.byType(EstadoSolicitudBadge).first);
+      final colors = context.colors;
+      Color colorDe(String texto) =>
+          tester.widget<Text>(find.text(texto)).style!.color!;
+
+      expect(colorDe('POR AUTORIZAR'), colors.textSecondary);
+      expect(colorDe('AUTORIZADO'), colors.success);
+      expect(colorDe('AJUSTADO'), colors.textSecondary);
+      expect(colorDe('RECHAZADO'), colors.error);
+      for (final texto in const [
+        'POR AUTORIZAR',
+        'AUTORIZADO',
+        'AJUSTADO',
+        'RECHAZADO',
+      ]) {
+        expect(find.text(texto), findsOneWidget);
+      }
     });
   }
 

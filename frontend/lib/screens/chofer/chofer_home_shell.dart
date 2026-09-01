@@ -2,14 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../router/route_paths.dart';
 import '../../theme/app_breakpoints.dart';
 import '../../theme/app_sizes.dart';
 import '../../widgets/chofer_mobile_wrapper.dart';
 import '../../widgets/sidebar_chofer.dart';
-import 'chofer_home_screen.dart';
 
 class ChoferHomeShell extends ConsumerStatefulWidget {
-  const ChoferHomeShell({super.key});
+  const ChoferHomeShell({super.key, required this.navigationShell});
+
+  final StatefulNavigationShell navigationShell;
 
   @override
   ConsumerState<ChoferHomeShell> createState() => _ChoferHomeShellState();
@@ -24,10 +26,39 @@ class _ChoferHomeShellState extends ConsumerState<ChoferHomeShell> {
     final esAncho = AppBreakpoints.isTabletOrDesktop(ancho);
     final puedeExpandir = ancho >= AppBreakpoints.desktop;
     final sidebarExpandido = puedeExpandir && _sidebarExpanded;
-    final ruta = GoRouterState.of(context).uri.path;
-    final indice = indiceDestinoChoferParaRuta(ruta);
-    void seleccionar(int destino) =>
-        navegarDesdeSidebarChofer(context, indice, destino);
+    final indice = esAncho
+        ? switch (widget.navigationShell.currentIndex) {
+            0 => 0,
+            1 => 2,
+            2 => 3,
+            3 => 4,
+            _ => 0,
+          }
+        : widget.navigationShell.currentIndex;
+    void seleccionar(int destino) {
+      if (esAncho) {
+        if (destino == 1) {
+          context.push(RoutePaths.choferTipoOperacion);
+          return;
+        }
+        final indiceRama = switch (destino) {
+          0 => 0,
+          2 => 1,
+          3 => 2,
+          4 => 3,
+          _ => 0,
+        };
+        widget.navigationShell.goBranch(
+          indiceRama,
+          initialLocation: indiceRama == widget.navigationShell.currentIndex,
+        );
+      } else {
+        widget.navigationShell.goBranch(
+          destino,
+          initialLocation: destino == widget.navigationShell.currentIndex,
+        );
+      }
+    }
 
     if (esAncho) {
       // Sin `ChoferMobileWrapper` aquí: con el sidebar ya dando la
@@ -61,7 +92,7 @@ class _ChoferHomeShellState extends ConsumerState<ChoferHomeShell> {
                       : null,
                 ),
               ),
-              const Expanded(child: ChoferHomeScreen()),
+              Expanded(child: widget.navigationShell),
             ],
           ),
         ),
@@ -69,9 +100,7 @@ class _ChoferHomeShellState extends ConsumerState<ChoferHomeShell> {
     }
 
     return Scaffold(
-      body: const SafeArea(
-        child: ChoferMobileWrapper(child: ChoferHomeScreen()),
-      ),
+      body: SafeArea(child: ChoferMobileWrapper(child: widget.navigationShell)),
       bottomNavigationBar: NavegacionInferiorChofer(
         indiceSeleccionado: indice,
         onSeleccionar: seleccionar,
@@ -96,12 +125,11 @@ class NavegacionInferiorChofer extends StatelessWidget {
 
     return NavigationBarTheme(
       data: NavigationBarThemeData(
-        indicatorColor: colorScheme.primary,
-        indicatorShape: const StadiumBorder(),
+        indicatorColor: Colors.transparent,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           return IconThemeData(
             color: states.contains(WidgetState.selected)
-                ? colorScheme.onPrimary
+                ? colorScheme.primary
                 : colorScheme.onSurfaceVariant,
           );
         }),
@@ -127,7 +155,7 @@ class NavegacionInferiorChofer extends StatelessWidget {
         height: 64,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: [
-          for (final d in destinosChofer)
+          for (final d in destinosNavegacionInferiorChofer)
             NavigationDestination(
               icon: Icon(d.icono),
               selectedIcon: Icon(d.iconoSeleccionado),

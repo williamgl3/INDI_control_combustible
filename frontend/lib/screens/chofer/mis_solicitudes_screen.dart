@@ -95,7 +95,7 @@ class _MisSolicitudesScreenState extends ConsumerState<MisSolicitudesScreen> {
               icono: Icons.hourglass_top_outlined,
               valor: '$pendientes',
               etiqueta: 'Por revisar',
-              color: colors.warning,
+              color: colors.textSecondary,
               // Mismo criterio que la versión admin en
               // `autorizaciones_tab.dart` — el chofer es quien más
               // presión de tiempo tiene por revisar esto, no tenía
@@ -139,7 +139,7 @@ class _MisSolicitudesScreenState extends ConsumerState<MisSolicitudesScreen> {
                 : 'No hay solicitudes con este filtro.',
             textoAccion: _filtro == null ? 'Solicitar carga' : null,
             onAccion: _filtro == null
-                ? () => context.go(RoutePaths.choferTipoOperacion)
+                ? () => context.push(RoutePaths.choferTipoOperacion)
                 : null,
           )
         else

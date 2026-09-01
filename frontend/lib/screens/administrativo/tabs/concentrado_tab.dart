@@ -415,7 +415,7 @@ class _ConcentradoTabState extends ConsumerState<ConcentradoTab> {
                 texto: 'Rendimiento anómalo (alerta)',
               ),
               _Leyenda(
-                color: colors.warning,
+                color: colors.textSecondary,
                 texto: 'Ticket pendiente de subir',
               ),
               _Leyenda(
@@ -591,7 +591,7 @@ class _TablaConcentrado extends StatelessWidget {
                   fondo: fila.rendimientoAnomalo
                       ? colors.error.withValues(alpha: 0.07)
                       : fila.ticketPendiente
-                      ? colors.warning.withValues(alpha: 0.08)
+                      ? colors.surfaceAlt
                       : null,
                   celdas: [
                     _celdaTexto(
@@ -657,7 +657,7 @@ class _TablaConcentrado extends StatelessWidget {
                     _celdaTexto(
                       context,
                       fila.ticketPendiente ? 'pend.' : '✓',
-                      color: fila.ticketPendiente ? colors.warning : null,
+                      color: fila.ticketPendiente ? colors.textSecondary : null,
                     ),
                   ],
                 ),
