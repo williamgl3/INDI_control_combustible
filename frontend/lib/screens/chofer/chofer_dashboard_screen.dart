@@ -7,7 +7,6 @@ import '../../core/providers.dart';
 import '../../core/session_provider.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_motion.dart';
-import '../../theme/app_radii.dart';
 import '../../theme/app_spacing.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_card.dart';
@@ -163,7 +162,7 @@ class _ChoferDashboardScreenState extends ConsumerState<ChoferDashboardScreen> {
                   icono: Icons.bar_chart_outlined,
                   mensaje: 'Todavía no registras cargas en este periodo.',
                   textoAccion: 'Solicitar carga',
-                  onAccion: () => context.go(RoutePaths.choferTipoOperacion),
+                  onAccion: () => context.push(RoutePaths.choferTipoOperacion),
                 )
               else ...[
                 if (serie.isNotEmpty) ...[
@@ -235,27 +234,8 @@ class _HeroConsumo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppCard(
       padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [colors.primary, colors.primaryHover],
-        ),
-        borderRadius: AppRadii.cardRadius,
-        // Variante intencional de `AppShadows.floating`, no un olvido: es
-        // un glow de marca (color primary, no negro) sobre el degradado
-        // de la propia tarjeta, no una sombra neutra — migrarla al token
-        // le quitaría el efecto.
-        boxShadow: [
-          BoxShadow(
-            color: colors.primary.withValues(alpha: 0.35),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
       child: Row(
         children: [
           Expanded(
@@ -265,7 +245,7 @@ class _HeroConsumo extends StatelessWidget {
                 Text(
                   'LITROS CONSUMIDOS',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.8),
+                    color: colors.textSecondary,
                     letterSpacing: 0.6,
                   ),
                 ),
@@ -273,7 +253,7 @@ class _HeroConsumo extends StatelessWidget {
                 Text(
                   totalLitros.toStringAsFixed(0),
                   style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                    color: Colors.white,
+                    color: colors.textPrimary,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -281,7 +261,7 @@ class _HeroConsumo extends StatelessWidget {
                 Text(
                   'Selecciona un periodo para comparar tu consumo, rendimiento y cargas registradas.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.84),
+                    color: colors.textSecondary,
                     height: 1.35,
                   ),
                 ),
@@ -290,8 +270,8 @@ class _HeroConsumo extends StatelessWidget {
           ),
           Icon(
             Icons.local_gas_station_rounded,
-            color: Colors.white.withValues(alpha: 0.25),
-            size: 64,
+            color: colors.primary,
+            size: 40,
           ),
         ],
       ),
@@ -381,14 +361,7 @@ class _TarjetaBarras extends StatelessWidget {
                       barRods: [
                         BarChartRodData(
                           toY: serie[i].litros,
-                          gradient: LinearGradient(
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                            colors: [
-                              colors.primary.withValues(alpha: 0.55),
-                              colors.primary,
-                            ],
-                          ),
+                          color: colors.primary,
                           width: 16,
                           borderRadius: BorderRadius.circular(6),
                         ),

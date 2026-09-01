@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth_controller.dart';
 import '../../core/cola_solicitudes_offline.dart';
+import '../../core/estadistica_carga_provider.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
 import '../../data/vehiculos_repository.dart';
@@ -17,19 +18,19 @@ import '../../theme/app_radii.dart';
 import '../../theme/app_sizes.dart';
 import '../../theme/app_status_colors.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/app_spacing.dart';
 import '../../widgets/acerca_de_dialog.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_status_chip.dart';
-import '../../widgets/ayuda_soporte_dialog.dart';
 import '../../widgets/brand_header.dart';
 import '../../widgets/confirmar_cerrar_sesion_dialog.dart';
 import '../../widgets/contenido_responsivo.dart';
 import '../../widgets/chofer_header_menu_button.dart';
+import '../../widgets/estado_vacio.dart';
 import '../../widgets/fecha_formato.dart';
 import '../../widgets/logo_glass.dart';
 import '../../widgets/section_label.dart';
 import '../../widgets/tarjeta_accion_sugerida.dart';
-import '../../widgets/selector_tema_dialog.dart';
 import 'detalle_solicitud_dialog.dart';
 
 class ChoferHomeScreen extends ConsumerStatefulWidget {
@@ -107,10 +108,6 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
         ? null
         : vehiculosRepo.porId(cargaAbiertaDeHoy.vehiculoId);
 
-    final sinSolicitudes = solicitudes.isEmpty;
-    final esPantallaAncha = AppBreakpoints.isTabletOrDesktop(
-      MediaQuery.sizeOf(context).width,
-    );
     return Scaffold(
       // Mismo padding/maxWidth que `ContenidoResponsivo` (ver
       // `_buildMovil`), calculado directo con `MediaQuery` en vez de
@@ -119,11 +116,6 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
       // tamaño intrínseco de su hijo para la animación de entrada del FAB
       // — algo que el `LayoutBuilder` interno de `ContenidoResponsivo` no
       // soporta bien (rompía el hit-test de tarjetas cercanas).
-      bottomNavigationBar: !sinSolicitudes && !esPantallaAncha
-          ? _BarraSolicitarCarga(
-              onPressed: () => context.go(RoutePaths.choferTipoOperacion),
-            )
-          : null,
       body: SafeArea(
         child: _buildMovil(
           perfil: perfil,
@@ -132,7 +124,6 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
           vehiculoDeHoy: vehiculoDeHoy,
           folioPendiente: folioPendiente,
           cargaAbiertaDeHoy: cargaAbiertaDeHoy,
-          mostrarAccionInline: !sinSolicitudes && esPantallaAncha,
         ),
       ),
     );
@@ -141,6 +132,7 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
   Widget _buildHeader(BuildContext context, Perfil perfil) {
     final screenWidth = MediaQuery.sizeOf(context).width;
     return BrandHeader(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -155,7 +147,7 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
                   'Hola, ${perfil.nombreCompleto.split(' ').first}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     color: BrandHeader.onColor,
                   ),
                 ),
@@ -174,23 +166,19 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
           ChoferHeaderMenuButton(
             items: [
               ChoferHeaderMenuItem(
-                icon: Icons.person_outline_rounded,
-                label: 'Perfil',
-                onSelected: () => context.go(RoutePaths.choferPerfil),
+                icon: Icons.local_gas_station_outlined,
+                label: 'Mi consumo',
+                onSelected: () => context.go(RoutePaths.choferDashboard),
               ),
               ChoferHeaderMenuItem(
-                icon: Icons.palette_outlined,
-                label: 'Cambiar tema',
-                onSelected: () => SelectorTemaDialog.show(context),
-              ),
-              ChoferHeaderMenuItem(
-                icon: Icons.help_outline_rounded,
-                label: 'Ayuda y soporte',
-                onSelected: () => AyudaSoporteDialog.show(context),
+                icon: Icons.assignment_outlined,
+                label: 'Mis solicitudes',
+                onSelected: () => context.go(RoutePaths.choferSolicitudes),
               ),
               ChoferHeaderMenuItem(
                 icon: Icons.info_outline_rounded,
                 label: 'Acerca de',
+                dividerBefore: true,
                 onSelected: () => AcercaDeDialog.show(context),
               ),
               ChoferHeaderMenuItem(
@@ -230,7 +218,7 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
                 context,
               ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
           ],
           if (folioPendiente != null) ...[
             _BannerCargaAprobada(
@@ -242,7 +230,7 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
           ],
           if (cargaAbiertaDeHoy != null) ...[
             TarjetaAccionSugerida(
@@ -257,16 +245,38 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
           ],
+          Consumer(
+            builder: (context, ref, _) {
+              final stats = ref.watch(estadisticaCargaHoyProvider);
+              if (stats.isEmpty) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                child: TarjetaAccionSugerida(
+                  icono: Icons.insights_rounded,
+                  color: colors.success,
+                  titulo: 'Estadísticas de carga',
+                  subtitulo:
+                      '${stats.totalCargas} carga${stats.totalCargas == 1 ? '' : 's'} · '
+                      '${stats.litrosTotales.toStringAsFixed(1)} L hoy',
+                  onTap: () => context.go(RoutePaths.choferEstadisticasCarga),
+                ),
+              );
+            },
+          ),
           Consumer(
             builder: (context, ref, _) {
               final total =
                   ref.watch(totalPendientesOfflineProvider).valueOrNull ?? 0;
               if (total == 0) return const SizedBox.shrink();
               return Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: _BannerPendientesOffline(cantidad: total),
+                padding: const EdgeInsets.only(top: AppSpacing.md),
+                child: _BannerPendientesOffline(
+                  cantidad: total,
+                  onTap: () =>
+                      context.go(RoutePaths.choferCentroSincronizacion),
+                ),
               );
             },
           ),
@@ -279,31 +289,15 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
     required BuildContext context,
     required List<SolicitudAutorizacion> solicitudes,
     required VehiculosRepository vehiculosRepo,
-    required bool mostrarAccionInline,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Actividad reciente',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ),
-            if (mostrarAccionInline) ...[
-              const SizedBox(width: 16),
-              SizedBox(
-                width: AppSizes.choferPrimaryActionDesktopWidth,
-                child: _BotonSolicitarCarga(
-                  onPressed: () => context.go(RoutePaths.choferTipoOperacion),
-                ),
-              ),
-            ],
-          ],
+        Text(
+          'Actividad reciente',
+          style: Theme.of(context).textTheme.titleLarge,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         AnimatedSwitcher(
           duration: MediaQuery.disableAnimationsOf(context)
               ? Duration.zero
@@ -311,9 +305,10 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
           switchInCurve: Curves.easeOutCubic,
           switchOutCurve: Curves.easeInCubic,
           child: solicitudes.isEmpty
-              ? _EstadoVacioSolicitudes(
-                  key: const ValueKey('actividad-vacia'),
-                  onSolicitar: () => context.go(RoutePaths.choferTipoOperacion),
+              ? const EstadoVacio(
+                  key: ValueKey('actividad-vacia'),
+                  icono: Icons.receipt_long_outlined,
+                  mensaje: 'Aún no tienes solicitudes de carga.',
                 )
               : Column(
                   key: const ValueKey('actividad-con-datos'),
@@ -364,7 +359,6 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
     required Vehiculo? vehiculoDeHoy,
     required String? folioPendiente,
     required dynamic cargaAbiertaDeHoy,
-    required bool mostrarAccionInline,
   }) {
     return Column(
       children: [
@@ -386,11 +380,18 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
                   cargaAbiertaDeHoy: cargaAbiertaDeHoy,
                 ),
                 const SizedBox(height: 20),
+                _AccionesInicioChofer(
+                  onSolicitar: () =>
+                      context.push(RoutePaths.choferTipoOperacion),
+                  onMiConsumo: () => context.go(RoutePaths.choferDashboard),
+                  onMisSolicitudes: () =>
+                      context.go(RoutePaths.choferSolicitudes),
+                ),
+                const SizedBox(height: 24),
                 _buildActividad(
                   context: context,
                   solicitudes: solicitudes,
                   vehiculosRepo: vehiculosRepo,
-                  mostrarAccionInline: mostrarAccionInline,
                 ),
               ],
             ),
@@ -401,29 +402,86 @@ class _ChoferHomeScreenState extends ConsumerState<ChoferHomeScreen> {
   }
 }
 
-class _BarraSolicitarCarga extends StatelessWidget {
-  const _BarraSolicitarCarga({required this.onPressed});
+class _AccionesInicioChofer extends StatelessWidget {
+  const _AccionesInicioChofer({
+    required this.onSolicitar,
+    required this.onMiConsumo,
+    required this.onMisSolicitudes,
+  });
 
-  final VoidCallback onPressed;
+  final VoidCallback onSolicitar;
+  final VoidCallback onMiConsumo;
+  final VoidCallback onMisSolicitudes;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Acciones', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: AppSpacing.md),
+        _BotonSolicitarCarga(onPressed: onSolicitar),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _AccesoRapidoChofer(
+                key: const ValueKey('inicio-mi-consumo'),
+                icono: Icons.insights_outlined,
+                etiqueta: 'Mi consumo',
+                onTap: onMiConsumo,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _AccesoRapidoChofer(
+                key: const ValueKey('inicio-mis-solicitudes'),
+                icono: Icons.assignment_outlined,
+                etiqueta: 'Mis solicitudes',
+                onTap: onMisSolicitudes,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AccesoRapidoChofer extends StatelessWidget {
+  const _AccesoRapidoChofer({
+    super.key,
+    required this.icono,
+    required this.etiqueta,
+    required this.onTap,
+  });
+
+  final IconData icono;
+  final String etiqueta;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final horizontal = ContenidoResponsivo.paddingHorizontalPara(
-      MediaQuery.sizeOf(context).width,
-    );
-    return Material(
-      color: colors.surface,
-      elevation: 3,
-      child: SafeArea(
-        top: false,
-        minimum: EdgeInsets.fromLTRB(
-          horizontal,
-          AppSizes.choferPrimaryActionVerticalPadding,
-          horizontal,
-          AppSizes.choferPrimaryActionVerticalPadding,
-        ),
-        child: _BotonSolicitarCarga(onPressed: onPressed),
+    return AppCard(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.md,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icono, color: colors.primary, size: 22),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              etiqueta,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -436,7 +494,6 @@ class _BotonSolicitarCarga extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
     final esEscritorio = AppBreakpoints.isTabletOrDesktop(
       MediaQuery.sizeOf(context).width,
     );
@@ -451,87 +508,12 @@ class _BotonSolicitarCarga extends StatelessWidget {
             ? AppSizes.choferPrimaryActionDesktopWidth
             : double.infinity,
         height: AppSizes.choferPrimaryActionHeight,
-        child: FloatingActionButton.extended(
+        child: ElevatedButton.icon(
           onPressed: onPressed,
-          backgroundColor: colors.primary,
-          foregroundColor: colors.primaryOn,
-          // Mismo nivel de elevación que `AppElevatedButton` (más suave que
-          // antes) — `FloatingActionButton` no expone `shadowColor` como
-          // `ElevatedButton`, así que aquí solo se pareja la elevación, no
-          // el tinte de color de la sombra.
-          elevation: 2,
-          focusElevation: 4,
-          shape: const RoundedRectangleBorder(
-            borderRadius: AppRadii.buttonRadius,
-          ),
           icon: const Icon(Icons.local_gas_station_rounded, size: 24),
           label: const Text(
             'Solicitar carga',
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EstadoVacioSolicitudes extends StatelessWidget {
-  const _EstadoVacioSolicitudes({super.key, required this.onSolicitar});
-
-  final VoidCallback onSolicitar;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Semantics(
-      container: true,
-      label: 'Sin solicitudes de carga',
-      child: Container(
-        key: const ValueKey('estado-vacio-solicitudes-chofer'),
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-        alignment: Alignment.center,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: colors.primary.withValues(alpha: 0.08),
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.local_gas_station_outlined,
-                  size: 30,
-                  color: colors.primary,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Aún no tienes solicitudes de carga.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Crea tu primera solicitud para comenzar.',
-                textAlign: TextAlign.center,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: colors.textMuted),
-              ),
-              const SizedBox(height: 20),
-              FilledButton.icon(
-                key: const ValueKey('solicitar-desde-estado-vacio'),
-                onPressed: onSolicitar,
-                icon: const Icon(Icons.local_gas_station_rounded),
-                label: const Text('Solicitar carga'),
-              ),
-            ],
           ),
         ),
       ),
@@ -553,6 +535,14 @@ class _SolicitudTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final hora = formatearHora(solicitud.creadaEn);
+    final unidad = vehiculo == null
+        ? null
+        : [
+            vehiculo!.modelo ?? vehiculo!.tipoUnidad,
+            vehiculo!.etiquetaUnidad,
+          ].join(' · ');
+    final combustible = vehiculo?.tipoCombustible ?? 'Sin especificar';
+    final detalle = vehiculo == null ? hora : '$combustible · $hora';
 
     return AppCard(
       floating: true,
@@ -561,45 +551,58 @@ class _SolicitudTile extends StatelessWidget {
         solicitud: solicitud,
         vehiculo: vehiculo,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
       child: Row(
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        '${solicitud.litrosSolicitados.toStringAsFixed(1)} L',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontFamily: 'IBM Plex Mono',
-                          fontWeight: FontWeight.w700,
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text:
+                            '${solicitud.litrosSolicitados.toStringAsFixed(1)} L',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontFamily: 'IBM Plex Mono',
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      TextSpan(
+                        text: ' solicitados',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colors.textSecondary,
                         ),
                       ),
-                    ),
-                    Text(
-                      ' solicitados',
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: AppSpacing.xs),
+                if (unidad != null) ...[
+                  Text(
+                    unidad,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                ],
                 Text(
-                  [
-                    hora,
-                    if (vehiculo != null)
-                      vehiculo!.modelo ?? vehiculo!.tipoUnidad,
-                    if (vehiculo != null) vehiculo!.etiquetaUnidad,
-                    if (vehiculo != null)
-                      '· ${vehiculo!.tipoCombustible ?? 'Sin especificar'}',
-                  ].join(' · '),
+                  detalle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(
                     context,
                   ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.sm),
                 Text(
                   'Programada: ${formatearFecha(solicitud.fechaProgramada)}',
                   style: Theme.of(
@@ -607,7 +610,7 @@ class _SolicitudTile extends StatelessWidget {
                   ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
                 ),
                 if (solicitud.comentario != null) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.xs),
                   Text(
                     solicitud.comentario!,
                     style: Theme.of(
@@ -618,7 +621,13 @@ class _SolicitudTile extends StatelessWidget {
               ],
             ),
           ),
-          _BadgeEstado(estadoVisual: solicitud.estadoVisual),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: _BadgeEstado(estadoVisual: solicitud.estadoVisual),
+            ),
+          ),
         ],
       ),
     );
@@ -635,8 +644,8 @@ class _BadgeEstado extends StatelessWidget {
     final colors = context.colors;
     final (color, texto, icono) = switch (estadoVisual) {
       EstadoVisualSolicitud.pendiente => (
-        colors.warning,
-        'En espera',
+        colors.textSecondary,
+        'Por autorizar',
         Icons.schedule_outlined,
       ),
       EstadoVisualSolicitud.autorizada => (
@@ -648,7 +657,7 @@ class _BadgeEstado extends StatelessWidget {
       // no rojo — un ajuste no es un error, es algo que el chofer debe
       // notar antes de ir a cargar.
       EstadoVisualSolicitud.ajustada => (
-        colors.warning,
+        colors.textSecondary,
         'Ajustado',
         Icons.tune_outlined,
       ),
@@ -671,7 +680,6 @@ class _BadgeEstado extends StatelessWidget {
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -704,31 +712,27 @@ class _BannerCargaAprobada extends StatelessWidget {
     final colors = context.colors;
     return Material(
       color: colors.success.withValues(alpha: 0.14),
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: AppRadii.cardRadius,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadii.cardRadius,
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.md,
+          ),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colors.success.withValues(alpha: 0.5)),
+            borderRadius: AppRadii.cardRadius,
+            border: Border.all(color: colors.success.withValues(alpha: 0.28)),
           ),
           child: Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: colors.success.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.local_gas_station,
-                  color: colors.success,
-                  size: 22,
-                ),
+              Icon(
+                Icons.local_gas_station_outlined,
+                color: colors.success,
+                size: 24,
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -740,7 +744,7 @@ class _BannerCargaAprobada extends StatelessWidget {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: AppSpacing.xs),
                     Text(
                       'Folio $folio',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -752,18 +756,18 @@ class _BannerCargaAprobada extends StatelessWidget {
               ),
               Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
                 ),
                 decoration: BoxDecoration(
                   color: colors.success,
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: AppRadii.navButtonRadius,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.bolt, size: 14, color: colors.primaryOn),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: AppSpacing.xs),
                     Text(
                       'COMPROBAR AHORA',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
@@ -784,9 +788,10 @@ class _BannerCargaAprobada extends StatelessWidget {
 }
 
 class _BannerPendientesOffline extends StatelessWidget {
-  const _BannerPendientesOffline({required this.cantidad});
+  const _BannerPendientesOffline({required this.cantidad, this.onTap});
 
   final int cantidad;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -794,6 +799,7 @@ class _BannerPendientesOffline extends StatelessWidget {
     final offline = context.statusColors.offline;
     return AppCard(
       floating: true,
+      onTap: onTap,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       color: offline.withValues(alpha: 0.08),
       child: Row(
@@ -807,13 +813,19 @@ class _BannerPendientesOffline extends StatelessWidget {
           Expanded(
             child: Text(
               cantidad == 1
-                  ? 'Tienes 1 solicitud guardada sin conexión — se enviará sola.'
-                  : 'Tienes $cantidad solicitudes guardadas sin conexión — se enviarán solas.',
+                  ? 'Tienes 1 operación guardada sin conexión — toca para ver detalles.'
+                  : 'Tienes $cantidad operaciones guardadas sin conexión — toca para ver detalles.',
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
             ),
           ),
+          if (onTap != null)
+            Icon(
+              Icons.chevron_right_rounded,
+              color: colors.textMuted,
+              size: 20,
+            ),
         ],
       ),
     );

@@ -52,6 +52,67 @@ const destinosOperativosChofer = [
 /// perfil se abre desde el avatar del shell, evitando un destino duplicado.
 const destinosChofer = destinosOperativosChofer;
 
+/// Destinos de la barra inferior mÃ³vil. El flujo de solicitud permanece como
+/// CTA en Inicio y no ocupa un destino redundante en esta barra.
+const destinosNavegacionInferiorChofer = [
+  DestinoChofer(
+    icono: Icons.home_outlined,
+    iconoSeleccionado: Icons.home_rounded,
+    etiqueta: 'Inicio',
+  ),
+  DestinoChofer(
+    icono: Icons.history_outlined,
+    iconoSeleccionado: Icons.history_rounded,
+    etiqueta: 'Historial',
+  ),
+  DestinoChofer(
+    icono: Icons.camera_alt_outlined,
+    iconoSeleccionado: Icons.camera_alt_rounded,
+    etiqueta: 'Evidencias',
+  ),
+  DestinoChofer(
+    icono: Icons.person_outline,
+    iconoSeleccionado: Icons.person,
+    etiqueta: 'Perfil',
+  ),
+];
+
+int indiceDestinoNavegacionInferiorChoferParaRuta(String ruta) {
+  if (ruta == RoutePaths.chofer || ruta == RoutePaths.choferDashboard) {
+    return 0;
+  }
+  if (ruta == RoutePaths.choferSolicitudes ||
+      ruta.startsWith('${RoutePaths.choferSolicitudes}/')) {
+    return 1;
+  }
+  if (ruta == RoutePaths.choferSubirEvidencias ||
+      ruta == RoutePaths.choferComprobar ||
+      ruta == RoutePaths.choferCerrarDia ||
+      ruta == RoutePaths.choferEstadisticasCarga) {
+    return 2;
+  }
+  if (ruta == RoutePaths.choferPerfil) return 3;
+  return 0;
+}
+
+void navegarDesdeNavegacionInferiorChofer(
+  BuildContext context,
+  int indiceActual,
+  int indice,
+) {
+  if (indice == indiceActual) return;
+  switch (indice) {
+    case 0:
+      context.go(RoutePaths.chofer);
+    case 1:
+      context.go(RoutePaths.choferSolicitudes);
+    case 2:
+      context.go(RoutePaths.choferSubirEvidencias);
+    case 3:
+      context.go(RoutePaths.choferPerfil);
+  }
+}
+
 /// Devuelve el único destino activo para una ruta del módulo del chofer.
 int indiceDestinoChoferParaRuta(String ruta) {
   if (ruta == RoutePaths.chofer || ruta == RoutePaths.choferDashboard) return 0;
@@ -66,7 +127,8 @@ int indiceDestinoChoferParaRuta(String ruta) {
   }
   if (ruta == RoutePaths.choferSubirEvidencias ||
       ruta == RoutePaths.choferComprobar ||
-      ruta == RoutePaths.choferCerrarDia) {
+      ruta == RoutePaths.choferCerrarDia ||
+      ruta == RoutePaths.choferEstadisticasCarga) {
     return 3;
   }
   if (ruta == RoutePaths.choferPerfil) return 0;

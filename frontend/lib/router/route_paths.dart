@@ -28,6 +28,7 @@ class RoutePaths {
   static const choferSubirEvidencias = '/chofer/subir-evidencias';
   static const choferCentroSincronizacion =
       '/chofer/centro-sincronizacion';
+  static const choferEstadisticasCarga = '/chofer/estadisticas-carga';
 
   static const administrativo = '/administrativo';
   static const administrativoPerfil = '/administrativo/perfil';

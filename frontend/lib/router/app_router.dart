@@ -16,6 +16,7 @@ import '../screens/chofer/cerrar_dia_screen.dart';
 import '../screens/chofer/chofer_dashboard_screen.dart';
 import '../screens/chofer/chofer_home_shell.dart';
 import '../screens/chofer/comprobar_carga_screen.dart';
+import '../screens/chofer/estadisticas_carga_screen.dart';
 import '../screens/chofer/mi_perfil_screen.dart';
 import '../screens/chofer/mis_solicitudes_screen.dart';
 import '../screens/chofer/respuesta_solicitud_screen.dart';
@@ -299,6 +300,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           state,
           const CentroSincronizacionScreen(),
         ),
+      ),
+      GoRoute(
+        path: RoutePaths.choferEstadisticasCarga,
+        pageBuilder: (context, state) =>
+            _paginaPrincipal(context, state, const EstadisticasCargaScreen()),
       ),
       GoRoute(
         path: RoutePaths.administrativo,

@@ -27,35 +27,20 @@ void main() {
           skipOffstage: false,
         );
         expect(tarjetas, findsOneWidget);
-        final ultima = find.byKey(const ValueKey('solicitud-sol-5'));
-        await tester.scrollUntilVisible(
-          ultima,
-          180,
-          scrollable: find.byType(Scrollable).first,
-        );
-        await tester.pumpAndSettle();
-
         final accion = find.byKey(const ValueKey('accion-solicitar-carga'));
         expect(accion, findsOneWidget);
-        final rectAccion = tester.getRect(accion);
-        final rectUltima = tester.getRect(ultima);
-        final rectViewport = tester.getRect(find.byType(Scrollable).first);
-        // getRect(ultima) devuelve también la porción del hijo que el
-        // viewport recorta. Compara sólo los píxeles realmente visibles.
-        final rectUltimaVisible = rectUltima.intersect(rectViewport);
+        expect(find.byKey(const ValueKey('solicitud-sol-5')), findsOneWidget);
         expect(
-          rectAccion.overlaps(rectUltimaVisible),
-          isFalse,
-          reason:
-              'acción=$rectAccion, tarjeta visible=$rectUltimaVisible, '
-              'viewport=$rectViewport',
+          find.ancestor(of: accion, matching: find.byType(Scrollable)),
+          findsWidgets,
+          reason: 'La acción debe desplazarse con el dashboard, no cubrirlo.',
         );
         expect(tester.takeException(), isNull);
       },
     );
   }
 
-  testWidgets('el estado vacio muestra una sola llamada a la accion', (
+  testWidgets('el estado vacio conserva el dashboard operativo', (
     tester,
   ) async {
     final container = makeTestContainer();
@@ -63,12 +48,82 @@ void main() {
     await _iniciarChofer(tester, container);
 
     expect(find.text('Solicitar carga'), findsOneWidget);
-    expect(find.byKey(const ValueKey('accion-solicitar-carga')), findsNothing);
     expect(
-      find.byKey(const ValueKey('solicitar-desde-estado-vacio')),
+      find.byKey(const ValueKey('accion-solicitar-carga')),
       findsOneWidget,
     );
+    expect(find.byKey(const ValueKey('inicio-mi-consumo')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('inicio-mis-solicitudes')),
+      findsOneWidget,
+    );
+    expect(find.text('Actividad reciente'), findsOneWidget);
+    expect(find.text('Aún no tienes solicitudes de carga.'), findsOneWidget);
+    expect(find.text('Crea tu primera solicitud para comenzar.'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
+
+  testWidgets('solicitar carga abre la selección de operación vigente', (
+    tester,
+  ) async {
+    await _configurarVista(tester, const Size(390, 844), 1);
+    final container = makeTestContainer();
+    addTearDown(container.dispose);
+    await _iniciarChofer(tester, container);
+
+    await tester.tap(find.byKey(const ValueKey('accion-solicitar-carga')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('¿Qué unidad vas a operar hoy?'),
+      findsOneWidget,
+    );
+    expect(find.text('Vehículo Ligero'), findsOneWidget);
+    expect(find.text('Maquinaria Pesada'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('los accesos restaurados navegan a destinos actuales', (
+    tester,
+  ) async {
+    await _configurarVista(tester, const Size(1366, 768), 1);
+    final container = makeTestContainer();
+    addTearDown(container.dispose);
+    await _iniciarChofer(tester, container);
+
+    await tester.tap(find.byKey(const ValueKey('inicio-mi-consumo')));
+    await tester.pumpAndSettle();
+    expect(find.text('Mi consumo'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('inicio-mis-solicitudes')));
+    await tester.pumpAndSettle();
+    expect(find.text('Mis solicitudes'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final caso in <(Size, double)>[
+    (const Size(390, 844), 1),
+    (const Size(1080, 2400), 3),
+    (const Size(1366, 768), 1),
+  ]) {
+    testWidgets('dashboard completo sin overflow en ${caso.$1}', (
+      tester,
+    ) async {
+      tester.view.physicalSize = caso.$1;
+      tester.view.devicePixelRatio = caso.$2;
+      addTearDown(tester.view.reset);
+      final container = makeTestContainer();
+      addTearDown(container.dispose);
+      await _iniciarChofer(tester, container);
+
+      expect(find.text('Acciones'), findsOneWidget);
+      expect(find.text('Actividad reciente'), findsOneWidget);
+      expect(find.text('Solicitar carga'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('reducir movimiento conserva layout y termina sin timers', (
     tester,
