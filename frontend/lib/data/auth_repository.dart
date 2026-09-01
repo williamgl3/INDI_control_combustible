@@ -56,6 +56,11 @@ abstract class AuthRepository {
 
   Future<void> recuperarPassword({required String usuarioOCorreo});
 
+  Future<void> restablecerPassword({
+    required String token,
+    required String passwordNueva,
+  });
+
   /// Cambiar contraseña estando ya logueado (distinto de
   /// [recuperarPassword], para cuando el usuario la olvidó). Usada por
   /// "Mi perfil".

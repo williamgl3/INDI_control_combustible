@@ -24,6 +24,7 @@ import '../screens/chofer/recorrido_marimba_screen.dart';
 import '../screens/chofer/tipo_operacion_screen.dart';
 import '../screens/login/login_screen.dart';
 import '../screens/recuperar_password/recuperar_password_screen.dart';
+import '../screens/recuperar_password/restablecer_password_screen.dart';
 import '../screens/registro_chofer/registro_chofer_screen.dart';
 import 'app_route_transitions.dart';
 import 'placeholder_screen.dart';
@@ -150,6 +151,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.recuperarPassword,
         pageBuilder: (context, state) =>
             _paginaAuth(context, state, const RecuperarPasswordScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.restablecerPassword,
+        pageBuilder: (context, state) => _paginaAuth(
+          context,
+          state,
+          RestablecerPasswordScreen(
+            token: state.uri.queryParameters['token'] ?? '',
+          ),
+        ),
       ),
       GoRoute(
         path: RoutePaths.chofer,

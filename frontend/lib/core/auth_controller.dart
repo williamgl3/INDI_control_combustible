@@ -53,6 +53,15 @@ class AuthController {
         .recuperarPassword(usuarioOCorreo: usuarioOCorreo);
   }
 
+  Future<void> restablecerPassword({
+    required String token,
+    required String passwordNueva,
+  }) {
+    return _ref
+        .read(authRepositoryProvider)
+        .restablecerPassword(token: token, passwordNueva: passwordNueva);
+  }
+
   Future<void> cambiarPassword({
     required String passwordActual,
     required String passwordNueva,

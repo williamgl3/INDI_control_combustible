@@ -8,6 +8,7 @@ class RoutePaths {
   static const login = '/login';
   static const registroChofer = '/registro-chofer';
   static const recuperarPassword = '/recuperar-password';
+  static const restablecerPassword = '/restablecer-password';
 
   static const chofer = '/chofer';
   static const choferTipoOperacion = '/chofer/tipo-operacion';
@@ -44,5 +45,6 @@ class RoutePaths {
     login,
     registroChofer,
     recuperarPassword,
+    restablecerPassword,
   };
 }

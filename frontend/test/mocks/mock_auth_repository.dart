@@ -311,4 +311,13 @@ class MockAuthRepository implements AuthRepository {
       );
     }
   }
+
+  @override
+  Future<void> restablecerPassword({
+    required String token,
+    required String passwordNueva,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (token.isEmpty) throw AuthException('El enlace no es válido.');
+  }
 }

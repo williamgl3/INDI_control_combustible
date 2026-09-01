@@ -76,6 +76,21 @@ class ApiAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> restablecerPassword({
+    required String token,
+    required String passwordNueva,
+  }) async {
+    try {
+      await _client.post(
+        '/restablecer-password',
+        body: {'token': token, 'passwordNueva': passwordNueva},
+      );
+    } on ApiException catch (e) {
+      throw AuthException(e.mensaje);
+    }
+  }
+
+  @override
   Future<void> cambiarPassword({
     required String passwordActual,
     required String passwordNueva,
