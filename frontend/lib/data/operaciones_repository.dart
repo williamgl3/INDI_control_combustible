@@ -127,6 +127,35 @@ abstract class OperacionesRepository {
     List<ComprobanteEstacionCarga>? comprobantes,
   });
 
+  Future<Carga> registrarCargaIdempotente({
+    required String idempotencyKey,
+    required String choferId,
+    required String vehiculoId,
+    required String folioAutorizacion,
+    List<String>? foliosAdicionales,
+    required double litrosCargados,
+    required double kmAlCargar,
+    required String gasolinera,
+    String? fotoTicketPath,
+    String? fotoTableroPath,
+    double? litrosDetectadosOcr,
+    List<SolicitudPartida>? partidas,
+    List<ComprobanteEstacionCarga>? comprobantes,
+  }) => registrarCarga(
+    choferId: choferId,
+    vehiculoId: vehiculoId,
+    folioAutorizacion: folioAutorizacion,
+    foliosAdicionales: foliosAdicionales,
+    litrosCargados: litrosCargados,
+    kmAlCargar: kmAlCargar,
+    gasolinera: gasolinera,
+    fotoTicketPath: fotoTicketPath,
+    fotoTableroPath: fotoTableroPath,
+    litrosDetectadosOcr: litrosDetectadosOcr,
+    partidas: partidas,
+    comprobantes: comprobantes,
+  );
+
   Carga? cargaAbiertaDeHoy(String choferId);
 
   Future<CierreDia> cerrarDia({
@@ -135,6 +164,19 @@ abstract class OperacionesRepository {
     required double kmFinal,
     required String fotoTableroPath,
   });
+
+  Future<CierreDia> cerrarDiaIdempotente({
+    required String idempotencyKey,
+    required String choferId,
+    required String cargaId,
+    required double kmFinal,
+    required String fotoTableroPath,
+  }) => cerrarDia(
+    choferId: choferId,
+    cargaId: cargaId,
+    kmFinal: kmFinal,
+    fotoTableroPath: fotoTableroPath,
+  );
 
   Carga? cargaDe(CierreDia cierre);
   CierreDia? cierreDe(Carga carga);

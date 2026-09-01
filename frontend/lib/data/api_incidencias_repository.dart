@@ -40,10 +40,28 @@ class ApiIncidenciasRepository implements IncidenciasRepository {
     required String descripcion,
     String? fotoPath,
   }) async {
+    return reportarIdempotente(
+      idempotencyKey: '',
+      vehiculoId: vehiculoId,
+      descripcion: descripcion,
+      fotoPath: fotoPath,
+    );
+  }
+
+  @override
+  Future<IncidenciaVehiculo> reportarIdempotente({
+    required String idempotencyKey,
+    required String vehiculoId,
+    required String descripcion,
+    String? fotoPath,
+  }) async {
     final data = await _client.postMultipart(
       '/incidencias',
       campos: {'vehiculoId': vehiculoId, 'descripcion': descripcion},
       archivos: {'foto': fotoPath},
+      headers: {
+        if (idempotencyKey.isNotEmpty) 'Idempotency-Key': idempotencyKey,
+      },
     );
     final incidencia = IncidenciaVehiculo.fromJson(
       data as Map<String, dynamic>,

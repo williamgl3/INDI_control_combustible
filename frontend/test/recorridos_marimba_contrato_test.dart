@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:indi_combustible/core/token_storage.dart';
@@ -22,7 +24,11 @@ class _ApiCapturable extends ApiClient {
   }
 
   @override
-  Future<dynamic> post(String path, {Object? body}) async {
+  Future<dynamic> post(
+    String path, {
+    Object? body,
+    Map<String, String> headers = const {},
+  }) async {
     ruta = path;
     cuerpo = body as Map<String, dynamic>;
     return _recorridoJson;
@@ -35,6 +41,7 @@ class _ApiCapturable extends ApiClient {
     Map<String, String> headers = const {},
     Map<String, String?> archivos = const {},
     Map<String, List<String>> archivosMultiples = const {},
+    Map<String, Uint8List?> archivosBytes = const {},
   }) async {
     ruta = path;
     this.campos = campos;

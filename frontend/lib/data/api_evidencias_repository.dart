@@ -36,6 +36,7 @@ class ApiEvidenciasRepository implements EvidenciasRepository {
     double? litros,
     double? precioPorLitro,
     double? montoPagado,
+    String idempotencyKey = '',
   }) async {
     final data = await _client.postMultipart(
       '/evidencias',
@@ -57,6 +58,9 @@ class ApiEvidenciasRepository implements EvidenciasRepository {
         if (montoPagado != null) 'monto_pagado': montoPagado.toStringAsFixed(2),
       },
       archivosMultiples: {'fotos': fotoPaths},
+      headers: {
+        if (idempotencyKey.isNotEmpty) 'Idempotency-Key': idempotencyKey,
+      },
     );
     return Evidencia.fromJson(data as Map<String, dynamic>);
   }

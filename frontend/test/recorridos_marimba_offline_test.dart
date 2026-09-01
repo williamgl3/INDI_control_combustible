@@ -17,7 +17,7 @@ import 'package:indi_combustible/models/recorrido_marimba.dart';
 /// Fake en memoria — registra el orden real de las llamadas, para
 /// comprobar que el sincronizador respeta la dependencia recorrido →
 /// despachos → cierre en vez de mandarlos en cualquier orden.
-class _FakeRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
+class _FakeRecorridosMarimbaRepository extends RecorridosMarimbaRepository {
   final llamadas = <String>[];
   int _contadorId = 0;
 

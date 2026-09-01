@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/catalogos_vehiculo.dart';
 import '../../core/cola_solicitudes_offline.dart';
+import '../../core/offline/metadata_archivo_offline.dart';
+import '../../core/offline/metadata_operacion_offline.dart';
 import '../../core/connectivity_provider.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
@@ -35,6 +37,8 @@ class CerrarDiaScreen extends ConsumerStatefulWidget {
 class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
   double _kmFinal = 0;
   String? _fotoTableroPath;
+  MetadataArchivoOffline? _fotoTableroDurable;
+  String? _idLocalFoto;
 
   bool _cargandoFoto = false;
   bool _enviando = false;
@@ -49,6 +53,20 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
         if (ruta != null) _fotoTableroPath = ruta;
         _cargandoFoto = false;
       });
+      if (ruta != null && mounted) {
+        final perfil = ref.read(sessionProvider);
+        if (perfil != null) {
+          _idLocalFoto ??= nuevaIdempotencyKeyOffline();
+          _fotoTableroDurable = await importarFotoADurable(
+            almacenamiento: ref.read(almacenamientoOfflineProvider),
+            fotoPicker: ref.read(fotoPickerProvider),
+            userId: perfil.id,
+            idLocal: _idLocalFoto!,
+            rutaTemporal: ruta,
+            multipartField: 'fotoTablero',
+          );
+        }
+      }
     }
   }
 
@@ -71,23 +89,36 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
       _enviando = true;
       _errorGeneral = null;
     });
+    final idLocal = _idLocalFoto ?? nuevaIdempotencyKeyOffline();
+    final metadata = MetadataOperacionOffline.nueva();
+    await _encolarSinConexion(
+      idLocal: idLocal,
+      metadata: metadata,
+      notificar: false,
+    );
 
     // Sin conexión detectada de entrada: se encola directo, igual que en
     // SolicitarCargaScreen — evita esperar el timeout de red.
     if (ref.read(conectividadProvider).valueOrNull == false) {
-      await _encolarSinConexion();
+      await _encolarSinConexion(
+        idLocal: idLocal,
+        metadata: metadata,
+        persistir: false,
+      );
       return;
     }
 
     try {
       final perfil = ref.read(sessionProvider)!;
       final repo = ref.read(operacionesRepositoryProvider);
-      final cierre = await repo.cerrarDia(
+      final cierre = await repo.cerrarDiaIdempotente(
+        idempotencyKey: metadata.idempotencyKey,
         choferId: perfil.id,
         cargaId: widget.carga.id,
         kmFinal: _kmFinal,
         fotoTableroPath: _fotoTableroPath!,
       );
+      await ref.read(colaCerrarDiaOfflineProvider).quitar(idLocal);
       final resultado = repo.rendimientoDe(cierre);
       HapticFeedback.mediumImpact();
       ref.read(operacionesTickProvider.notifier).state++;
@@ -96,10 +127,15 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
           .cancelarRecordatorio(widget.carga.id);
       if (mounted) setState(() => _resultado = resultado);
     } on ApiException catch (e) {
+      await ref.read(colaCerrarDiaOfflineProvider).registrarError(idLocal, e);
       if (e.status == null) {
         // Sin `status` HTTP = nunca llegó a un servidor — posible falso
         // positivo del chequeo de conectividad de arriba.
-        await _encolarSinConexion();
+        await _encolarSinConexion(
+          idLocal: idLocal,
+          metadata: metadata,
+          persistir: false,
+        );
         return;
       }
       setState(() => _errorGeneral = e.mensaje);
@@ -115,22 +151,34 @@ class _CerrarDiaScreenState extends ConsumerState<CerrarDiaScreen> {
   /// Encola el cierre de día para reintentarlo al reconectar (ver
   /// `cola_solicitudes_offline.dart`). Sin resultado de rendimiento que
   /// mostrar aquí — se calcula del lado del backend al sincronizar.
-  Future<void> _encolarSinConexion() async {
+  Future<void> _encolarSinConexion({
+    required String idLocal,
+    required MetadataOperacionOffline metadata,
+    bool persistir = true,
+    bool notificar = true,
+  }) async {
     final perfil = ref.read(sessionProvider)!;
     final ahora = DateTime.now();
-    await ref
-        .read(colaCerrarDiaOfflineProvider)
-        .agregar(
-          CerrarDiaPendienteOffline(
-            idLocal: 'offline-${ahora.microsecondsSinceEpoch}',
-            choferId: perfil.id,
-            cargaId: widget.carga.id,
-            kmFinal: _kmFinal,
-            fotoTableroPath: _fotoTableroPath!,
-            creadaEn: ahora,
-          ),
-        );
+    if (persistir) {
+      await ref
+          .read(colaCerrarDiaOfflineProvider)
+          .agregar(
+            CerrarDiaPendienteOffline(
+              idLocal: idLocal,
+              choferId: perfil.id,
+              cargaId: widget.carga.id,
+              kmFinal: _kmFinal,
+              fotoTableroPath: _fotoTableroPath!,
+              creadaEn: ahora,
+              metadata: metadata,
+              archivosOffline: _fotoTableroDurable != null
+                  ? [_fotoTableroDurable!]
+                  : null,
+            ),
+          );
+    }
     ref.read(operacionesTickProvider.notifier).state++;
+    if (!notificar) return;
     if (!mounted) return;
     setState(() => _enviando = false);
     await SinConexionDialog.show(

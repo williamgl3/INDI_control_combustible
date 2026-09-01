@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/catalogos_vehiculo.dart';
 import '../../core/cola_solicitudes_offline.dart';
+import '../../core/offline/metadata_archivo_offline.dart';
+import '../../core/offline/metadata_operacion_offline.dart';
 import '../../core/connectivity_provider.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
@@ -51,6 +53,9 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
   double _kmAlCargar = 0;
   String? _fotoTicketPath;
   String? _fotoTableroPath;
+  MetadataArchivoOffline? _fotoTicketDurable;
+  MetadataArchivoOffline? _fotoTableroDurable;
+  String? _idLocalFotos;
   ResultadoOcrTicket? _resultadoOcr;
 
   bool _cargandoFotoTicket = false;
@@ -89,6 +94,20 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
         if (ruta != null) _fotoTableroPath = ruta;
         _cargandoFotoTablero = false;
       });
+      if (ruta != null && mounted) {
+        final perfil = ref.read(sessionProvider);
+        if (perfil != null) {
+          _idLocalFotos ??= nuevaIdempotencyKeyOffline();
+          _fotoTableroDurable = await importarFotoADurable(
+            almacenamiento: ref.read(almacenamientoOfflineProvider),
+            fotoPicker: ref.read(fotoPickerProvider),
+            userId: perfil.id,
+            idLocal: _idLocalFotos!,
+            rutaTemporal: ruta,
+            multipartField: 'fotoTablero',
+          );
+        }
+      }
     }
   }
 
@@ -99,8 +118,6 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
       if (mounted) setState(() => _cargandoFotoTicket = false);
       return;
     }
-    // El OCR es un apoyo visual (ver TicketOcrService) — si falla, se
-    // ignora y el chofer puede seguir enviando su comprobación igual.
     ResultadoOcrTicket? resultado;
     try {
       resultado = await ref.read(ticketOcrServiceProvider).leerTicket(ruta);
@@ -113,6 +130,20 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
         _resultadoOcr = resultado;
         _cargandoFotoTicket = false;
       });
+      if (mounted) {
+        final perfil = ref.read(sessionProvider);
+        if (perfil != null) {
+          _idLocalFotos ??= nuevaIdempotencyKeyOffline();
+          _fotoTicketDurable = await importarFotoADurable(
+            almacenamiento: ref.read(almacenamientoOfflineProvider),
+            fotoPicker: ref.read(fotoPickerProvider),
+            userId: perfil.id,
+            idLocal: _idLocalFotos!,
+            rutaTemporal: ruta,
+            multipartField: 'fotoTicket',
+          );
+        }
+      }
     }
   }
 
@@ -175,6 +206,13 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
       _enviando = true;
       _errorGeneral = null;
     });
+    final idLocal = _idLocalFotos ?? nuevaIdempotencyKeyOffline();
+    final metadata = MetadataOperacionOffline.nueva();
+    await _encolarSinConexion(
+      idLocal: idLocal,
+      metadata: metadata,
+      notificar: false,
+    );
 
     // Sin conexión detectada de entrada: se encola directo, igual que en
     // SolicitarCargaScreen — evita esperar el timeout de red.
@@ -187,7 +225,11 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
         });
         return;
       }
-      await _encolarSinConexion();
+      await _encolarSinConexion(
+        idLocal: idLocal,
+        metadata: metadata,
+        persistir: false,
+      );
       return;
     }
 
@@ -195,7 +237,8 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
       final perfil = ref.read(sessionProvider)!;
       final carga = await ref
           .read(operacionesRepositoryProvider)
-          .registrarCarga(
+          .registrarCargaIdempotente(
+            idempotencyKey: metadata.idempotencyKey,
             choferId: perfil.id,
             vehiculoId: _vehiculo!.id,
             folioAutorizacion: widget.folioAutorizacion,
@@ -216,6 +259,7 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
                   ]
                 : null,
           );
+      await ref.read(colaComprobarCargaOfflineProvider).quitar(idLocal);
       HapticFeedback.mediumImpact();
       ref.read(operacionesTickProvider.notifier).state++;
       // 8 horas para "fin de jornada" confirmado por el usuario.
@@ -227,6 +271,9 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
           );
       if (mounted) context.go(RoutePaths.chofer);
     } on ApiException catch (e) {
+      await ref
+          .read(colaComprobarCargaOfflineProvider)
+          .registrarError(idLocal, e);
       if (e.status == null) {
         if (_usaPartidas) {
           if (mounted) {
@@ -239,7 +286,11 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
         }
         // Sin `status` HTTP = nunca llegó a un servidor — posible falso
         // positivo del chequeo de conectividad de arriba.
-        await _encolarSinConexion();
+        await _encolarSinConexion(
+          idLocal: idLocal,
+          metadata: metadata,
+          persistir: false,
+        );
         return;
       }
       setState(() => _errorGeneral = e.mensaje);
@@ -257,27 +308,40 @@ class _ComprobarCargaScreenState extends ConsumerState<ComprobarCargaScreen> {
   /// `cola_solicitudes_offline.dart`). No se programa el recordatorio
   /// local de "cerrar mi día" aquí — depende del `id`/`creadaEn` reales
   /// que solo asigna el backend al sincronizar.
-  Future<void> _encolarSinConexion() async {
+  Future<void> _encolarSinConexion({
+    required String idLocal,
+    required MetadataOperacionOffline metadata,
+    bool persistir = true,
+    bool notificar = true,
+  }) async {
     final perfil = ref.read(sessionProvider)!;
     final ahora = DateTime.now();
-    await ref
-        .read(colaComprobarCargaOfflineProvider)
-        .agregar(
-          ComprobarCargaPendienteOffline(
-            idLocal: 'offline-${ahora.microsecondsSinceEpoch}',
-            choferId: perfil.id,
-            vehiculoId: _vehiculo!.id,
-            folioAutorizacion: widget.folioAutorizacion,
-            litrosCargados: _litrosCargados,
-            kmAlCargar: _kmAlCargar,
-            gasolinera: _gasolineraController.text.trim(),
-            fotoTicketPath: _fotoTicketPath!,
-            fotoTableroPath: _fotoTableroPath!,
-            litrosDetectadosOcr: _resultadoOcr?.litros,
-            creadaEn: ahora,
-          ),
-        );
+    if (persistir) {
+      await ref
+          .read(colaComprobarCargaOfflineProvider)
+          .agregar(
+            ComprobarCargaPendienteOffline(
+              idLocal: idLocal,
+              choferId: perfil.id,
+              vehiculoId: _vehiculo!.id,
+              folioAutorizacion: widget.folioAutorizacion,
+              litrosCargados: _totalCargado,
+              kmAlCargar: _kmAlCargar,
+              gasolinera: _gasolineraController.text.trim(),
+              fotoTicketPath: _fotoTicketPath!,
+              fotoTableroPath: _fotoTableroPath!,
+              litrosDetectadosOcr: _resultadoOcr?.litros,
+              creadaEn: ahora,
+              metadata: metadata,
+              archivosOffline: [
+                ?_fotoTicketDurable,
+                ?_fotoTableroDurable,
+              ],
+            ),
+          );
+    }
     ref.read(operacionesTickProvider.notifier).state++;
+    if (!notificar) return;
     if (!mounted) return;
     setState(() => _enviando = false);
     await SinConexionDialog.show(

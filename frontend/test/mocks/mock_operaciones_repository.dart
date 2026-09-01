@@ -19,7 +19,7 @@ import 'package:indi_combustible/models/vehiculo.dart';
 ///
 /// Útil para tests de widgets y como referencia de la interfaz que
 /// implementa `ApiOperacionesRepository`.
-class MockOperacionesRepository implements OperacionesRepository {
+class MockOperacionesRepository extends OperacionesRepository {
   final List<SolicitudAutorizacion> _solicitudes = [];
   final List<Carga> _cargas = [];
   final List<CierreDia> _cierres = [];
@@ -388,6 +388,11 @@ class MockOperacionesRepository implements OperacionesRepository {
   /// Registro 1 del día: se llena justo después de cargar combustible.
   /// [creadaEn] la pone el dispositivo (no el chofer) para que sirva de
   /// registro de auditoría.
+  /// Inserta una carga directamente en la lista interna, sin delay —
+  /// para tests de widget que usan `testWidgets` (FakeAsync) donde un
+  /// `await Future.delayed` bloquearía el event loop.
+  void precargarCarga(Carga carga) => _cargas.add(carga);
+
   @override
   Future<Carga> registrarCarga({
     required String choferId,

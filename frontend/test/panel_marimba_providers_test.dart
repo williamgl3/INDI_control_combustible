@@ -10,7 +10,7 @@ import 'package:indi_combustible/models/panel_marimba.dart';
 import 'package:indi_combustible/models/perfil.dart';
 import 'package:indi_combustible/models/recorrido_marimba.dart';
 
-class _Repo implements RecorridosMarimbaRepository {
+class _Repo extends RecorridosMarimbaRepository {
   int resumenConsultas = 0;
   int historialConsultas = 0;
   Completer<List<ResumenUnidadMarimba>>? resumenPendiente;

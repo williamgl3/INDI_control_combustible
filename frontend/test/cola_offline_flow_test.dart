@@ -110,9 +110,7 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    await tester.tap(
-      find.byKey(const ValueKey('solicitar-desde-estado-vacio')),
-    );
+    await tester.tap(find.byKey(const ValueKey('accion-solicitar-carga')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Vehículo Ligero'));
     await tester.pumpAndSettle();
@@ -149,7 +147,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('1 solicitud guardada sin conexión'),
+      find.textContaining('1 operación guardada sin conexión'),
       findsOneWidget,
     );
 

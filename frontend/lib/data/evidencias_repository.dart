@@ -4,6 +4,9 @@ import '../models/evidencia.dart';
 abstract class EvidenciasRepository {
   /// Sube una evidencia fotográfica al backend (1 a 5 imágenes +
   /// metadatos). Las imágenes se envían como `multipart/form-data`.
+  ///
+  /// [idempotencyKey] se envía como header `Idempotency-Key` cuando se
+  /// proporciona — necesario para el soporte offline persist-first (fase 3D).
   Future<Evidencia> subirEvidencia({
     required String usuarioId,
     required TipoEvidencia tipo,
@@ -18,6 +21,7 @@ abstract class EvidenciasRepository {
     double? litros,
     double? precioPorLitro,
     double? montoPagado,
+    String idempotencyKey = '',
   });
 
   /// Cache en memoria de [cargarTodasLasEvidencias] — solo poblado para

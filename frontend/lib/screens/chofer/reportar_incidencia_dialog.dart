@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/cola_solicitudes_offline.dart';
+import '../../core/offline/metadata_archivo_offline.dart';
+import '../../core/offline/metadata_operacion_offline.dart';
 import '../../core/connectivity_provider.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
@@ -51,6 +53,8 @@ class _ReportarIncidenciaDialogState
   /// el motor"), a diferencia de las fotos de carga/cierre que sí son
   /// obligatorias.
   String? _fotoPath;
+  MetadataArchivoOffline? _fotoDurable;
+  String? _idLocalFoto;
   bool _cargandoFoto = false;
 
   Future<void> _tomarFoto() async {
@@ -61,6 +65,20 @@ class _ReportarIncidenciaDialogState
         if (ruta != null) _fotoPath = ruta;
         _cargandoFoto = false;
       });
+      if (ruta != null && mounted) {
+        final perfil = ref.read(sessionProvider);
+        if (perfil != null) {
+          _idLocalFoto ??= nuevaIdempotencyKeyOffline();
+          _fotoDurable = await importarFotoADurable(
+            almacenamiento: ref.read(almacenamientoOfflineProvider),
+            fotoPicker: ref.read(fotoPickerProvider),
+            userId: perfil.id,
+            idLocal: _idLocalFoto!,
+            rutaTemporal: ruta,
+            multipartField: 'foto',
+          );
+        }
+      }
     }
   }
 
@@ -79,28 +97,49 @@ class _ReportarIncidenciaDialogState
     });
 
     final descripcion = _descripcionController.text.trim();
+    final idLocal = _idLocalFoto ?? nuevaIdempotencyKeyOffline();
+    final metadata = MetadataOperacionOffline.nueva();
+    await _encolarSinConexion(
+      descripcion,
+      idLocal: idLocal,
+      metadata: metadata,
+      notificar: false,
+    );
 
     // Sin conexión detectada de entrada: se encola directo, igual que en
     // SolicitarCargaScreen — evita esperar el timeout de red.
     if (ref.read(conectividadProvider).valueOrNull == false) {
-      await _encolarSinConexion(descripcion);
+      await _encolarSinConexion(
+        descripcion,
+        idLocal: idLocal,
+        metadata: metadata,
+        persistir: false,
+      );
       return;
     }
 
     try {
       await ref
           .read(incidenciasRepositoryProvider)
-          .reportar(
+          .reportarIdempotente(
+            idempotencyKey: metadata.idempotencyKey,
             vehiculoId: widget.vehiculo.id,
             descripcion: descripcion,
             fotoPath: _fotoPath,
           );
+      await ref.read(colaIncidenciasOfflineProvider).quitar(idLocal);
       if (mounted) Navigator.of(context).pop(true);
     } on ApiException catch (e) {
+      await ref.read(colaIncidenciasOfflineProvider).registrarError(idLocal, e);
       if (e.status == null) {
         // Sin `status` HTTP = nunca llegó a un servidor — posible falso
         // positivo del chequeo de conectividad de arriba.
-        await _encolarSinConexion(descripcion);
+        await _encolarSinConexion(
+          descripcion,
+          idLocal: idLocal,
+          metadata: metadata,
+          persistir: false,
+        );
         return;
       }
       setState(() => _errorGeneral = e.mensaje);
@@ -112,7 +151,13 @@ class _ReportarIncidenciaDialogState
   /// Encola el reporte para reintentarlo al reconectar (ver
   /// `cola_solicitudes_offline.dart`) — la foto es opcional aquí (a
   /// diferencia de las otras 3 colas, donde es obligatoria).
-  Future<void> _encolarSinConexion(String descripcion) async {
+  Future<void> _encolarSinConexion(
+    String descripcion, {
+    required String idLocal,
+    required MetadataOperacionOffline metadata,
+    bool persistir = true,
+    bool notificar = true,
+  }) async {
     final perfil = ref.read(sessionProvider);
     if (perfil == null) {
       if (mounted) {
@@ -126,19 +171,24 @@ class _ReportarIncidenciaDialogState
     }
 
     final ahora = DateTime.now();
-    await ref
-        .read(colaIncidenciasOfflineProvider)
-        .agregar(
-          IncidenciaPendienteOffline(
-            idLocal: 'offline-${ahora.microsecondsSinceEpoch}',
-            usuarioId: perfil.id,
-            vehiculoId: widget.vehiculo.id,
-            descripcion: descripcion,
-            creadaEn: ahora,
-            fotoPath: _fotoPath,
-          ),
-        );
+    if (persistir) {
+      await ref
+          .read(colaIncidenciasOfflineProvider)
+          .agregar(
+            IncidenciaPendienteOffline(
+              idLocal: idLocal,
+              usuarioId: perfil.id,
+              vehiculoId: widget.vehiculo.id,
+              descripcion: descripcion,
+              creadaEn: ahora,
+              fotoPath: _fotoPath,
+              metadata: metadata,
+              archivosOffline: _fotoDurable != null ? [_fotoDurable!] : null,
+            ),
+          );
+    }
     ref.read(operacionesTickProvider.notifier).state++;
+    if (!notificar) return;
     if (!mounted) return;
     setState(() => _cargando = false);
     await SinConexionDialog.show(

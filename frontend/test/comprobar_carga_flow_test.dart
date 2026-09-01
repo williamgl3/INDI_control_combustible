@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:indi_combustible/core/providers.dart';
 
@@ -42,6 +43,11 @@ void main() {
   testWidgets(
     'chofer registra su carga (con fotos) y luego cierra su día, viendo el rendimiento',
     (tester) async {
+      tester.view.physicalSize = const Size(1600, 1000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      SharedPreferences.setMockInitialValues({});
       final container = makeTestContainer();
       addTearDown(container.dispose);
       await pumpTestApp(tester, container: container);
@@ -61,9 +67,7 @@ void main() {
 
       // Solicitar carga. chofer1 no tiene historial todavía, así que queda
       // pendiente de revisión manual (no se auto-aprueba).
-      await tester.tap(
-        find.byKey(const ValueKey('solicitar-desde-estado-vacio')),
-      );
+      await tester.tap(find.byKey(const ValueKey('accion-solicitar-carga')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Vehículo Ligero'));
       await tester.pumpAndSettle();
@@ -91,7 +95,10 @@ void main() {
       );
       await tester.ensureVisible(find.text('Enviar solicitud'));
       await tester.tap(find.text('Enviar solicitud'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
 
       expect(find.text('En revisión'), findsOneWidget);
       await tester.tap(find.text('Entendido'));
@@ -100,6 +107,9 @@ void main() {
       // El admin la resuelve desde su propia sesión (esto también ejercita
       // RevisarSolicitudDialog de punta a punta). "Cerrar sesión" del
       // chofer ahora está en la pestaña Perfil del bottom nav.
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('sidebar-chofer-perfil')),
+      );
       await tester.tap(find.byKey(const ValueKey('sidebar-chofer-perfil')));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Cerrar sesión'));

@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/catalogos_vehiculo.dart';
 import '../../core/cola_solicitudes_offline.dart';
+import '../../core/offline/metadata_archivo_offline.dart';
+import '../../core/offline/metadata_operacion_offline.dart';
+import '../../core/offline/politica_retry_offline.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
 import '../../data/api_client.dart';
@@ -73,6 +76,8 @@ class _RecorridoMarimbaScreenState
   String? _fotoMedidorPath;
   String? _fotoEvidenciaPath;
   String? _fotoEnCarga;
+  String? _idLocalDespacho;
+  final List<MetadataArchivoOffline> _archivosDespacho = [];
   bool _agregando = false;
   String? _errorDespacho;
 
@@ -139,10 +144,33 @@ class _RecorridoMarimbaScreenState
 
     final marimba = _marimba!;
     final frente = _frenteController.text.trim();
+    final perfilActual = ref.read(sessionProvider);
+    if (perfilActual == null || !perfilActual.esSupervisor) return;
+    final idLocalInicial = nuevaIdempotencyKeyOffline();
+    final metadataInicial = MetadataOperacionOffline.nueva();
+    await ref
+        .read(colaRecorridosMarimbaOfflineProvider)
+        .agregar(
+          RecorridoMarimbaPendienteOffline(
+            idLocal: idLocalInicial,
+            usuarioId: perfilActual.id,
+            rol: perfilActual.rol.name,
+            marimbaId: marimba.id,
+            tipoCombustible: _tipoCombustible!,
+            frente: frente,
+            kmInicio: _kmInicio > 0 ? _kmInicio : null,
+            horasEquipoMenorInicio: _horasEquipoMenorInicio > 0
+                ? _horasEquipoMenorInicio
+                : null,
+            creadaEn: DateTime.now(),
+            metadata: metadataInicial,
+          ),
+        );
     try {
       final recorrido = await ref
           .read(recorridosMarimbaRepositoryProvider)
-          .abrirRecorrido(
+          .abrirRecorridoIdempotente(
+            idempotencyKey: metadataInicial.idempotencyKey,
             marimbaId: marimba.id,
             tipoCombustible: _tipoCombustible!,
             frente: frente,
@@ -151,6 +179,12 @@ class _RecorridoMarimbaScreenState
                 ? _horasEquipoMenorInicio
                 : null,
           );
+      await ref
+          .read(colaRecorridosMarimbaOfflineProvider)
+          .actualizarIdServidor(idLocalInicial, recorrido.id);
+      await ref
+          .read(colaRecorridosMarimbaOfflineProvider)
+          .quitar(idLocalInicial);
       if (!mounted) return;
       setState(() {
         _recorridoIdLocal = recorrido.id;
@@ -159,6 +193,12 @@ class _RecorridoMarimbaScreenState
         _litrosInicialesActivos = recorrido.litrosIniciales;
       });
     } on ApiException catch (error) {
+      await ref
+          .read(colaRecorridosMarimbaOfflineProvider)
+          .actualizarMetadata(
+            idLocalInicial,
+            metadataTrasErrorOffline(metadataInicial, error),
+          );
       if (error.status == null) {
         final perfil = ref.read(sessionProvider);
         if (perfil == null || !perfil.esSupervisor) {
@@ -167,28 +207,9 @@ class _RecorridoMarimbaScreenState
           }
           return;
         }
-        final ahora = DateTime.now();
-        final idLocal = 'recorrido-${ahora.microsecondsSinceEpoch}';
-        await ref
-            .read(colaRecorridosMarimbaOfflineProvider)
-            .agregar(
-              RecorridoMarimbaPendienteOffline(
-                idLocal: idLocal,
-                usuarioId: perfil.id,
-                rol: perfil.rol.name,
-                marimbaId: marimba.id,
-                tipoCombustible: _tipoCombustible!,
-                frente: frente,
-                kmInicio: _kmInicio > 0 ? _kmInicio : null,
-                horasEquipoMenorInicio: _horasEquipoMenorInicio > 0
-                    ? _horasEquipoMenorInicio
-                    : null,
-                creadaEn: ahora,
-              ),
-            );
         if (mounted) {
           setState(() {
-            _recorridoIdLocal = idLocal;
+            _recorridoIdLocal = idLocalInicial;
             _recorridoPendiente = true;
             _frenteActivo = frente;
           });
@@ -257,12 +278,64 @@ class _RecorridoMarimbaScreenState
 
     final destino = _destino!;
     final operador = _operadorController.text.trim();
+    final perfilDespacho = ref.read(sessionProvider);
+    if (perfilDespacho == null || !perfilDespacho.esSupervisor) return;
+    final ahoraDespacho = DateTime.now();
+    final idDespacho = _idLocalDespacho ?? nuevaIdempotencyKeyOffline();
+    final metadataDespacho = MetadataOperacionOffline.nueva();
+    final colaRecorridosDespacho = ref.read(
+      colaRecorridosMarimbaOfflineProvider,
+    );
+    final existeEncabezadoDespacho = (await colaRecorridosDespacho.leer()).any(
+      (r) => r.idLocal == _recorridoIdLocal,
+    );
+    if (!existeEncabezadoDespacho) {
+      await colaRecorridosDespacho.agregar(
+        RecorridoMarimbaPendienteOffline(
+          idLocal: _recorridoIdLocal!,
+          usuarioId: perfilDespacho.id,
+          rol: perfilDespacho.rol.name,
+          marimbaId: _marimba!.id,
+          tipoCombustible: _tipoCombustible!,
+          frente: _frenteActivo!,
+          creadaEn: ahoraDespacho,
+          idServidor: _recorridoIdLocal,
+        ),
+      );
+    }
+    await ref
+        .read(colaDespachosMarimbaOfflineProvider)
+        .agregar(
+          DespachoMarimbaPendienteOffline(
+            idLocal: idDespacho,
+            recorridoIdLocal: _recorridoIdLocal!,
+            usuarioId: perfilDespacho.id,
+            rol: perfilDespacho.rol.name,
+            vehiculoDestinoId: destino.id,
+            tipoCombustible: _tipoCombustible!,
+            operadorTexto: operador,
+            horometro: _horometro,
+            fotoHorometroPath: _fotoHorometroPath!,
+            litrosDeclarados: _cantidadDeclarada ? litros : null,
+            medidorInicial: _cantidadDeclarada ? null : _medidorInicial,
+            medidorFinal: _cantidadDeclarada ? null : _medidorFinal,
+            fotoMedidorPath: _cantidadDeclarada ? null : _fotoMedidorPath,
+            fotoEvidenciaPath: _fotoEvidenciaPath,
+            ubicacion: _frenteActivo,
+            creadaEn: ahoraDespacho,
+            metadata: metadataDespacho,
+            archivosOffline: _archivosDespacho.isNotEmpty
+                ? _archivosDespacho
+                : null,
+          ),
+        );
 
     try {
       if (_recorridoPendiente) throw ApiException('Sin conexión.');
       final despacho = await ref
           .read(recorridosMarimbaRepositoryProvider)
-          .agregarDespacho(
+          .agregarDespachoIdempotente(
+            idempotencyKey: metadataDespacho.idempotencyKey,
             recorridoId: _recorridoIdLocal!,
             tipoCombustible: _tipoCombustible!,
             vehiculoDestinoId: destino.id,
@@ -276,6 +349,10 @@ class _RecorridoMarimbaScreenState
             fotoEvidenciaPath: _fotoEvidenciaPath,
             ubicacion: _frenteActivo,
           );
+      await ref.read(colaDespachosMarimbaOfflineProvider).quitar(idDespacho);
+      if (!existeEncabezadoDespacho) {
+        await colaRecorridosDespacho.quitar(_recorridoIdLocal!);
+      }
       final etiquetaDestino = destino.modelo ?? destino.etiquetaUnidad;
       if (!mounted) return;
       setState(() {
@@ -292,8 +369,15 @@ class _RecorridoMarimbaScreenState
         _fotoHorometroPath = null;
         _fotoMedidorPath = null;
         _fotoEvidenciaPath = null;
+        _archivosDespacho.clear();
       });
     } on ApiException catch (error) {
+      await ref
+          .read(colaDespachosMarimbaOfflineProvider)
+          .actualizarMetadata(
+            idDespacho,
+            metadataTrasErrorOffline(metadataDespacho, error),
+          );
       if (error.status == null) {
         final perfil = ref.read(sessionProvider);
         if (perfil == null || !perfil.esSupervisor) {
@@ -302,7 +386,7 @@ class _RecorridoMarimbaScreenState
           }
           return;
         }
-        final ahora = DateTime.now();
+        final ahora = ahoraDespacho;
         final colaRecorridos = ref.read(colaRecorridosMarimbaOfflineProvider);
         final existeEncabezado = (await colaRecorridos.leer()).any(
           (r) => r.idLocal == _recorridoIdLocal,
@@ -325,7 +409,7 @@ class _RecorridoMarimbaScreenState
             .read(colaDespachosMarimbaOfflineProvider)
             .agregar(
               DespachoMarimbaPendienteOffline(
-                idLocal: 'despacho-${ahora.microsecondsSinceEpoch}',
+                idLocal: idDespacho,
                 recorridoIdLocal: _recorridoIdLocal!,
                 usuarioId: perfil.id,
                 rol: perfil.rol.name,
@@ -341,6 +425,10 @@ class _RecorridoMarimbaScreenState
                 fotoEvidenciaPath: _fotoEvidenciaPath,
                 ubicacion: _frenteActivo,
                 creadaEn: ahora,
+                metadata: metadataDespacho,
+                archivosOffline: _archivosDespacho.isNotEmpty
+                    ? _archivosDespacho
+                    : null,
               ),
             );
         if (mounted) {
@@ -386,6 +474,23 @@ class _RecorridoMarimbaScreenState
         }
         _fotoEnCarga = null;
       });
+      if (ruta != null && mounted) {
+        final perfil = ref.read(sessionProvider);
+        if (perfil != null) {
+          _idLocalDespacho ??= nuevaIdempotencyKeyOffline();
+          final metadata = await importarFotoADurable(
+            almacenamiento: ref.read(almacenamientoOfflineProvider),
+            fotoPicker: ref.read(fotoPickerProvider),
+            userId: perfil.id,
+            idLocal: _idLocalDespacho!,
+            rutaTemporal: ruta,
+            multipartField: 'foto$tipo',
+          );
+          if (metadata != null) {
+            _archivosDespacho.add(metadata);
+          }
+        }
+      }
     }
   }
 
@@ -394,11 +499,54 @@ class _RecorridoMarimbaScreenState
     if (resultado == null) return;
 
     setState(() => _cerrando = true);
+    final perfilCierre = ref.read(sessionProvider);
+    if (perfilCierre == null || !perfilCierre.esSupervisor) return;
+    final ahoraCierre = DateTime.now();
+    final idCierre = resultado.idLocal;
+    final metadataCierre = MetadataOperacionOffline.nueva();
+    final colaRecorridosCierre = ref.read(colaRecorridosMarimbaOfflineProvider);
+    final existeEncabezadoCierre = (await colaRecorridosCierre.leer()).any(
+      (r) => r.idLocal == _recorridoIdLocal,
+    );
+    if (!existeEncabezadoCierre) {
+      await colaRecorridosCierre.agregar(
+        RecorridoMarimbaPendienteOffline(
+          idLocal: _recorridoIdLocal!,
+          usuarioId: perfilCierre.id,
+          rol: perfilCierre.rol.name,
+          marimbaId: _marimba!.id,
+          tipoCombustible: _tipoCombustible!,
+          frente: _frenteActivo!,
+          creadaEn: ahoraCierre,
+          idServidor: _recorridoIdLocal,
+        ),
+      );
+    }
+    await ref
+        .read(colaCierresRecorridoMarimbaOfflineProvider)
+        .agregar(
+          CierreRecorridoMarimbaPendienteOffline(
+            idLocal: idCierre,
+            recorridoIdLocal: _recorridoIdLocal!,
+            usuarioId: perfilCierre.id,
+            rol: perfilCierre.rol.name,
+            kmCierre: resultado.kmCierre,
+            horasEquipoMenorCierre: resultado.horasEquipoMenorCierre,
+            fotoCierrePath: resultado.fotoCierrePath,
+            fotoNivelPath: resultado.fotoNivelPath,
+            existenciaFisica: resultado.existenciaFisica,
+            observaciones: resultado.observaciones,
+            creadaEn: ahoraCierre,
+            metadata: metadataCierre,
+            archivosOffline: resultado.archivosOffline,
+          ),
+        );
     try {
       if (_recorridoPendiente) throw ApiException('Sin conexión.');
       final recorridoCerrado = await ref
           .read(recorridosMarimbaRepositoryProvider)
-          .cerrarRecorrido(
+          .cerrarRecorridoIdempotente(
+            idempotencyKey: metadataCierre.idempotencyKey,
             recorridoId: _recorridoIdLocal!,
             kmCierre: resultado.kmCierre,
             horasEquipoMenorCierre: resultado.horasEquipoMenorCierre,
@@ -407,10 +555,22 @@ class _RecorridoMarimbaScreenState
             existenciaFisica: resultado.existenciaFisica,
             observaciones: resultado.observaciones,
           );
+      await ref
+          .read(colaCierresRecorridoMarimbaOfflineProvider)
+          .quitar(idCierre);
+      if (!existeEncabezadoCierre) {
+        await colaRecorridosCierre.quitar(_recorridoIdLocal!);
+      }
       if (!mounted) return;
       await _DialogoConciliacion.show(context, recorrido: recorridoCerrado);
       if (mounted) context.go(RoutePaths.chofer);
     } on ApiException catch (error) {
+      await ref
+          .read(colaCierresRecorridoMarimbaOfflineProvider)
+          .actualizarMetadata(
+            idCierre,
+            metadataTrasErrorOffline(metadataCierre, error),
+          );
       if (error.status == null) {
         final perfil = ref.read(sessionProvider);
         if (perfil == null || !perfil.esSupervisor) {
@@ -421,7 +581,7 @@ class _RecorridoMarimbaScreenState
           }
           return;
         }
-        final ahora = DateTime.now();
+        final ahora = ahoraCierre;
         final colaRecorridos = ref.read(colaRecorridosMarimbaOfflineProvider);
         final existeEncabezado = (await colaRecorridos.leer()).any(
           (r) => r.idLocal == _recorridoIdLocal,
@@ -444,7 +604,7 @@ class _RecorridoMarimbaScreenState
             .read(colaCierresRecorridoMarimbaOfflineProvider)
             .agregar(
               CierreRecorridoMarimbaPendienteOffline(
-                idLocal: 'cierre-${ahora.microsecondsSinceEpoch}',
+                idLocal: idCierre,
                 recorridoIdLocal: _recorridoIdLocal!,
                 usuarioId: perfil.id,
                 rol: perfil.rol.name,
@@ -455,6 +615,8 @@ class _RecorridoMarimbaScreenState
                 existenciaFisica: resultado.existenciaFisica,
                 observaciones: resultado.observaciones,
                 creadaEn: ahora,
+                metadata: metadataCierre,
+                archivosOffline: resultado.archivosOffline,
               ),
             );
         if (mounted) context.go(RoutePaths.chofer);
@@ -925,20 +1087,24 @@ class _TarjetaDespacho extends StatelessWidget {
 
 class _ResultadoCierre {
   const _ResultadoCierre({
+    required this.idLocal,
     this.kmCierre,
     this.horasEquipoMenorCierre,
     required this.fotoCierrePath,
     required this.fotoNivelPath,
     required this.existenciaFisica,
     this.observaciones,
+    this.archivosOffline,
   });
 
+  final String idLocal;
   final double? kmCierre;
   final double? horasEquipoMenorCierre;
   final String fotoCierrePath;
   final String fotoNivelPath;
   final double existenciaFisica;
   final String? observaciones;
+  final List<MetadataArchivoOffline>? archivosOffline;
 }
 
 class _DialogoCerrarRecorrido extends ConsumerStatefulWidget {
@@ -968,6 +1134,8 @@ class _DialogoCerrarRecorridoState
   String? _fotoCierrePath;
   String? _fotoNivelPath;
   String? _fotoEnCarga;
+  String? _idLocalCierre;
+  final List<MetadataArchivoOffline> _archivosCierre = [];
   String? _error;
 
   @override
@@ -987,6 +1155,23 @@ class _DialogoCerrarRecorridoState
         }
         _fotoEnCarga = null;
       });
+      if (ruta != null && mounted) {
+        final perfil = ref.read(sessionProvider);
+        if (perfil != null) {
+          _idLocalCierre ??= nuevaIdempotencyKeyOffline();
+          final metadata = await importarFotoADurable(
+            almacenamiento: ref.read(almacenamientoOfflineProvider),
+            fotoPicker: ref.read(fotoPickerProvider),
+            userId: perfil.id,
+            idLocal: _idLocalCierre!,
+            rutaTemporal: ruta,
+            multipartField: 'foto$tipo',
+          );
+          if (metadata != null) {
+            _archivosCierre.add(metadata);
+          }
+        }
+      }
     }
   }
 
@@ -1070,6 +1255,7 @@ class _DialogoCerrarRecorridoState
             }
             Navigator.of(context).pop(
               _ResultadoCierre(
+                idLocal: _idLocalCierre!,
                 kmCierre: _kmCierre > 0 ? _kmCierre : null,
                 horasEquipoMenorCierre: _horasEquipoMenorCierre > 0
                     ? _horasEquipoMenorCierre
@@ -1080,6 +1266,9 @@ class _DialogoCerrarRecorridoState
                 observaciones: _observacionesController.text.trim().isEmpty
                     ? null
                     : _observacionesController.text.trim(),
+                archivosOffline: _archivosCierre.isNotEmpty
+                    ? _archivosCierre
+                    : null,
               ),
             );
           },

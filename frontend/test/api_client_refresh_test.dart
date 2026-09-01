@@ -34,6 +34,33 @@ class _FakeTokenStorage extends TokenStorage {
 }
 
 void main() {
+  test('el retry despues de 401 conserva Idempotency-Key', () async {
+    const key = '00000000-0000-4000-8000-000000000123';
+    final storage = _FakeTokenStorage()
+      ..token = 'token-viejo'
+      ..refreshToken = 'refresh-viejo';
+    final keys = <String?>[];
+    var intentos = 0;
+    final mockHttp = MockClient((request) async {
+      if (request.url.path == '/refresh') {
+        return http.Response(
+          jsonEncode({'token': 'token-nuevo', 'refreshToken': 'refresh-nuevo'}),
+          200,
+        );
+      }
+      keys.add(request.headers['Idempotency-Key']);
+      intentos++;
+      return intentos == 1
+          ? http.Response(jsonEncode({'error': 'Token expirado'}), 401)
+          : http.Response(jsonEncode({'ok': true}), 201);
+    });
+    final client = ApiClient(tokenStorage: storage, httpClient: mockHttp);
+
+    await client.post('/operacion', headers: {'Idempotency-Key': key});
+
+    expect(keys, [key, key]);
+  });
+
   test(
     'un 401 dispara un refresh y reintenta la petición original una sola vez',
     () async {

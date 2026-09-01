@@ -17,6 +17,25 @@ class ApiRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
     double? kmInicio,
     double? horasEquipoMenorInicio,
   }) async {
+    return abrirRecorridoIdempotente(
+      idempotencyKey: '',
+      marimbaId: marimbaId,
+      tipoCombustible: tipoCombustible,
+      frente: frente,
+      kmInicio: kmInicio,
+      horasEquipoMenorInicio: horasEquipoMenorInicio,
+    );
+  }
+
+  @override
+  Future<RecorridoMarimba> abrirRecorridoIdempotente({
+    required String idempotencyKey,
+    required String marimbaId,
+    required String tipoCombustible,
+    required String frente,
+    double? kmInicio,
+    double? horasEquipoMenorInicio,
+  }) async {
     final data = await _client.post(
       '/recorridos-marimba',
       body: {
@@ -25,6 +44,9 @@ class ApiRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
         'frente': frente,
         'kmInicio': ?kmInicio,
         'horasEquipoMenorInicio': ?horasEquipoMenorInicio,
+      },
+      headers: {
+        if (idempotencyKey.isNotEmpty) 'Idempotency-Key': idempotencyKey,
       },
     );
     return RecorridoMarimba.fromJson(data as Map<String, dynamic>);
@@ -78,6 +100,41 @@ class ApiRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
     String? ubicacion,
     String? observaciones,
   }) async {
+    return agregarDespachoIdempotente(
+      idempotencyKey: '',
+      recorridoId: recorridoId,
+      tipoCombustible: tipoCombustible,
+      vehiculoDestinoId: vehiculoDestinoId,
+      operadorTexto: operadorTexto,
+      horometro: horometro,
+      fotoHorometroPath: fotoHorometroPath,
+      litrosDeclarados: litrosDeclarados,
+      medidorInicial: medidorInicial,
+      medidorFinal: medidorFinal,
+      fotoMedidorPath: fotoMedidorPath,
+      fotoEvidenciaPath: fotoEvidenciaPath,
+      ubicacion: ubicacion,
+      observaciones: observaciones,
+    );
+  }
+
+  @override
+  Future<DespachoMarimba> agregarDespachoIdempotente({
+    required String idempotencyKey,
+    required String recorridoId,
+    required String tipoCombustible,
+    required String vehiculoDestinoId,
+    required String operadorTexto,
+    required double horometro,
+    required String fotoHorometroPath,
+    double? litrosDeclarados,
+    double? medidorInicial,
+    double? medidorFinal,
+    String? fotoMedidorPath,
+    String? fotoEvidenciaPath,
+    String? ubicacion,
+    String? observaciones,
+  }) async {
     final data = await _client.postMultipart(
       '/recorridos-marimba/$recorridoId/despachos',
       campos: {
@@ -96,12 +153,38 @@ class ApiRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
         'fotoMedidor': fotoMedidorPath,
         'fotoEvidencia': fotoEvidenciaPath,
       },
+      headers: {
+        if (idempotencyKey.isNotEmpty) 'Idempotency-Key': idempotencyKey,
+      },
     );
     return DespachoMarimba.fromJson(data as Map<String, dynamic>);
   }
 
   @override
   Future<RecorridoMarimba> cerrarRecorrido({
+    required String recorridoId,
+    double? kmCierre,
+    double? horasEquipoMenorCierre,
+    required String fotoCierrePath,
+    required double existenciaFisica,
+    required String fotoNivelPath,
+    String? observaciones,
+  }) async {
+    return cerrarRecorridoIdempotente(
+      idempotencyKey: '',
+      recorridoId: recorridoId,
+      kmCierre: kmCierre,
+      horasEquipoMenorCierre: horasEquipoMenorCierre,
+      fotoCierrePath: fotoCierrePath,
+      existenciaFisica: existenciaFisica,
+      fotoNivelPath: fotoNivelPath,
+      observaciones: observaciones,
+    );
+  }
+
+  @override
+  Future<RecorridoMarimba> cerrarRecorridoIdempotente({
+    required String idempotencyKey,
     required String recorridoId,
     double? kmCierre,
     double? horasEquipoMenorCierre,
@@ -119,6 +202,9 @@ class ApiRecorridosMarimbaRepository implements RecorridosMarimbaRepository {
         'observaciones': ?observaciones,
       },
       archivos: {'fotoCierre': fotoCierrePath, 'fotoNivel': fotoNivelPath},
+      headers: {
+        if (idempotencyKey.isNotEmpty) 'Idempotency-Key': idempotencyKey,
+      },
     );
     return RecorridoMarimba.fromJson(data as Map<String, dynamic>);
   }

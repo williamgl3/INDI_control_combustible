@@ -2,7 +2,7 @@ import 'package:indi_combustible/data/incidencias_repository.dart';
 import 'package:indi_combustible/models/incidencia_vehiculo.dart';
 
 /// Repositorio de incidencias MOCK — datos en memoria, para widget tests.
-class MockIncidenciasRepository implements IncidenciasRepository {
+class MockIncidenciasRepository extends IncidenciasRepository {
   final List<IncidenciaVehiculo> _todas = [];
   int _idSeq = 1;
 

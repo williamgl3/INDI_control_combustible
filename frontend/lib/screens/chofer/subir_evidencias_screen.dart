@@ -5,11 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/catalogos_vehiculo.dart';
+import '../../core/cola_solicitudes_offline.dart';
 import '../../core/connectivity_provider.dart';
 import '../../core/flujo_diario_provider.dart';
+import '../../core/offline/metadata_archivo_offline.dart';
+import '../../core/offline/metadata_operacion_offline.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
+import '../../core/solicitud_idempotencia.dart';
 import '../../core/validators.dart';
+import '../../data/api_client.dart';
 import '../../models/evidencia.dart';
 import '../../models/precio_combustible.dart';
 import '../../models/solicitud_autorizacion.dart';
@@ -83,6 +88,12 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
   _TipoEvidencia _tipo = _TipoEvidencia.comprobante;
   String? _tipoCombustibleCargado;
   final List<String> _fotoPaths = [];
+
+  /// Metadata durable de cada foto importada — paralelo a [_fotoPaths].
+  /// Cada entrada contiene el SHA-256 y storageKey que la cola offline
+  /// usará para verificar integridad antes de reintentar el envío.
+  final List<MetadataArchivoOffline> _fotosDurable = [];
+
   bool _cargandoFoto = false;
   bool _enviando = false;
   String? _errorGeneral;
@@ -93,6 +104,11 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
   /// vez de dejar el campo vacío por error. La evidencia se guarda sin
   /// `folioId`, marcada como pendiente de vincular después.
   bool _vincularDespues = false;
+
+  /// ID local de la evidencia en construcción — se genera una vez y se
+  /// reutiliza para todas las fotos importadas a durable storage y para
+  /// la clave de idempotencia. Se establece al capturar la primera foto.
+  String? _idLocalEvidencia;
 
   /// Solicitud seleccionada por el usuario — `null` = "Ninguna / evidencia suelta".
   SolicitudAutorizacion? _solicitudSeleccionada;
@@ -221,11 +237,49 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
         if (ruta != null) _fotoPaths.add(ruta);
         _cargandoFoto = false;
       });
+      if (ruta != null && mounted) {
+        final perfil = ref.read(sessionProvider);
+        if (perfil != null) {
+          _idLocalEvidencia ??= nuevaIdempotencyKeyOffline();
+          final idx = _fotoPaths.length - 1;
+          final durable = await importarFotoADurable(
+            almacenamiento: ref.read(almacenamientoOfflineProvider),
+            fotoPicker: ref.read(fotoPickerProvider),
+            userId: perfil.id,
+            idLocal: _idLocalEvidencia!,
+            rutaTemporal: ruta,
+            multipartField: 'fotos_$idx',
+          );
+          if (mounted && durable != null) {
+            setState(() {
+              while (_fotosDurable.length <= idx) {
+                _fotosDurable.add(durable);
+              }
+              _fotosDurable[idx] = durable;
+            });
+          }
+        }
+      }
     }
   }
 
-  void _quitarFoto(int indice) {
-    setState(() => _fotoPaths.removeAt(indice));
+  Future<void> _quitarFoto(int indice) async {
+    if (indice < _fotosDurable.length) {
+      final perfil = ref.read(sessionProvider);
+      if (perfil != null && _idLocalEvidencia != null) {
+        await ref
+            .read(almacenamientoOfflineProvider)
+            .eliminar(
+              storageKey: _fotosDurable[indice].storageKey,
+              usuarioId: perfil.id,
+              idLocalOperacion: _idLocalEvidencia!,
+            );
+      }
+    }
+    setState(() {
+      _fotoPaths.removeAt(indice);
+      if (indice < _fotosDurable.length) _fotosDurable.removeAt(indice);
+    });
   }
 
   Future<void> _guardar() async {
@@ -245,13 +299,18 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
       return;
     }
 
-    // El selector de combustible es un grupo de chips, no un
-    // `TextFormField` — el `Form.validate()` de arriba no lo cubre, así
-    // que se revisa aquí a mano (mismo criterio que el chequeo de foto).
     if (_tipo == _TipoEvidencia.comprobante &&
         _tipoCombustibleCargado == null) {
       setState(
         () => _errorGeneral = 'Selecciona el tipo de combustible cargado.',
+      );
+      return;
+    }
+
+    if (_fotosDurable.length != _fotoPaths.length) {
+      setState(
+        () => _errorGeneral =
+            'Espera a que se guarden todas las fotos antes de enviar.',
       );
       return;
     }
@@ -265,54 +324,139 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
       final perfil = ref.read(sessionProvider);
       if (perfil == null) return;
 
+      _idLocalEvidencia ??= nuevaIdempotencyKeyOffline();
+      final metadata = MetadataOperacionOffline.nueva();
       final esComprobante = _tipo == _TipoEvidencia.comprobante;
-      final repo = ref.read(evidenciasRepositoryProvider);
-      await repo.subirEvidencia(
+
+      final km = _tipo == _TipoEvidencia.tablero
+          ? double.tryParse(_kmController.text.trim())
+          : null;
+      final folioId = _solicitudSeleccionada?.id;
+      final pendienteVincular =
+          _vincularDespues && _solicitudSeleccionada == null;
+      final notas = _notasController.text.isEmpty
+          ? null
+          : _notasController.text;
+      final tipoCombustibleCargado = esComprobante
+          ? _tipoCombustibleCargado
+          : null;
+      final litros = esComprobante
+          ? double.tryParse(_litrosController.text.trim())
+          : null;
+      final precioPorLitro = esComprobante
+          ? double.tryParse(_precioController.text.trim())
+          : null;
+      final montoPagado = esComprobante
+          ? double.tryParse(_totalController.text.trim())
+          : null;
+
+      // Calcular fingerprint con SHA-256 de archivos durables.
+      final fotosSha256 = _fotosDurable
+          .map((a) => a.sha256)
+          .toList(growable: false);
+      final fingerprint = await fingerprintEvidencia(
         usuarioId: perfil.id,
-        tipo: _tipo.toTipoEvidencia,
-        fotoPaths: List.of(_fotoPaths),
-        km: _tipo == _TipoEvidencia.tablero
-            ? double.tryParse(_kmController.text.trim())
-            : null,
-        folioId: _solicitudSeleccionada?.id,
-        pendienteVincular: _vincularDespues && _solicitudSeleccionada == null,
-        notas: _notasController.text.isEmpty ? null : _notasController.text,
-        tipoCombustibleCargado: esComprobante ? _tipoCombustibleCargado : null,
-        litros: esComprobante
-            ? double.tryParse(_litrosController.text.trim())
-            : null,
-        precioPorLitro: esComprobante
-            ? double.tryParse(_precioController.text.trim())
-            : null,
-        montoPagado: esComprobante
-            ? double.tryParse(_totalController.text.trim())
-            : null,
+        tipo: _tipo.toTipoEvidencia.name,
+        km: km,
+        folioId: folioId,
+        cargaId: null,
+        pendienteVincular: pendienteVincular,
+        notas: notas,
+        tipoCombustibleCargado: tipoCombustibleCargado,
+        litros: litros,
+        precioPorLitro: precioPorLitro,
+        montoPagado: montoPagado,
+        fotosSha256: fotosSha256,
       );
-      ref.read(evidenciaSubidaHoyProvider.notifier).state = true;
-    } catch (e) {
-      if (!mounted) return;
+
+      final pendiente = EvidenciaPendienteOffline(
+        idLocal: _idLocalEvidencia!,
+        usuarioId: perfil.id,
+        tipo: _tipo.toTipoEvidencia.name,
+        km: km,
+        folioId: folioId,
+        cargaId: null,
+        pendienteVincular: pendienteVincular,
+        notas: notas,
+        tipoCombustibleCargado: tipoCombustibleCargado,
+        litros: litros,
+        precioPorLitro: precioPorLitro,
+        montoPagado: montoPagado,
+        creadaEn: DateTime.now(),
+        fotoPaths: List.of(_fotoPaths),
+        archivosOffline: List.of(_fotosDurable),
+        metadata: metadata,
+        payloadFingerprint: fingerprint,
+      );
+
+      await ref.read(colaEvidenciasOfflineProvider).agregar(pendiente);
+      ref.read(operacionesTickProvider.notifier).state++;
+
+      // Si hay conexión, intento de envío inmediato.
       final hayConexion = ref.read(conectividadProvider).valueOrNull ?? true;
+      if (hayConexion) {
+        try {
+          final repo = ref.read(evidenciasRepositoryProvider);
+          await repo.subirEvidencia(
+            usuarioId: perfil.id,
+            tipo: _tipo.toTipoEvidencia,
+            fotoPaths: List.of(_fotoPaths),
+            km: km,
+            folioId: folioId,
+            cargaId: null,
+            pendienteVincular: pendienteVincular,
+            notas: notas,
+            tipoCombustibleCargado: tipoCombustibleCargado,
+            litros: litros,
+            precioPorLitro: precioPorLitro,
+            montoPagado: montoPagado,
+            idempotencyKey: metadata.idempotencyKey,
+          );
+          // Éxito — limpiar de la cola.
+          await ref
+              .read(colaEvidenciasOfflineProvider)
+              .quitar(_idLocalEvidencia!);
+          ref.read(operacionesTickProvider.notifier).state++;
+        } on ApiException catch (e) {
+          await ref
+              .read(colaEvidenciasOfflineProvider)
+              .registrarError(_idLocalEvidencia!, e);
+          if (e.status == null) {
+            // Sin status = nunca llegó al servidor — posible falso
+            // positivo de conectividad. Se queda en la cola.
+          } else {
+            if (mounted) {
+              setState(() {
+                _enviando = false;
+                _errorGeneral = e.mensaje;
+              });
+            }
+            return;
+          }
+        }
+      }
+
+      ref.read(evidenciaSubidaHoyProvider.notifier).state = true;
+      if (!mounted) return;
+      setState(() {
+        _enviando = false;
+        _guardado = true;
+      });
       if (!hayConexion) {
         await SinConexionDialog.show(
           context,
           mensaje:
-              'Las evidencias todavía requieren conexión. Conserva las fotos e intenta de nuevo cuando vuelva la señal.',
+              'Guardamos tu evidencia en este dispositivo. Se enviará '
+              'solo en cuanto vuelvas a tener señal.',
         );
       }
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
         _enviando = false;
-        _errorGeneral = hayConexion
-            ? 'No se pudo guardar la evidencia. Intenta de nuevo.'
-            : 'No se envió la evidencia. Se requiere conexión.';
+        _errorGeneral = 'No se pudo guardar la evidencia. Intenta de nuevo.';
       });
-      return;
     }
-
-    if (!mounted) return;
-    setState(() {
-      _enviando = false;
-      _guardado = true;
-    });
   }
 
   void _abrirSelectorSolicitudes() {
@@ -419,9 +563,11 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
             const SizedBox(height: AppSpacing.xl),
             Row(
               children: [
-                Text(
-                  'Tipo de combustible cargado',
-                  style: Theme.of(context).textTheme.titleLarge,
+                Expanded(
+                  child: Text(
+                    'Tipo de combustible cargado',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                 ),
                 const SizedBox(width: 4),
                 Text(
@@ -535,9 +681,11 @@ class _SubirEvidenciasScreenState extends ConsumerState<SubirEvidenciasScreen> {
           const SizedBox(height: AppSpacing.xl),
           Row(
             children: [
-              Text(
-                'Folio / Solicitud asociada',
-                style: Theme.of(context).textTheme.titleLarge,
+              Expanded(
+                child: Text(
+                  'Folio / Solicitud asociada',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
               ),
               if (_folioRequerido) ...[
                 const SizedBox(width: 4),
@@ -859,7 +1007,7 @@ class _SelectorTipoEvidencia extends StatelessWidget {
             icono: Icons.speed_outlined,
             etiqueta: 'Tablero',
             seleccionado: seleccionado == _TipoEvidencia.tablero,
-            color: context.colors.info,
+            color: context.colors.primary,
             onTap: () => onChanged(_TipoEvidencia.tablero),
           ),
         ),
@@ -869,7 +1017,7 @@ class _SelectorTipoEvidencia extends StatelessWidget {
             icono: Icons.description_outlined,
             etiqueta: 'Comprobante',
             seleccionado: seleccionado == _TipoEvidencia.comprobante,
-            color: context.colors.warning,
+            color: context.colors.primary,
             onTap: () => onChanged(_TipoEvidencia.comprobante),
           ),
         ),

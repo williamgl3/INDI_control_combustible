@@ -8,6 +8,8 @@ import 'core/app_logger.dart';
 import 'core/cola_solicitudes_offline.dart';
 import 'core/connectivity_provider.dart';
 import 'core/providers.dart';
+import 'core/offline/coordinador_sincronizacion.dart';
+import 'core/session_provider.dart';
 import 'core/theme_mode_provider.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
@@ -75,11 +77,79 @@ class MyApp extends ConsumerWidget {
   }
 }
 
-class _AppConRouter extends ConsumerWidget {
+class _AppConRouter extends ConsumerStatefulWidget {
   const _AppConRouter();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_AppConRouter> createState() => _AppConRouterState();
+}
+
+class _AppConRouterState extends ConsumerState<_AppConRouter> {
+  @override
+  void initState() {
+    super.initState();
+    _limpiarArchivosHuerfanosAlInicio();
+  }
+
+  Future<void> _limpiarArchivosHuerfanosAlInicio() async {
+    try {
+      final perfil = ref.read(sessionProvider);
+      if (perfil == null) return;
+      final almacenamiento = ref.read(almacenamientoOfflineProvider);
+      // Recopilamos todas las keys referenciadas en las colas offline.
+      final keysReferenciadas = <String>{};
+      final colas = [
+        ref.read(colaSolicitudesOfflineProvider).leer(),
+        ref.read(colaComprobarCargaOfflineProvider).leer(),
+        ref.read(colaCerrarDiaOfflineProvider).leer(),
+        ref.read(colaIncidenciasOfflineProvider).leer(),
+        ref.read(colaRecorridosMarimbaOfflineProvider).leer(),
+        ref.read(colaDespachosMarimbaOfflineProvider).leer(),
+        ref.read(colaCierresRecorridoMarimbaOfflineProvider).leer(),
+        ref.read(colaEvidenciasOfflineProvider).leer(),
+      ];
+      for (final lista in await Future.wait(colas)) {
+        for (final op in lista) {
+          final archivos = _extraerArchivosOffline(op);
+          for (final a in archivos) {
+            keysReferenciadas.add(a.storageKey);
+          }
+        }
+      }
+
+      final limpiados = await limpiarArchivosHuerfanos(
+        almacenamiento: almacenamiento,
+        usuarioId: perfil.id,
+        storageKeysReferenciadas: keysReferenciadas,
+        alFallar: (error, archivo) => AppLogger.error(
+          'main',
+          'No se pudo eliminar el archivo huérfano '
+              '${archivo.storageKey}: $error',
+        ),
+      );
+      if (limpiados > 0) {
+        AppLogger.error(
+          'main',
+          'Limpieza de huérfanos: $limpiados archivos eliminados.',
+        );
+      }
+    } catch (e) {
+      AppLogger.error('main', 'Error limpiando huérfanos: $e');
+    }
+  }
+
+  List<dynamic> _extraerArchivosOffline(dynamic operacion) {
+    try {
+      final dyn = operacion as dynamic;
+      if (dyn.archivosOffline != null) {
+        return dyn.archivosOffline as List;
+      }
+    } catch (_) {}
+    return const [];
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
     final modoTema = ref.watch(themeModeProvider);
     observarReconexionParaSincronizar(ref);

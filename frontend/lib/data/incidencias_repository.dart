@@ -20,5 +20,16 @@ abstract class IncidenciasRepository {
     String? fotoPath,
   });
 
+  Future<IncidenciaVehiculo> reportarIdempotente({
+    required String idempotencyKey,
+    required String vehiculoId,
+    required String descripcion,
+    String? fotoPath,
+  }) => reportar(
+    vehiculoId: vehiculoId,
+    descripcion: descripcion,
+    fotoPath: fotoPath,
+  );
+
   Future<IncidenciaVehiculo> resolver({required String id, String? comentario});
 }

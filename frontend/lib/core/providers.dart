@@ -24,6 +24,9 @@ import '../models/recorrido_marimba.dart';
 import 'auth_controller.dart';
 import 'exportador_service.dart';
 import 'foto_picker.dart';
+import 'offline/almacenamiento_offline.dart';
+import 'offline/almacenamiento_offline_factory.dart';
+import 'offline/metadata_archivo_offline.dart';
 import 'recordatorio_service.dart';
 import 'session_provider.dart';
 import 'session_storage.dart';
@@ -264,3 +267,56 @@ final evidenciasRepositoryProvider = Provider<EvidenciasRepository>((ref) {
   ref.watch(sessionProvider.select((perfil) => perfil?.id));
   return ApiEvidenciasRepository(ref.watch(apiClientProvider));
 });
+
+/// Almacenamiento offline durable para archivos (fotografías).
+/// En mobile/desktop usa filesystem privado; en Web usa IndexedDB.
+final almacenamientoOfflineProvider = Provider<AlmacenamientoOffline>((ref) {
+  return crearAlmacenamientoOffline();
+});
+
+/// Importa una foto capturada al almacenamiento durable y retorna la
+/// metadata. Las pantallas llaman esto inmediatamente después de tomar
+/// una foto para que no dependan del temp path del SO.
+Future<MetadataArchivoOffline?> importarFotoADurable({
+  required AlmacenamientoOffline almacenamiento,
+  required FotoPicker fotoPicker,
+  required String userId,
+  required String idLocal,
+  required String rutaTemporal,
+  required String multipartField,
+}) async {
+  try {
+    final bytes = await fotoPicker.leerBytes(rutaTemporal);
+    return await almacenamiento.importar(
+      usuarioId: userId,
+      idLocalOperacion: idLocal,
+      multipartField: multipartField,
+      bytesDirectos: bytes,
+    );
+  } catch (e) {
+    return null;
+  }
+}
+
+/// Importa bytes directos al almacenamiento durable (para Web o cuando
+/// los bytes ya están en memoria).
+Future<MetadataArchivoOffline?> importarBytesADurable({
+  required AlmacenamientoOffline almacenamiento,
+  required String userId,
+  required String idLocal,
+  required Uint8List bytes,
+  required String multipartField,
+  String? originalName,
+}) async {
+  try {
+    return await almacenamiento.importar(
+      usuarioId: userId,
+      idLocalOperacion: idLocal,
+      multipartField: multipartField,
+      bytesDirectos: bytes,
+      originalName: originalName,
+    );
+  } catch (e) {
+    return null;
+  }
+}

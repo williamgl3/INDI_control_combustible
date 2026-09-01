@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -39,12 +40,23 @@ String normalizarReferenciaArchivo(String referencia) {
 /// Excepción lanzada por [ApiClient] cuando el backend responde con un
 /// error, con un mensaje ya listo para mostrar al usuario (el backend
 /// siempre responde `{ "error": "mensaje" }` — ver `errorHandler.ts`).
+enum CategoriaTransporte { ninguna, sinRed, timeout, transporte }
+
 class ApiException implements Exception {
-  ApiException(this.mensaje, {this.status, this.codigo, this.solicitudId});
+  ApiException(
+    this.mensaje, {
+    this.status,
+    this.codigo,
+    this.solicitudId,
+    this.retryAfter,
+    this.categoriaTransporte = CategoriaTransporte.ninguna,
+  });
   final String mensaje;
   final int? status;
   final String? codigo;
   final String? solicitudId;
+  final Duration? retryAfter;
+  final CategoriaTransporte categoriaTransporte;
 
   @override
   String toString() => mensaje;
@@ -201,7 +213,21 @@ class ApiClient {
       status: res.statusCode,
       codigo: codigo,
       solicitudId: solicitudId,
+      retryAfter: _leerRetryAfter(res.headers['retry-after']),
     );
+  }
+
+  Duration? _leerRetryAfter(String? valor) {
+    if (valor == null) return null;
+    final segundos = int.tryParse(valor.trim());
+    if (segundos != null && segundos >= 0) return Duration(seconds: segundos);
+    try {
+      final fecha = HttpDate.parse(valor);
+      final diferencia = fecha.difference(DateTime.now().toUtc());
+      return diferencia.isNegative ? Duration.zero : diferencia;
+    } on FormatException {
+      return null;
+    }
   }
 
   /// Envuelve cualquier llamada HTTP: registra en [AppLogger] las fallas
@@ -220,6 +246,12 @@ class ApiClient {
     } on SocketException catch (e, st) {
       AppLogger.error(contexto, e, stackTrace: st);
       throw ApiException('Sin conexión a internet. Intenta de nuevo.');
+    } on TimeoutException catch (e, st) {
+      AppLogger.error(contexto, e, stackTrace: st);
+      throw ApiException(
+        'El servidor tardÃ³ demasiado en responder.',
+        categoriaTransporte: CategoriaTransporte.timeout,
+      );
     } on HttpException catch (e, st) {
       AppLogger.error(contexto, e, stackTrace: st);
       throw ApiException('No pudimos conectar con el servidor.');
@@ -253,12 +285,16 @@ class ApiClient {
     });
   }
 
-  Future<dynamic> post(String path, {Object? body}) {
+  Future<dynamic> post(
+    String path, {
+    Object? body,
+    Map<String, String> headers = const {},
+  }) {
     return _conManejoDeErrores('ApiClient.post $path', () async {
       return _conReintentoDeToken(
         () async => _http.post(
           _uri(path),
-          headers: await _headers(),
+          headers: {...await _headers(), ...headers},
           body: body == null ? null : jsonEncode(body),
         ),
       );
@@ -293,12 +329,15 @@ class ApiClient {
   /// como `multipart/form-data` (ver `middleware/upload.ts`). `campos`
   /// son los valores de texto/número; `archivos` mapea el nombre del
   /// campo del formulario a la ruta local del archivo (`null`/ausente si
-  /// esa foto no se tomó).
+  /// esa foto no se tomó). [archivosBytes] permite adjuntar bytes
+  /// directos (útil para Web o cuando el archivo durable ya está en
+  /// memoria).
   Future<dynamic> postMultipart(
     String path, {
     required Map<String, String> campos,
     Map<String, String> headers = const {},
     Map<String, String?> archivos = const {},
+    Map<String, Uint8List?> archivosBytes = const {},
     // Igual que `archivos`, pero para campos que aceptan varios archivos
     // bajo el mismo nombre (ej. `fotos`, hasta 5) — multer/el backend los
     // lee como una lista por ese campo.
@@ -318,6 +357,15 @@ class ApiClient {
             throw ApiException('No se encontró la evidencia seleccionada.');
           }
           req.files.add(await http.MultipartFile.fromPath(entry.key, ruta));
+        }
+        for (final entry in archivosBytes.entries) {
+          final bytes = entry.value;
+          if (bytes == null) continue;
+          req.files.add(http.MultipartFile.fromBytes(
+            entry.key,
+            bytes,
+            filename: '${entry.key}.jpg',
+          ));
         }
         for (final entry in archivosMultiples.entries) {
           for (final ruta in entry.value) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:indi_combustible/core/providers.dart';
 
@@ -32,6 +33,7 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
 
+      SharedPreferences.setMockInitialValues({});
       final container = makeTestContainer();
       addTearDown(container.dispose);
       await pumpTestApp(tester, container: container);
@@ -49,11 +51,9 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.ensureVisible(
-        find.byKey(const ValueKey('solicitar-desde-estado-vacio')),
+        find.byKey(const ValueKey('accion-solicitar-carga')),
       );
-      await tester.tap(
-        find.byKey(const ValueKey('solicitar-desde-estado-vacio')),
-      );
+      await tester.tap(find.byKey(const ValueKey('accion-solicitar-carga')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Vehículo Ligero'));
       await tester.pumpAndSettle();
@@ -79,7 +79,10 @@ void main() {
       await tester.tap(
         find.descendant(of: dialog, matching: find.text('Reportar')),
       );
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
 
       expect(find.text('Incidencia reportada.'), findsOneWidget);
       final mensajeContext = tester.element(find.byType(SnackBar));

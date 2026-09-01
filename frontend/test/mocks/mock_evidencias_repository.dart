@@ -26,6 +26,7 @@ class MockEvidenciasRepository implements EvidenciasRepository {
     double? litros,
     double? precioPorLitro,
     double? montoPagado,
+    String idempotencyKey = '',
   }) async {
     final evidencia = Evidencia(
       id: 'evidencia-${_idSeq++}',

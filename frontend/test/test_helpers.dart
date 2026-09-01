@@ -85,6 +85,11 @@ class FakeFotoPicker implements FotoPicker {
     archivo.writeAsBytesSync([0xff, 0xd8, 0xff, 0xd9]);
     return archivo.path;
   }
+
+  @override
+  Future<Uint8List> leerBytes(String ruta) {
+    return File(ruta).readAsBytes();
+  }
 }
 
 class FakeTicketOcrService implements TicketOcrService {

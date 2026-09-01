@@ -12,6 +12,8 @@ import '../../core/cola_solicitudes_offline.dart';
 import '../../core/app_logger.dart';
 import '../../core/catalogos_vehiculo.dart';
 import '../../core/connectivity_provider.dart';
+import '../../core/offline/metadata_archivo_offline.dart';
+import '../../core/offline/metadata_operacion_offline.dart';
 import '../../core/providers.dart';
 import '../../core/session_provider.dart';
 import '../../core/solicitud_idempotencia.dart';
@@ -99,6 +101,8 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
   String? _supervisor;
 
   String? _fotoTableroPath;
+  MetadataArchivoOffline? _fotoTableroDurable;
+  String? _idLocalFotoTablero;
   bool _cargandoFotoTablero = false;
 
   late DateTime _fechaProgramada = () {
@@ -163,6 +167,20 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
         if (ruta != null) _fotoTableroPath = ruta;
         _cargandoFotoTablero = false;
       });
+      if (ruta != null && mounted) {
+        final perfil = ref.read(sessionProvider);
+        if (perfil != null) {
+          _idLocalFotoTablero = nuevaIdempotencyKeyOffline();
+          _fotoTableroDurable = await importarFotoADurable(
+            almacenamiento: ref.read(almacenamientoOfflineProvider),
+            fotoPicker: ref.read(fotoPickerProvider),
+            userId: perfil.id,
+            idLocal: _idLocalFotoTablero!,
+            rutaTemporal: ruta,
+            multipartField: 'fotoTablero',
+          );
+        }
+      }
     }
   }
 
@@ -276,6 +294,7 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
     final actividad = _actividadController.text.trim();
     final perfil = ref.read(sessionProvider)!;
     final idempotencyKey = nuevaIdempotencyKey();
+    final idLocal = _idLocalFotoTablero ?? nuevaIdempotencyKey();
     final payloadFingerprint = await fingerprintSolicitud(
       choferId: perfil.id,
       vehiculoId: _vehiculo!.id,
@@ -286,6 +305,16 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
       fechaProgramada: _fechaProgramada,
       fotoTableroPath: _fotoTableroPath,
       partidas: _partidasSolicitud,
+    );
+
+    await _encolarSinConexion(
+      motivo: motivo,
+      actividad: actividad,
+      usuarioId: perfil.id,
+      idLocal: idLocal,
+      idempotencyKey: idempotencyKey,
+      payloadFingerprint: payloadFingerprint,
+      notificar: false,
     );
 
     try {
@@ -303,8 +332,10 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
           motivo: motivo,
           actividad: actividad,
           usuarioId: perfil.id,
+          idLocal: idLocal,
           idempotencyKey: idempotencyKey,
           payloadFingerprint: payloadFingerprint,
+          persistir: false,
         );
         return;
       }
@@ -323,6 +354,7 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
             fotoTableroPath: _fotoTableroPath,
             partidas: _partidasSolicitud,
           );
+      await ref.read(colaSolicitudesOfflineProvider).quitar(idLocal);
       HapticFeedback.mediumImpact();
       ref.read(operacionesTickProvider.notifier).state++;
       unawaited(_guardarUltimaCantidad());
@@ -330,13 +362,16 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
         context.replace(RoutePaths.choferRespuesta, extra: solicitud);
       }
     } on ApiException catch (e) {
+      await ref.read(colaSolicitudesOfflineProvider).registrarError(idLocal, e);
       if (e.status == null) {
         await _encolarSinConexion(
           motivo: motivo,
           actividad: actividad,
           usuarioId: perfil.id,
+          idLocal: idLocal,
           idempotencyKey: idempotencyKey,
           payloadFingerprint: payloadFingerprint,
+          persistir: false,
         );
         return;
       }
@@ -362,30 +397,42 @@ class _SolicitarCargaScreenState extends ConsumerState<SolicitarCargaScreen> {
     required String? motivo,
     required String actividad,
     required String usuarioId,
+    required String idLocal,
     required String idempotencyKey,
     required String payloadFingerprint,
+    bool persistir = true,
+    bool notificar = true,
   }) async {
     final ahora = DateTime.now();
-    final agregada = await ref
-        .read(colaSolicitudesOfflineProvider)
-        .agregar(
-          SolicitudPendienteOffline(
-            idLocal: idempotencyKey,
-            usuarioId: usuarioId,
-            idempotencyKey: idempotencyKey,
-            payloadFingerprint: payloadFingerprint,
-            vehiculoId: _vehiculo!.id,
-            litrosSolicitados: _litros,
-            esUrgente: _esUrgente,
-            motivoChofer: motivo,
-            actividad: actividad,
-            fechaProgramada: _fechaProgramada,
-            fotoTableroPath: _fotoTableroPath!,
-            creadaEn: ahora,
-          ),
-        );
+    final agregada =
+        !persistir ||
+        await ref
+            .read(colaSolicitudesOfflineProvider)
+            .agregar(
+              SolicitudPendienteOffline(
+                idLocal: idLocal,
+                usuarioId: usuarioId,
+                idempotencyKey: idempotencyKey,
+                payloadFingerprint: payloadFingerprint,
+                vehiculoId: _vehiculo!.id,
+                litrosSolicitados: _litros,
+                esUrgente: _esUrgente,
+                motivoChofer: motivo,
+                actividad: actividad,
+                fechaProgramada: _fechaProgramada,
+                fotoTableroPath: _fotoTableroPath!,
+                creadaEn: ahora,
+                archivosOffline: _fotoTableroDurable != null
+                    ? [_fotoTableroDurable!]
+                    : null,
+              ),
+            );
+    if (!agregada && persistir) {
+      throw StateError('No se pudo persistir la solicitud antes de enviarla.');
+    }
     ref.read(operacionesTickProvider.notifier).state++;
     unawaited(_guardarUltimaCantidad());
+    if (!notificar) return;
     if (!mounted) return;
     setState(() => _cargando = false);
     await SinConexionDialog.show(
@@ -761,12 +808,12 @@ class _FotoTableroCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.info_outline, size: 14, color: colors.warning),
+                Icon(Icons.info_outline, size: 14, color: colors.textSecondary),
                 const SizedBox(width: 4),
                 Text(
                   'Obligatorio',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colors.warning,
+                    color: colors.textSecondary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1060,19 +1107,7 @@ class _ChipAtajo extends StatelessWidget {
     final colors = context.colors;
     return Container(
       width: anchoCompleto ? double.infinity : null,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        // Variante intencional de `AppShadows.card` (mismo blur/offset),
-        // no un olvido: el tinte de color de marca es la señal visual de
-        // "chip seleccionado/destacado", se perdería con el token neutro.
-        boxShadow: [
-          BoxShadow(
-            color: colors.primary.withValues(alpha: destacado ? 0.2 : 0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+      decoration: const BoxDecoration(),
       child: Material(
         color: destacado
             ? colors.primary.withValues(alpha: 0.15)

@@ -2,14 +2,92 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/api_client.dart';
+import '../models/evidencia.dart';
 import 'app_logger.dart';
 import 'connectivity_provider.dart';
 import 'providers.dart';
 import 'session_provider.dart';
+import 'offline/almacenamiento_offline.dart';
+import 'offline/metadata_archivo_offline.dart';
+import 'offline/metadata_operacion_offline.dart';
+import 'offline/mutex_persistencia.dart';
+import 'offline/politica_retry_offline.dart';
+
+bool _archivoExiste(String? ruta) {
+  if (ruta == null || ruta.isEmpty) return false;
+  if (kIsWeb) return true;
+  return File(ruta).existsSync();
+}
+
+Future<List<T>> _leerColaConMigracion<T>(
+  String key,
+  T Function(Map<String, dynamic>) decodificar,
+  Map<String, dynamic> Function(T) codificar,
+) async {
+  final prefs = await SharedPreferences.getInstance();
+  final crudo = prefs.getStringList(key) ?? const [];
+  final mapas = crudo
+      .map((valor) => jsonDecode(valor) as Map<String, dynamic>)
+      .toList();
+  final requiereMigracion = mapas.any(
+    MetadataOperacionOffline.requiereMigracion,
+  );
+  final resultado = mapas.map(decodificar).toList();
+  if (requiereMigracion) {
+    final guardado = await prefs.setStringList(
+      key,
+      resultado.map((valor) => jsonEncode(codificar(valor))).toList(),
+    );
+    if (!guardado) {
+      throw StateError('No se pudo persistir la migracion offline de $key.');
+    }
+  }
+  return resultado;
+}
+
+Future<void> _guardarColaCritica(
+  SharedPreferences prefs,
+  String key,
+  List<String> valores,
+) async {
+  if (!await prefs.setStringList(key, valores)) {
+    throw StateError('No se pudo persistir la cola offline $key.');
+  }
+}
+
+MetadataOperacionOffline _metadataDeJson(
+  Map<String, dynamic> json, {
+  String? usuarioId,
+  EstadoOperacionOffline estadoPredeterminado =
+      EstadoOperacionOffline.pendiente,
+}) {
+  final metadata = MetadataOperacionOffline.fromJson(
+    json,
+    estadoPredeterminado: estadoPredeterminado,
+  );
+  if (usuarioId == null || usuarioId.isEmpty) {
+    return metadata.copiar(
+      estado: EstadoOperacionOffline.requiereRevision,
+      ultimoError: 'La operacion legacy no identifica a su propietario.',
+      ultimoCodigo: 'LEGACY_USUARIO_DESCONOCIDO',
+      limpiarProximoIntento: true,
+    );
+  }
+  return metadata;
+}
+
+List<MetadataArchivoOffline>? _parseArchivosOffline(Object? raw) {
+  if (raw is! List) return null;
+  return raw
+      .whereType<Map<String, dynamic>>()
+      .map(MetadataArchivoOffline.fromJson)
+      .toList();
+}
 
 /// Una solicitud de carga guardada localmente porque no había conexión
 /// al momento de enviarla — se reintenta automáticamente cuando vuelve la
@@ -18,7 +96,7 @@ import 'session_provider.dart';
 /// [IncidenciaPendienteOffline] — juntas cubren los cuatro flujos del
 /// chofer que pueden ejecutarse sin señal en obra.
 class SolicitudPendienteOffline {
-  const SolicitudPendienteOffline({
+  SolicitudPendienteOffline({
     required this.idLocal,
     required this.usuarioId,
     required this.idempotencyKey,
@@ -36,7 +114,17 @@ class SolicitudPendienteOffline {
     this.intentos = 0,
     this.ultimoError,
     this.proximoIntento,
-  });
+    MetadataOperacionOffline? metadata,
+    this.archivosOffline,
+  }) : metadata =
+           metadata ??
+           MetadataOperacionOffline(
+             idempotencyKey: idempotencyKey,
+             estado: _estadoComun(estado),
+             intentos: intentos,
+             proximoIntento: proximoIntento,
+             ultimoError: ultimoError,
+           );
 
   final String idLocal;
   final String usuarioId;
@@ -59,13 +147,24 @@ class SolicitudPendienteOffline {
   final int intentos;
   final String? ultimoError;
   final DateTime? proximoIntento;
+  final MetadataOperacionOffline metadata;
+  final List<MetadataArchivoOffline>? archivosOffline;
 
   factory SolicitudPendienteOffline.fromJson(Map<String, dynamic> json) {
+    final usuarioId = json['usuarioId'] as String? ?? '';
+    final metadata = _metadataDeJson(
+      json,
+      usuarioId: usuarioId,
+      estadoPredeterminado: _estadoComun(
+        EstadoSolicitudOffline.values.byName(
+          json['estado'] as String? ?? EstadoSolicitudOffline.pendiente.name,
+        ),
+      ),
+    );
     return SolicitudPendienteOffline(
       idLocal: json['idLocal'] as String,
-      usuarioId: json['usuarioId'] as String? ?? '',
-      idempotencyKey:
-          json['idempotencyKey'] as String? ?? json['idLocal'] as String,
+      usuarioId: usuarioId,
+      idempotencyKey: metadata.idempotencyKey,
       payloadFingerprint: json['payloadFingerprint'] as String? ?? '',
       vehiculoId: json['vehiculoId'] as String,
       litrosSolicitados: (json['litrosSolicitados'] as num).toDouble(),
@@ -84,6 +183,8 @@ class SolicitudPendienteOffline {
       proximoIntento: json['proximoIntento'] == null
           ? null
           : DateTime.parse(json['proximoIntento'] as String),
+      metadata: metadata,
+      archivosOffline: _parseArchivosOffline(json['archivosOffline']),
     );
   }
 
@@ -105,6 +206,10 @@ class SolicitudPendienteOffline {
     'intentos': intentos,
     'ultimoError': ultimoError,
     'proximoIntento': proximoIntento?.toIso8601String(),
+    ...metadata.toJson(),
+    if (archivosOffline != null)
+      'archivosOffline':
+          archivosOffline!.map((a) => a.toJson()).toList(growable: false),
   };
 
   SolicitudPendienteOffline copiar({
@@ -113,6 +218,9 @@ class SolicitudPendienteOffline {
     int? intentos,
     String? ultimoError,
     DateTime? proximoIntento,
+    MetadataOperacionOffline? metadata,
+    List<MetadataArchivoOffline>? archivosOffline,
+    bool limpiarArchivosOffline = false,
   }) => SolicitudPendienteOffline(
     idLocal: idLocal,
     usuarioId: usuarioId,
@@ -131,8 +239,35 @@ class SolicitudPendienteOffline {
     intentos: intentos ?? this.intentos,
     ultimoError: ultimoError,
     proximoIntento: proximoIntento,
+    metadata:
+        metadata ??
+        this.metadata.copiar(
+          estado: estado == null ? null : _estadoComun(estado),
+          intentos: intentos,
+          ultimoError: ultimoError,
+          proximoIntento: proximoIntento,
+          limpiarProximoIntento: proximoIntento == null,
+        ),
+    archivosOffline: limpiarArchivosOffline
+        ? null
+        : archivosOffline ?? this.archivosOffline,
   );
 }
+
+EstadoOperacionOffline _estadoComun(
+  EstadoSolicitudOffline estado,
+) => switch (estado) {
+  EstadoSolicitudOffline.pendiente => EstadoOperacionOffline.pendiente,
+  EstadoSolicitudOffline.sincronizando => EstadoOperacionOffline.sincronizando,
+  EstadoSolicitudOffline.enviadaSinConfirmar ||
+  EstadoSolicitudOffline.requiereReintento =>
+    EstadoOperacionOffline.errorTransitorio,
+  EstadoSolicitudOffline.sincronizada => EstadoOperacionOffline.sincronizada,
+  EstadoSolicitudOffline.fallidaPermanente =>
+    EstadoOperacionOffline.errorPermanente,
+  EstadoSolicitudOffline.requiereRevision =>
+    EstadoOperacionOffline.requiereRevision,
+};
 
 enum EstadoSolicitudOffline {
   pendiente,
@@ -146,27 +281,19 @@ enum EstadoSolicitudOffline {
 
 class ColaSolicitudesOffline {
   static const _key = 'cola_solicitudes_offline';
-  static Future<void> _operacion = Future.value();
+  final _mutex = MutexPersistencia();
 
   Future<List<SolicitudPendienteOffline>> leer() async {
-    final prefs = await SharedPreferences.getInstance();
-    final crudo = prefs.getStringList(_key) ?? const [];
-    return crudo
-        .map(
-          (s) => SolicitudPendienteOffline.fromJson(
-            jsonDecode(s) as Map<String, dynamic>,
-          ),
-        )
-        .toList();
+    return _leerColaConMigracion(
+      _key,
+      SolicitudPendienteOffline.fromJson,
+      (valor) => valor.toJson(),
+    );
   }
 
   Future<bool> agregar(SolicitudPendienteOffline pendiente) async {
-    var agregada = false;
-    final previa = _operacion;
-    final completa = Completer<void>();
-    _operacion = completa.future;
-    await previa;
-    try {
+    return _mutex.run(() async {
+      var agregada = false;
       final prefs = await SharedPreferences.getInstance();
       final actuales = await leer();
       final duplicada = actuales.any(
@@ -180,22 +307,21 @@ class ColaSolicitudesOffline {
             }.contains(p.estado),
       );
       if (!duplicada) {
-        await prefs.setStringList(_key, [
+        await _guardarColaCritica(prefs, _key, [
           ...actuales.map((p) => jsonEncode(p.toJson())),
           jsonEncode(pendiente.toJson()),
         ]);
         agregada = true;
       }
-    } finally {
-      completa.complete();
-    }
-    return agregada;
+      return agregada;
+    });
   }
 
   Future<void> actualizar(SolicitudPendienteOffline pendiente) async {
     final prefs = await SharedPreferences.getInstance();
     final actuales = await leer();
-    await prefs.setStringList(
+    await _guardarColaCritica(
+      prefs,
       _key,
       actuales
           .map(
@@ -210,12 +336,34 @@ class ColaSolicitudesOffline {
   Future<void> quitar(String idLocal) async {
     final prefs = await SharedPreferences.getInstance();
     final actuales = await leer();
-    await prefs.setStringList(
+    await _guardarColaCritica(
+      prefs,
       _key,
       actuales
           .where((p) => p.idLocal != idLocal)
           .map((p) => jsonEncode(p.toJson()))
           .toList(),
+    );
+  }
+
+  Future<void> registrarError(String idLocal, ApiException error) async {
+    final actuales = await leer();
+    final pendiente = actuales.where((p) => p.idLocal == idLocal).firstOrNull;
+    if (pendiente == null) return;
+    final metadata = metadataTrasErrorOffline(pendiente.metadata, error);
+    await actualizar(
+      pendiente.copiar(
+        estado: metadata.estado == EstadoOperacionOffline.errorTransitorio
+            ? EstadoSolicitudOffline.requiereReintento
+            : metadata.estado == EstadoOperacionOffline.conflicto ||
+                  metadata.estado == EstadoOperacionOffline.requiereRevision
+            ? EstadoSolicitudOffline.requiereRevision
+            : EstadoSolicitudOffline.fallidaPermanente,
+        intentos: metadata.intentos,
+        ultimoError: error.mensaje,
+        proximoIntento: metadata.proximoIntento,
+        metadata: metadata,
+      ),
     );
   }
 }
@@ -228,7 +376,7 @@ class ColaSolicitudesOffline {
 /// pendiente entera en vez de reintentarla para siempre (ver
 /// [sincronizarSolicitudesOffline]).
 class ComprobarCargaPendienteOffline {
-  const ComprobarCargaPendienteOffline({
+  ComprobarCargaPendienteOffline({
     required this.idLocal,
     required this.choferId,
     required this.vehiculoId,
@@ -240,7 +388,9 @@ class ComprobarCargaPendienteOffline {
     required this.fotoTableroPath,
     this.litrosDetectadosOcr,
     required this.creadaEn,
-  });
+    MetadataOperacionOffline? metadata,
+    this.archivosOffline,
+  }) : metadata = metadata ?? MetadataOperacionOffline.nueva();
 
   final String idLocal;
   final String choferId;
@@ -253,6 +403,9 @@ class ComprobarCargaPendienteOffline {
   final String fotoTableroPath;
   final double? litrosDetectadosOcr;
   final DateTime creadaEn;
+  final MetadataOperacionOffline metadata;
+  final List<MetadataArchivoOffline>? archivosOffline;
+  String get idempotencyKey => metadata.idempotencyKey;
 
   factory ComprobarCargaPendienteOffline.fromJson(Map<String, dynamic> json) {
     return ComprobarCargaPendienteOffline(
@@ -267,6 +420,8 @@ class ComprobarCargaPendienteOffline {
       fotoTableroPath: json['fotoTableroPath'] as String,
       litrosDetectadosOcr: (json['litrosDetectadosOcr'] as num?)?.toDouble(),
       creadaEn: DateTime.parse(json['creadaEn'] as String),
+      metadata: MetadataOperacionOffline.fromJson(json),
+      archivosOffline: _parseArchivosOffline(json['archivosOffline']),
     );
   }
 
@@ -282,57 +437,116 @@ class ComprobarCargaPendienteOffline {
     'fotoTableroPath': fotoTableroPath,
     'litrosDetectadosOcr': litrosDetectadosOcr,
     'creadaEn': creadaEn.toIso8601String(),
+    ...metadata.toJson(),
+    if (archivosOffline != null)
+      'archivosOffline':
+          archivosOffline!.map((a) => a.toJson()).toList(growable: false),
   };
+
+  ComprobarCargaPendienteOffline conMetadata(
+    MetadataOperacionOffline metadata,
+  ) => ComprobarCargaPendienteOffline(
+    idLocal: idLocal,
+    choferId: choferId,
+    vehiculoId: vehiculoId,
+    folioAutorizacion: folioAutorizacion,
+    litrosCargados: litrosCargados,
+    kmAlCargar: kmAlCargar,
+    gasolinera: gasolinera,
+    fotoTicketPath: fotoTicketPath,
+    fotoTableroPath: fotoTableroPath,
+    litrosDetectadosOcr: litrosDetectadosOcr,
+    creadaEn: creadaEn,
+    metadata: metadata,
+    archivosOffline: archivosOffline,
+  );
 }
 
 class ColaComprobarCargaOffline {
   static const _key = 'cola_comprobar_carga_offline';
+  final _mutex = MutexPersistencia();
 
   Future<List<ComprobarCargaPendienteOffline>> leer() async {
-    final prefs = await SharedPreferences.getInstance();
-    final crudo = prefs.getStringList(_key) ?? const [];
-    return crudo
-        .map(
-          (s) => ComprobarCargaPendienteOffline.fromJson(
-            jsonDecode(s) as Map<String, dynamic>,
-          ),
-        )
-        .toList();
+    return _leerColaConMigracion(
+      _key,
+      ComprobarCargaPendienteOffline.fromJson,
+      (valor) => valor.toJson(),
+    );
   }
 
   Future<void> agregar(ComprobarCargaPendienteOffline pendiente) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = prefs.getStringList(_key) ?? const [];
-    await prefs.setStringList(_key, [
-      ...actuales,
-      jsonEncode(pendiente.toJson()),
-    ]);
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      if (actuales.any((p) => p.idLocal == pendiente.idLocal)) return;
+      await _guardarColaCritica(prefs, _key, [
+        ...actuales.map((p) => jsonEncode(p.toJson())),
+        jsonEncode(pendiente.toJson()),
+      ]);
+    });
+  }
+
+  Future<void> actualizar(ComprobarCargaPendienteOffline pendiente) async {
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .map(
+              (p) => jsonEncode(
+                p.idLocal == pendiente.idLocal
+                    ? pendiente.toJson()
+                    : p.toJson(),
+              ),
+            )
+            .toList(),
+      );
+    });
   }
 
   Future<void> quitar(String idLocal) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = await leer();
-    await prefs.setStringList(
-      _key,
-      actuales
-          .where((p) => p.idLocal != idLocal)
-          .map((p) => jsonEncode(p.toJson()))
-          .toList(),
-    );
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .where((p) => p.idLocal != idLocal)
+            .map((p) => jsonEncode(p.toJson()))
+            .toList(),
+      );
+    });
+  }
+
+  Future<void> registrarError(String idLocal, ApiException error) async {
+    final pendiente =
+        (await leer()).where((p) => p.idLocal == idLocal).firstOrNull;
+    if (pendiente != null) {
+      await actualizar(
+        pendiente.conMetadata(
+          metadataTrasErrorOffline(pendiente.metadata, error),
+        ),
+      );
+    }
   }
 }
 
 /// Cierre de día (registro 2) pendiente de sincronizar — misma lógica de
 /// foto local que [ComprobarCargaPendienteOffline].
 class CerrarDiaPendienteOffline {
-  const CerrarDiaPendienteOffline({
+  CerrarDiaPendienteOffline({
     required this.idLocal,
     required this.choferId,
     required this.cargaId,
     required this.kmFinal,
     required this.fotoTableroPath,
     required this.creadaEn,
-  });
+    MetadataOperacionOffline? metadata,
+    this.archivosOffline,
+  }) : metadata = metadata ?? MetadataOperacionOffline.nueva();
 
   final String idLocal;
   final String choferId;
@@ -340,6 +554,9 @@ class CerrarDiaPendienteOffline {
   final double kmFinal;
   final String fotoTableroPath;
   final DateTime creadaEn;
+  final MetadataOperacionOffline metadata;
+  final List<MetadataArchivoOffline>? archivosOffline;
+  String get idempotencyKey => metadata.idempotencyKey;
 
   factory CerrarDiaPendienteOffline.fromJson(Map<String, dynamic> json) {
     return CerrarDiaPendienteOffline(
@@ -349,6 +566,8 @@ class CerrarDiaPendienteOffline {
       kmFinal: (json['kmFinal'] as num).toDouble(),
       fotoTableroPath: json['fotoTableroPath'] as String,
       creadaEn: DateTime.parse(json['creadaEn'] as String),
+      metadata: MetadataOperacionOffline.fromJson(json),
+      archivosOffline: _parseArchivosOffline(json['archivosOffline']),
     );
   }
 
@@ -359,43 +578,94 @@ class CerrarDiaPendienteOffline {
     'kmFinal': kmFinal,
     'fotoTableroPath': fotoTableroPath,
     'creadaEn': creadaEn.toIso8601String(),
+    ...metadata.toJson(),
+    if (archivosOffline != null)
+      'archivosOffline':
+          archivosOffline!.map((a) => a.toJson()).toList(growable: false),
   };
+
+  CerrarDiaPendienteOffline conMetadata(MetadataOperacionOffline metadata) =>
+      CerrarDiaPendienteOffline(
+        idLocal: idLocal,
+        choferId: choferId,
+        cargaId: cargaId,
+        kmFinal: kmFinal,
+        fotoTableroPath: fotoTableroPath,
+        creadaEn: creadaEn,
+        metadata: metadata,
+        archivosOffline: archivosOffline,
+      );
 }
 
 class ColaCerrarDiaOffline {
   static const _key = 'cola_cerrar_dia_offline';
+  final _mutex = MutexPersistencia();
 
   Future<List<CerrarDiaPendienteOffline>> leer() async {
-    final prefs = await SharedPreferences.getInstance();
-    final crudo = prefs.getStringList(_key) ?? const [];
-    return crudo
-        .map(
-          (s) => CerrarDiaPendienteOffline.fromJson(
-            jsonDecode(s) as Map<String, dynamic>,
-          ),
-        )
-        .toList();
+    return _leerColaConMigracion(
+      _key,
+      CerrarDiaPendienteOffline.fromJson,
+      (valor) => valor.toJson(),
+    );
   }
 
   Future<void> agregar(CerrarDiaPendienteOffline pendiente) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = prefs.getStringList(_key) ?? const [];
-    await prefs.setStringList(_key, [
-      ...actuales,
-      jsonEncode(pendiente.toJson()),
-    ]);
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      if (actuales.any((p) => p.idLocal == pendiente.idLocal)) return;
+      await _guardarColaCritica(prefs, _key, [
+        ...actuales.map((p) => jsonEncode(p.toJson())),
+        jsonEncode(pendiente.toJson()),
+      ]);
+    });
+  }
+
+  Future<void> actualizar(CerrarDiaPendienteOffline pendiente) async {
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .map(
+              (p) => jsonEncode(
+                p.idLocal == pendiente.idLocal
+                    ? pendiente.toJson()
+                    : p.toJson(),
+              ),
+            )
+            .toList(),
+      );
+    });
   }
 
   Future<void> quitar(String idLocal) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = await leer();
-    await prefs.setStringList(
-      _key,
-      actuales
-          .where((p) => p.idLocal != idLocal)
-          .map((p) => jsonEncode(p.toJson()))
-          .toList(),
-    );
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .where((p) => p.idLocal != idLocal)
+            .map((p) => jsonEncode(p.toJson()))
+            .toList(),
+      );
+    });
+  }
+
+  Future<void> registrarError(String idLocal, ApiException error) async {
+    final pendiente =
+        (await leer()).where((p) => p.idLocal == idLocal).firstOrNull;
+    if (pendiente != null) {
+      await actualizar(
+        pendiente.conMetadata(
+          metadataTrasErrorOffline(pendiente.metadata, error),
+        ),
+      );
+    }
   }
 }
 
@@ -403,14 +673,16 @@ class ColaCerrarDiaOffline {
 /// foto es opcional (no toda incidencia es fotografiable), a diferencia
 /// de las otras 3 colas donde la(s) foto(s) son obligatorias.
 class IncidenciaPendienteOffline {
-  const IncidenciaPendienteOffline({
+  IncidenciaPendienteOffline({
     required this.idLocal,
     required this.usuarioId,
     required this.vehiculoId,
     required this.descripcion,
     required this.creadaEn,
     this.fotoPath,
-  });
+    MetadataOperacionOffline? metadata,
+    this.archivosOffline,
+  }) : metadata = metadata ?? MetadataOperacionOffline.nueva();
 
   final String idLocal;
   final String usuarioId;
@@ -418,15 +690,21 @@ class IncidenciaPendienteOffline {
   final String descripcion;
   final DateTime creadaEn;
   final String? fotoPath;
+  final MetadataOperacionOffline metadata;
+  final List<MetadataArchivoOffline>? archivosOffline;
+  String get idempotencyKey => metadata.idempotencyKey;
 
   factory IncidenciaPendienteOffline.fromJson(Map<String, dynamic> json) {
+    final usuarioId = json['usuarioId'] as String? ?? '';
     return IncidenciaPendienteOffline(
       idLocal: json['idLocal'] as String,
-      usuarioId: json['usuarioId'] as String? ?? '',
+      usuarioId: usuarioId,
       vehiculoId: json['vehiculoId'] as String,
       descripcion: json['descripcion'] as String,
       creadaEn: DateTime.parse(json['creadaEn'] as String),
       fotoPath: json['fotoPath'] as String?,
+      metadata: _metadataDeJson(json, usuarioId: usuarioId),
+      archivosOffline: _parseArchivosOffline(json['archivosOffline']),
     );
   }
 
@@ -437,43 +715,277 @@ class IncidenciaPendienteOffline {
     'descripcion': descripcion,
     'creadaEn': creadaEn.toIso8601String(),
     'fotoPath': fotoPath,
+    ...metadata.toJson(),
+    if (archivosOffline != null)
+      'archivosOffline':
+          archivosOffline!.map((a) => a.toJson()).toList(growable: false),
   };
+
+  IncidenciaPendienteOffline conMetadata(MetadataOperacionOffline metadata) =>
+      IncidenciaPendienteOffline(
+        idLocal: idLocal,
+        usuarioId: usuarioId,
+        vehiculoId: vehiculoId,
+        descripcion: descripcion,
+        creadaEn: creadaEn,
+        fotoPath: fotoPath,
+        metadata: metadata,
+        archivosOffline: archivosOffline,
+      );
 }
 
 class ColaIncidenciasOffline {
   static const _key = 'cola_incidencias_offline';
+  final _mutex = MutexPersistencia();
 
   Future<List<IncidenciaPendienteOffline>> leer() async {
-    final prefs = await SharedPreferences.getInstance();
-    final crudo = prefs.getStringList(_key) ?? const [];
-    return crudo
-        .map(
-          (s) => IncidenciaPendienteOffline.fromJson(
-            jsonDecode(s) as Map<String, dynamic>,
-          ),
-        )
-        .toList();
+    return _leerColaConMigracion(
+      _key,
+      IncidenciaPendienteOffline.fromJson,
+      (valor) => valor.toJson(),
+    );
   }
 
   Future<void> agregar(IncidenciaPendienteOffline pendiente) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = prefs.getStringList(_key) ?? const [];
-    await prefs.setStringList(_key, [
-      ...actuales,
-      jsonEncode(pendiente.toJson()),
-    ]);
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      if (actuales.any((p) => p.idLocal == pendiente.idLocal)) return;
+      await _guardarColaCritica(prefs, _key, [
+        ...actuales.map((p) => jsonEncode(p.toJson())),
+        jsonEncode(pendiente.toJson()),
+      ]);
+    });
+  }
+
+  Future<void> actualizar(IncidenciaPendienteOffline pendiente) async {
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .map(
+              (p) => jsonEncode(
+                p.idLocal == pendiente.idLocal
+                    ? pendiente.toJson()
+                    : p.toJson(),
+              ),
+            )
+            .toList(),
+      );
+    });
   }
 
   Future<void> quitar(String idLocal) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = await leer();
-    await prefs.setStringList(
-      _key,
-      actuales
-          .where((p) => p.idLocal != idLocal)
-          .map((p) => jsonEncode(p.toJson()))
-          .toList(),
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .where((p) => p.idLocal != idLocal)
+            .map((p) => jsonEncode(p.toJson()))
+            .toList(),
+      );
+    });
+  }
+
+  Future<void> registrarError(String idLocal, ApiException error) async {
+    final pendiente =
+        (await leer()).where((p) => p.idLocal == idLocal).firstOrNull;
+    if (pendiente != null) {
+      await actualizar(
+        pendiente.conMetadata(
+          metadataTrasErrorOffline(pendiente.metadata, error),
+        ),
+      );
+    }
+  }
+}
+
+/// Evidencia fotográfica pendiente de sincronizar — cola plana e
+/// independiente (mismo patrón que [SolicitudPendienteOffline] y
+/// [IncidenciaPendienteOffline]). Requiere que el recurso padre
+/// (solicitud) ya tenga `idServidor` antes de ser elegible — ver
+/// [_sincronizarEvidencias].
+class EvidenciaPendienteOffline {
+  EvidenciaPendienteOffline({
+    required this.idLocal,
+    required this.usuarioId,
+    required this.tipo,
+    this.km,
+    this.folioId,
+    this.cargaId,
+    required this.pendienteVincular,
+    this.notas,
+    this.tipoCombustibleCargado,
+    this.litros,
+    this.precioPorLitro,
+    this.montoPagado,
+    required this.creadaEn,
+    required this.fotoPaths,
+    required this.archivosOffline,
+    MetadataOperacionOffline? metadata,
+    this.payloadFingerprint = '',
+  }) : metadata = metadata ?? MetadataOperacionOffline.nueva();
+
+  final String idLocal;
+  final String usuarioId;
+  final String tipo;
+  final double? km;
+  final String? folioId;
+  final String? cargaId;
+  final bool pendienteVincular;
+  final String? notas;
+  final String? tipoCombustibleCargado;
+  final double? litros;
+  final double? precioPorLitro;
+  final double? montoPagado;
+  final DateTime creadaEn;
+  final List<String> fotoPaths;
+  final List<MetadataArchivoOffline> archivosOffline;
+  final MetadataOperacionOffline metadata;
+  final String payloadFingerprint;
+  String get idempotencyKey => metadata.idempotencyKey;
+
+  factory EvidenciaPendienteOffline.fromJson(Map<String, dynamic> json) {
+    final usuarioId = json['usuarioId'] as String? ?? '';
+    return EvidenciaPendienteOffline(
+      idLocal: json['idLocal'] as String,
+      usuarioId: usuarioId,
+      tipo: json['tipo'] as String,
+      km: (json['km'] as num?)?.toDouble(),
+      folioId: json['folioId'] as String?,
+      cargaId: json['cargaId'] as String?,
+      pendienteVincular: json['pendienteVincular'] as bool? ?? false,
+      notas: json['notas'] as String?,
+      tipoCombustibleCargado: json['tipoCombustibleCargado'] as String?,
+      litros: (json['litros'] as num?)?.toDouble(),
+      precioPorLitro: (json['precioPorLitro'] as num?)?.toDouble(),
+      montoPagado: (json['montoPagado'] as num?)?.toDouble(),
+      creadaEn: DateTime.parse(json['creadaEn'] as String),
+      fotoPaths: (json['fotoPaths'] as List?)?.cast<String>() ?? [],
+      archivosOffline: _parseArchivosOffline(json['archivosOffline']) ?? [],
+      metadata: _metadataDeJson(json, usuarioId: usuarioId),
+      payloadFingerprint: json['payloadFingerprint'] as String? ?? '',
     );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'idLocal': idLocal,
+    'usuarioId': usuarioId,
+    'tipo': tipo,
+    'km': km,
+    'folioId': folioId,
+    'cargaId': cargaId,
+    'pendienteVincular': pendienteVincular,
+    'notas': notas,
+    'tipoCombustibleCargado': tipoCombustibleCargado,
+    'litros': litros,
+    'precioPorLitro': precioPorLitro,
+    'montoPagado': montoPagado,
+    'creadaEn': creadaEn.toIso8601String(),
+    'fotoPaths': fotoPaths,
+    ...metadata.toJson(),
+    'archivosOffline':
+        archivosOffline.map((a) => a.toJson()).toList(growable: false),
+    'payloadFingerprint': payloadFingerprint,
+  };
+
+  EvidenciaPendienteOffline conMetadata(MetadataOperacionOffline metadata) =>
+      EvidenciaPendienteOffline(
+        idLocal: idLocal,
+        usuarioId: usuarioId,
+        tipo: tipo,
+        km: km,
+        folioId: folioId,
+        cargaId: cargaId,
+        pendienteVincular: pendienteVincular,
+        notas: notas,
+        tipoCombustibleCargado: tipoCombustibleCargado,
+        litros: litros,
+        precioPorLitro: precioPorLitro,
+        montoPagado: montoPagado,
+        creadaEn: creadaEn,
+        fotoPaths: fotoPaths,
+        archivosOffline: archivosOffline,
+        metadata: metadata,
+        payloadFingerprint: payloadFingerprint,
+      );
+}
+
+class ColaEvidenciasOffline {
+  static const _key = 'cola_evidencias_offline';
+  final _mutex = MutexPersistencia();
+
+  Future<List<EvidenciaPendienteOffline>> leer() async {
+    return _leerColaConMigracion(
+      _key,
+      EvidenciaPendienteOffline.fromJson,
+      (valor) => valor.toJson(),
+    );
+  }
+
+  Future<void> agregar(EvidenciaPendienteOffline pendiente) async {
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      if (actuales.any((p) => p.idLocal == pendiente.idLocal)) return;
+      await _guardarColaCritica(prefs, _key, [
+        ...actuales.map((p) => jsonEncode(p.toJson())),
+        jsonEncode(pendiente.toJson()),
+      ]);
+    });
+  }
+
+  Future<void> actualizar(EvidenciaPendienteOffline pendiente) async {
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .map(
+              (p) => jsonEncode(
+                p.idLocal == pendiente.idLocal
+                    ? pendiente.toJson()
+                    : p.toJson(),
+              ),
+            )
+            .toList(),
+      );
+    });
+  }
+
+  Future<void> quitar(String idLocal) async {
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .where((p) => p.idLocal != idLocal)
+            .map((p) => jsonEncode(p.toJson()))
+            .toList(),
+      );
+    });
+  }
+
+  Future<void> registrarError(String idLocal, ApiException error) async {
+    final pendiente =
+        (await leer()).where((p) => p.idLocal == idLocal).firstOrNull;
+    if (pendiente != null) {
+      await actualizar(
+        pendiente.conMetadata(
+          metadataTrasErrorOffline(pendiente.metadata, error),
+        ),
+      );
+    }
   }
 }
 
@@ -490,7 +1002,7 @@ class ColaIncidenciasOffline {
 /// (si existe) también se sincronizaron — recién ahí se considera
 /// "terminado" y se quita.
 class RecorridoMarimbaPendienteOffline {
-  const RecorridoMarimbaPendienteOffline({
+  RecorridoMarimbaPendienteOffline({
     required this.idLocal,
     required this.usuarioId,
     required this.rol,
@@ -501,9 +1013,15 @@ class RecorridoMarimbaPendienteOffline {
     this.horasEquipoMenorInicio,
     required this.creadaEn,
     this.idServidor,
-    this.intentos = 0,
-    this.ultimoError,
-  });
+    int intentos = 0,
+    String? ultimoError,
+    MetadataOperacionOffline? metadata,
+  }) : metadata =
+           metadata ??
+           MetadataOperacionOffline.nueva().copiar(
+             intentos: intentos,
+             ultimoError: ultimoError,
+           );
 
   final String idLocal;
   final String usuarioId;
@@ -517,13 +1035,16 @@ class RecorridoMarimbaPendienteOffline {
 
   /// `null` hasta que `POST /recorridos-marimba` responde con éxito.
   final String? idServidor;
-  final int intentos;
-  final String? ultimoError;
+  final MetadataOperacionOffline metadata;
+  String get idempotencyKey => metadata.idempotencyKey;
+  int get intentos => metadata.intentos;
+  String? get ultimoError => metadata.ultimoError;
 
   factory RecorridoMarimbaPendienteOffline.fromJson(Map<String, dynamic> json) {
+    final usuarioId = json['usuarioId'] as String? ?? '';
     return RecorridoMarimbaPendienteOffline(
       idLocal: json['idLocal'] as String,
-      usuarioId: json['usuarioId'] as String? ?? '',
+      usuarioId: usuarioId,
       rol: json['rol'] as String? ?? '',
       marimbaId: json['marimbaId'] as String,
       tipoCombustible: json['tipoCombustible'] as String? ?? '',
@@ -535,6 +1056,7 @@ class RecorridoMarimbaPendienteOffline {
       idServidor: json['idServidor'] as String?,
       intentos: json['intentos'] as int? ?? 0,
       ultimoError: json['ultimoError'] as String?,
+      metadata: _metadataDeJson(json, usuarioId: usuarioId),
     );
   }
 
@@ -551,6 +1073,7 @@ class RecorridoMarimbaPendienteOffline {
     'idServidor': idServidor,
     'intentos': intentos,
     'ultimoError': ultimoError,
+    ...metadata.toJson(),
   };
 
   RecorridoMarimbaPendienteOffline conIdServidor(String idServidor) {
@@ -567,6 +1090,10 @@ class RecorridoMarimbaPendienteOffline {
       idServidor: idServidor,
       intentos: intentos,
       ultimoError: null,
+      metadata: metadata.copiar(
+        estado: EstadoOperacionOffline.pendiente,
+        limpiarUltimoError: true,
+      ),
     );
   }
 
@@ -584,76 +1111,131 @@ class RecorridoMarimbaPendienteOffline {
         idServidor: idServidor,
         intentos: intentos + 1,
         ultimoError: error,
+        metadata: metadata.copiar(
+          intentos: metadata.intentos + 1,
+          ultimoError: error,
+        ),
       );
+
+  RecorridoMarimbaPendienteOffline conMetadata(
+    MetadataOperacionOffline metadata,
+  ) => RecorridoMarimbaPendienteOffline(
+    idLocal: idLocal,
+    usuarioId: usuarioId,
+    rol: rol,
+    marimbaId: marimbaId,
+    tipoCombustible: tipoCombustible,
+    frente: frente,
+    kmInicio: kmInicio,
+    horasEquipoMenorInicio: horasEquipoMenorInicio,
+    creadaEn: creadaEn,
+    idServidor: idServidor,
+    intentos: intentos,
+    ultimoError: ultimoError,
+    metadata: metadata,
+  );
 }
 
 class ColaRecorridosMarimbaOffline {
   static const _key = 'cola_recorridos_marimba_offline';
+  final _mutex = MutexPersistencia();
 
   Future<List<RecorridoMarimbaPendienteOffline>> leer() async {
-    final prefs = await SharedPreferences.getInstance();
-    final crudo = prefs.getStringList(_key) ?? const [];
-    return crudo
-        .map(
-          (s) => RecorridoMarimbaPendienteOffline.fromJson(
-            jsonDecode(s) as Map<String, dynamic>,
-          ),
-        )
-        .toList();
+    return _leerColaConMigracion(
+      _key,
+      RecorridoMarimbaPendienteOffline.fromJson,
+      (valor) => valor.toJson(),
+    );
   }
 
   Future<void> agregar(RecorridoMarimbaPendienteOffline pendiente) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = prefs.getStringList(_key) ?? const [];
-    await prefs.setStringList(_key, [
-      ...actuales,
-      jsonEncode(pendiente.toJson()),
-    ]);
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      if (actuales.any((p) => p.idLocal == pendiente.idLocal)) return;
+      await _guardarColaCritica(prefs, _key, [
+        ...actuales.map((p) => jsonEncode(p.toJson())),
+        jsonEncode(pendiente.toJson()),
+      ]);
+    });
   }
 
   /// Reescribe el registro ya existente con el [idServidor] recién
   /// obtenido — el recorrido sigue en la cola (sus despachos/cierre aún
   /// pueden estar pendientes), solo deja de estar "sin resolver".
   Future<void> actualizarIdServidor(String idLocal, String idServidor) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = await leer();
-    await prefs.setStringList(
-      _key,
-      actuales
-          .map(
-            (p) => jsonEncode(
-              (p.idLocal == idLocal ? p.conIdServidor(idServidor) : p).toJson(),
-            ),
-          )
-          .toList(),
-    );
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .map(
+              (p) => jsonEncode(
+                (p.idLocal == idLocal
+                        ? p.conIdServidor(idServidor)
+                        : p)
+                    .toJson(),
+              ),
+            )
+            .toList(),
+      );
+    });
   }
 
   Future<void> registrarError(String idLocal, String error) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = await leer();
-    await prefs.setStringList(
-      _key,
-      actuales
-          .map(
-            (p) => jsonEncode(
-              (p.idLocal == idLocal ? p.conError(error) : p).toJson(),
-            ),
-          )
-          .toList(),
-    );
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .map(
+              (p) => jsonEncode(
+                (p.idLocal == idLocal ? p.conError(error) : p).toJson(),
+              ),
+            )
+            .toList(),
+      );
+    });
+  }
+
+  Future<void> actualizarMetadata(
+    String idLocal,
+    MetadataOperacionOffline metadata,
+  ) async {
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .map(
+              (p) => jsonEncode(
+                (p.idLocal == idLocal ? p.conMetadata(metadata) : p).toJson(),
+              ),
+            )
+            .toList(),
+      );
+    });
   }
 
   Future<void> quitar(String idLocal) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = await leer();
-    await prefs.setStringList(
-      _key,
-      actuales
-          .where((p) => p.idLocal != idLocal)
-          .map((p) => jsonEncode(p.toJson()))
-          .toList(),
-    );
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .where((p) => p.idLocal != idLocal)
+            .map((p) => jsonEncode(p.toJson()))
+            .toList(),
+      );
+    });
   }
 }
 
@@ -662,7 +1244,7 @@ class ColaRecorridosMarimbaOffline {
 /// por el id del servidor, precisamente porque puede no existir todavía
 /// (ver [RecorridoMarimbaPendienteOffline]).
 class DespachoMarimbaPendienteOffline {
-  const DespachoMarimbaPendienteOffline({
+  DespachoMarimbaPendienteOffline({
     required this.idLocal,
     required this.recorridoIdLocal,
     required this.usuarioId,
@@ -680,9 +1262,16 @@ class DespachoMarimbaPendienteOffline {
     this.ubicacion,
     this.observaciones,
     required this.creadaEn,
-    this.intentos = 0,
-    this.ultimoError,
-  });
+    int intentos = 0,
+    String? ultimoError,
+    MetadataOperacionOffline? metadata,
+    this.archivosOffline,
+  }) : metadata =
+           metadata ??
+           MetadataOperacionOffline.nueva().copiar(
+             intentos: intentos,
+             ultimoError: ultimoError,
+           );
 
   final String idLocal;
   final String recorridoIdLocal;
@@ -701,16 +1290,20 @@ class DespachoMarimbaPendienteOffline {
   final String? ubicacion;
   final String? observaciones;
   final DateTime creadaEn;
-  final int intentos;
-  final String? ultimoError;
+  final MetadataOperacionOffline metadata;
+  final List<MetadataArchivoOffline>? archivosOffline;
+  String get idempotencyKey => metadata.idempotencyKey;
+  int get intentos => metadata.intentos;
+  String? get ultimoError => metadata.ultimoError;
 
   bool get esMedido => medidorInicial != null && medidorFinal != null;
 
   factory DespachoMarimbaPendienteOffline.fromJson(Map<String, dynamic> json) {
+    final usuarioId = json['usuarioId'] as String? ?? '';
     return DespachoMarimbaPendienteOffline(
       idLocal: json['idLocal'] as String,
       recorridoIdLocal: json['recorridoIdLocal'] as String,
-      usuarioId: json['usuarioId'] as String? ?? '',
+      usuarioId: usuarioId,
       rol: json['rol'] as String? ?? '',
       vehiculoDestinoId: json['vehiculoDestinoId'] as String? ?? '',
       tipoCombustible: json['tipoCombustible'] as String? ?? '',
@@ -727,6 +1320,8 @@ class DespachoMarimbaPendienteOffline {
       creadaEn: DateTime.parse(json['creadaEn'] as String),
       intentos: json['intentos'] as int? ?? 0,
       ultimoError: json['ultimoError'] as String?,
+      metadata: _metadataDeJson(json, usuarioId: usuarioId),
+      archivosOffline: _parseArchivosOffline(json['archivosOffline']),
     );
   }
 
@@ -750,6 +1345,10 @@ class DespachoMarimbaPendienteOffline {
     'creadaEn': creadaEn.toIso8601String(),
     'intentos': intentos,
     'ultimoError': ultimoError,
+    ...metadata.toJson(),
+    if (archivosOffline != null)
+      'archivosOffline':
+          archivosOffline!.map((a) => a.toJson()).toList(growable: false),
   };
 
   DespachoMarimbaPendienteOffline conError(String error) =>
@@ -773,58 +1372,116 @@ class DespachoMarimbaPendienteOffline {
         creadaEn: creadaEn,
         intentos: intentos + 1,
         ultimoError: error,
+        metadata: metadata.copiar(
+          intentos: metadata.intentos + 1,
+          ultimoError: error,
+        ),
+        archivosOffline: archivosOffline,
       );
+
+  DespachoMarimbaPendienteOffline conMetadata(
+    MetadataOperacionOffline metadata,
+  ) => DespachoMarimbaPendienteOffline(
+    idLocal: idLocal,
+    recorridoIdLocal: recorridoIdLocal,
+    usuarioId: usuarioId,
+    rol: rol,
+    vehiculoDestinoId: vehiculoDestinoId,
+    tipoCombustible: tipoCombustible,
+    operadorTexto: operadorTexto,
+    horometro: horometro,
+    fotoHorometroPath: fotoHorometroPath,
+    litrosDeclarados: litrosDeclarados,
+    medidorInicial: medidorInicial,
+    medidorFinal: medidorFinal,
+    fotoMedidorPath: fotoMedidorPath,
+    fotoEvidenciaPath: fotoEvidenciaPath,
+    ubicacion: ubicacion,
+    observaciones: observaciones,
+    creadaEn: creadaEn,
+    intentos: intentos,
+    ultimoError: ultimoError,
+    metadata: metadata,
+    archivosOffline: archivosOffline,
+  );
 }
 
 class ColaDespachosMarimbaOffline {
   static const _key = 'cola_despachos_marimba_offline';
+  final _mutex = MutexPersistencia();
 
   Future<List<DespachoMarimbaPendienteOffline>> leer() async {
-    final prefs = await SharedPreferences.getInstance();
-    final crudo = prefs.getStringList(_key) ?? const [];
-    return crudo
-        .map(
-          (s) => DespachoMarimbaPendienteOffline.fromJson(
-            jsonDecode(s) as Map<String, dynamic>,
-          ),
-        )
-        .toList();
+    return _leerColaConMigracion(
+      _key,
+      DespachoMarimbaPendienteOffline.fromJson,
+      (valor) => valor.toJson(),
+    );
   }
 
   Future<void> agregar(DespachoMarimbaPendienteOffline pendiente) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = prefs.getStringList(_key) ?? const [];
-    await prefs.setStringList(_key, [
-      ...actuales,
-      jsonEncode(pendiente.toJson()),
-    ]);
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      if (actuales.any((p) => p.idLocal == pendiente.idLocal)) return;
+      await _guardarColaCritica(prefs, _key, [
+        ...actuales.map((p) => jsonEncode(p.toJson())),
+        jsonEncode(pendiente.toJson()),
+      ]);
+    });
   }
 
   Future<void> quitar(String idLocal) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = await leer();
-    await prefs.setStringList(
-      _key,
-      actuales
-          .where((p) => p.idLocal != idLocal)
-          .map((p) => jsonEncode(p.toJson()))
-          .toList(),
-    );
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .where((p) => p.idLocal != idLocal)
+            .map((p) => jsonEncode(p.toJson()))
+            .toList(),
+      );
+    });
   }
 
   Future<void> registrarError(String idLocal, String error) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = await leer();
-    await prefs.setStringList(
-      _key,
-      actuales
-          .map(
-            (p) => jsonEncode(
-              (p.idLocal == idLocal ? p.conError(error) : p).toJson(),
-            ),
-          )
-          .toList(),
-    );
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .map(
+              (p) => jsonEncode(
+                (p.idLocal == idLocal ? p.conError(error) : p).toJson(),
+              ),
+            )
+            .toList(),
+      );
+    });
+  }
+
+  Future<void> actualizarMetadata(
+    String idLocal,
+    MetadataOperacionOffline metadata,
+  ) async {
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .map(
+              (p) => jsonEncode(
+                (p.idLocal == idLocal ? p.conMetadata(metadata) : p).toJson(),
+              ),
+            )
+            .toList(),
+      );
+    });
   }
 }
 
@@ -834,7 +1491,7 @@ class ColaDespachosMarimbaOffline {
 /// [_sincronizarRecorridosMarimba]), para que el backend calcule la
 /// conciliación con TODOS los despachos ya aplicados.
 class CierreRecorridoMarimbaPendienteOffline {
-  const CierreRecorridoMarimbaPendienteOffline({
+  CierreRecorridoMarimbaPendienteOffline({
     required this.idLocal,
     required this.recorridoIdLocal,
     required this.usuarioId,
@@ -846,9 +1503,16 @@ class CierreRecorridoMarimbaPendienteOffline {
     required this.existenciaFisica,
     this.observaciones,
     required this.creadaEn,
-    this.intentos = 0,
-    this.ultimoError,
-  });
+    int intentos = 0,
+    String? ultimoError,
+    MetadataOperacionOffline? metadata,
+    this.archivosOffline,
+  }) : metadata =
+           metadata ??
+           MetadataOperacionOffline.nueva().copiar(
+             intentos: intentos,
+             ultimoError: ultimoError,
+           );
 
   final String idLocal;
   final String recorridoIdLocal;
@@ -861,16 +1525,20 @@ class CierreRecorridoMarimbaPendienteOffline {
   final double existenciaFisica;
   final String? observaciones;
   final DateTime creadaEn;
-  final int intentos;
-  final String? ultimoError;
+  final MetadataOperacionOffline metadata;
+  final List<MetadataArchivoOffline>? archivosOffline;
+  String get idempotencyKey => metadata.idempotencyKey;
+  int get intentos => metadata.intentos;
+  String? get ultimoError => metadata.ultimoError;
 
   factory CierreRecorridoMarimbaPendienteOffline.fromJson(
     Map<String, dynamic> json,
   ) {
+    final usuarioId = json['usuarioId'] as String? ?? '';
     return CierreRecorridoMarimbaPendienteOffline(
       idLocal: json['idLocal'] as String,
       recorridoIdLocal: json['recorridoIdLocal'] as String,
-      usuarioId: json['usuarioId'] as String? ?? '',
+      usuarioId: usuarioId,
       rol: json['rol'] as String? ?? '',
       kmCierre: (json['kmCierre'] as num?)?.toDouble(),
       horasEquipoMenorCierre: (json['horasEquipoMenorCierre'] as num?)
@@ -882,6 +1550,8 @@ class CierreRecorridoMarimbaPendienteOffline {
       creadaEn: DateTime.parse(json['creadaEn'] as String),
       intentos: json['intentos'] as int? ?? 0,
       ultimoError: json['ultimoError'] as String?,
+      metadata: _metadataDeJson(json, usuarioId: usuarioId),
+      archivosOffline: _parseArchivosOffline(json['archivosOffline']),
     );
   }
 
@@ -899,6 +1569,10 @@ class CierreRecorridoMarimbaPendienteOffline {
     'creadaEn': creadaEn.toIso8601String(),
     'intentos': intentos,
     'ultimoError': ultimoError,
+    ...metadata.toJson(),
+    if (archivosOffline != null)
+      'archivosOffline':
+          archivosOffline!.map((a) => a.toJson()).toList(growable: false),
   };
 
   CierreRecorridoMarimbaPendienteOffline conError(String error) =>
@@ -916,58 +1590,110 @@ class CierreRecorridoMarimbaPendienteOffline {
         creadaEn: creadaEn,
         intentos: intentos + 1,
         ultimoError: error,
+        metadata: metadata.copiar(
+          intentos: metadata.intentos + 1,
+          ultimoError: error,
+        ),
+        archivosOffline: archivosOffline,
       );
+
+  CierreRecorridoMarimbaPendienteOffline conMetadata(
+    MetadataOperacionOffline metadata,
+  ) => CierreRecorridoMarimbaPendienteOffline(
+    idLocal: idLocal,
+    recorridoIdLocal: recorridoIdLocal,
+    usuarioId: usuarioId,
+    rol: rol,
+    kmCierre: kmCierre,
+    horasEquipoMenorCierre: horasEquipoMenorCierre,
+    fotoCierrePath: fotoCierrePath,
+    fotoNivelPath: fotoNivelPath,
+    existenciaFisica: existenciaFisica,
+    observaciones: observaciones,
+    creadaEn: creadaEn,
+    intentos: intentos,
+    ultimoError: ultimoError,
+    metadata: metadata,
+    archivosOffline: archivosOffline,
+  );
 }
 
 class ColaCierresRecorridoMarimbaOffline {
   static const _key = 'cola_cierres_recorrido_marimba_offline';
+  final _mutex = MutexPersistencia();
 
   Future<List<CierreRecorridoMarimbaPendienteOffline>> leer() async {
-    final prefs = await SharedPreferences.getInstance();
-    final crudo = prefs.getStringList(_key) ?? const [];
-    return crudo
-        .map(
-          (s) => CierreRecorridoMarimbaPendienteOffline.fromJson(
-            jsonDecode(s) as Map<String, dynamic>,
-          ),
-        )
-        .toList();
+    return _leerColaConMigracion(
+      _key,
+      CierreRecorridoMarimbaPendienteOffline.fromJson,
+      (valor) => valor.toJson(),
+    );
   }
 
   Future<void> agregar(CierreRecorridoMarimbaPendienteOffline pendiente) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = prefs.getStringList(_key) ?? const [];
-    await prefs.setStringList(_key, [
-      ...actuales,
-      jsonEncode(pendiente.toJson()),
-    ]);
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      if (actuales.any((p) => p.idLocal == pendiente.idLocal)) return;
+      await _guardarColaCritica(prefs, _key, [
+        ...actuales.map((p) => jsonEncode(p.toJson())),
+        jsonEncode(pendiente.toJson()),
+      ]);
+    });
   }
 
   Future<void> quitar(String idLocal) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = await leer();
-    await prefs.setStringList(
-      _key,
-      actuales
-          .where((p) => p.idLocal != idLocal)
-          .map((p) => jsonEncode(p.toJson()))
-          .toList(),
-    );
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .where((p) => p.idLocal != idLocal)
+            .map((p) => jsonEncode(p.toJson()))
+            .toList(),
+      );
+    });
   }
 
   Future<void> registrarError(String idLocal, String error) async {
-    final prefs = await SharedPreferences.getInstance();
-    final actuales = await leer();
-    await prefs.setStringList(
-      _key,
-      actuales
-          .map(
-            (p) => jsonEncode(
-              (p.idLocal == idLocal ? p.conError(error) : p).toJson(),
-            ),
-          )
-          .toList(),
-    );
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .map(
+              (p) => jsonEncode(
+                (p.idLocal == idLocal ? p.conError(error) : p).toJson(),
+              ),
+            )
+            .toList(),
+      );
+    });
+  }
+
+  Future<void> actualizarMetadata(
+    String idLocal,
+    MetadataOperacionOffline metadata,
+  ) async {
+    await _mutex.run(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final actuales = await leer();
+      await _guardarColaCritica(
+        prefs,
+        _key,
+        actuales
+            .map(
+              (p) => jsonEncode(
+                (p.idLocal == idLocal ? p.conMetadata(metadata) : p).toJson(),
+              ),
+            )
+            .toList(),
+      );
+    });
   }
 }
 
@@ -1062,6 +1788,10 @@ final colaIncidenciasOfflineProvider = Provider<ColaIncidenciasOffline>(
   (ref) => ColaIncidenciasOffline(),
 );
 
+final colaEvidenciasOfflineProvider = Provider<ColaEvidenciasOffline>(
+  (ref) => ColaEvidenciasOffline(),
+);
+
 final colaRecorridosMarimbaOfflineProvider =
     Provider<ColaRecorridosMarimbaOffline>(
       (ref) => ColaRecorridosMarimbaOffline(),
@@ -1101,16 +1831,25 @@ final totalPendientesOfflineProvider = FutureProvider<int>((ref) async {
   ref.watch(operacionesTickProvider);
   final usuarioId = ref.watch(sessionProvider)?.id;
   final solicitudes = await ref.read(colaSolicitudesOfflineProvider).leer();
-  final resultados = await Future.wait([
-    ref.read(colaComprobarCargaOfflineProvider).leer(),
-    ref.read(colaCerrarDiaOfflineProvider).leer(),
-    ref.read(colaIncidenciasOfflineProvider).leer(),
-    ref.read(colaRecorridosMarimbaOfflineProvider).leer(),
-    ref.read(colaDespachosMarimbaOfflineProvider).leer(),
-    ref.read(colaCierresRecorridoMarimbaOfflineProvider).leer(),
-  ]);
+  final cargas = await ref.read(colaComprobarCargaOfflineProvider).leer();
+  final cierres = await ref.read(colaCerrarDiaOfflineProvider).leer();
+  final incidencias = await ref.read(colaIncidenciasOfflineProvider).leer();
+  final evidencias = await ref.read(colaEvidenciasOfflineProvider).leer();
+  final recorridos = await ref
+      .read(colaRecorridosMarimbaOfflineProvider)
+      .leer();
+  final despachos = await ref.read(colaDespachosMarimbaOfflineProvider).leer();
+  final cierresRecorrido = await ref
+      .read(colaCierresRecorridoMarimbaOfflineProvider)
+      .leer();
   return solicitudes.where((p) => p.usuarioId == usuarioId).length +
-      resultados.fold<int>(0, (suma, lista) => suma + lista.length);
+      cargas.where((p) => p.choferId == usuarioId).length +
+      cierres.where((p) => p.choferId == usuarioId).length +
+      incidencias.where((p) => p.usuarioId == usuarioId).length +
+      evidencias.where((p) => p.usuarioId == usuarioId).length +
+      recorridos.where((p) => p.usuarioId == usuarioId).length +
+      despachos.where((p) => p.usuarioId == usuarioId).length +
+      cierresRecorrido.where((p) => p.usuarioId == usuarioId).length;
 });
 
 /// Registra en [AvisosSincronizacionOfflineStorage] que una pendiente
@@ -1138,6 +1877,30 @@ Future<void> _registrarAviso(
   );
 }
 
+final _clasificadorOffline = ClasificadorHttpOffline();
+final _backoffOffline = PoliticaBackoffOffline();
+
+MetadataOperacionOffline _metadataTrasError(
+  MetadataOperacionOffline actual,
+  ApiException error,
+) => metadataTrasErrorOffline(
+  actual,
+  error,
+  clasificador: _clasificadorOffline,
+  backoff: _backoffOffline,
+);
+
+MetadataOperacionOffline _metadataArchivoFaltante(
+  MetadataOperacionOffline actual,
+) => actual.copiar(
+  estado: EstadoOperacionOffline.requiereRevision,
+  intentos: actual.intentos + 1,
+  ultimoIntento: DateTime.now(),
+  ultimoError: 'Falta una evidencia o archivo requerido para sincronizar.',
+  ultimoCodigo: 'ARCHIVO_OFFLINE_FALTANTE',
+  limpiarProximoIntento: true,
+);
+
 /// Reintenta enviar cada solicitud de carga encolada, en orden. Se
 /// detiene en cuanto una falla por falta de red (probablemente todas
 /// fallarán igual en ese momento) — pero si una falla por una razón de
@@ -1164,15 +1927,31 @@ Future<void> _sincronizarSolicitudes(WidgetRef ref) async {
     }
     final vehiculo = vehiculosRepo.porId(pendiente.vehiculoId);
     if (vehiculo == null) {
-      await cola.quitar(pendiente.idLocal);
+      await cola.actualizar(
+        pendiente.copiar(
+          estado: EstadoSolicitudOffline.requiereRevision,
+          ultimoError: 'Vehiculo no disponible en el catalogo local.',
+          metadata: pendiente.metadata.copiar(
+            estado: EstadoOperacionOffline.requiereRevision,
+            ultimoError: 'Vehiculo no disponible en el catalogo local.',
+            ultimoCodigo: 'VEHICULO_LOCAL_NO_DISPONIBLE',
+          ),
+        ),
+      );
       AppLogger.error(
         'sincronizarSolicitudesOffline',
         'Vehículo ${pendiente.vehiculoId} ya no existe — se descarta ${pendiente.idLocal}.',
       );
       continue;
     }
-    if (!File(pendiente.fotoTableroPath).existsSync()) {
-      await cola.quitar(pendiente.idLocal);
+    if (!_archivoExiste(pendiente.fotoTableroPath)) {
+      await cola.actualizar(
+        pendiente.copiar(
+          estado: EstadoSolicitudOffline.requiereRevision,
+          ultimoError: 'Falta la foto requerida.',
+          metadata: _metadataArchivoFaltante(pendiente.metadata),
+        ),
+      );
       AppLogger.error(
         'sincronizarSolicitudesOffline',
         'La foto del tablero de la solicitud ${pendiente.idLocal} ya no '
@@ -1203,16 +1982,14 @@ Future<void> _sincronizarSolicitudes(WidgetRef ref) async {
         // verdad (falso positivo de `conectividadProvider`, que solo
         // detecta wifi/datos, no que el backend responda). Se detiene
         // aquí y se reintenta en el próximo evento de reconexión.
-        final intentos = pendiente.intentos + 1;
-        final segundos =
-            (1 << intentos.clamp(0, 8)) +
-            (pendiente.idLocal.hashCode.abs() % 4);
+        final metadata = _metadataTrasError(pendiente.metadata, e);
         await cola.actualizar(
           pendiente.copiar(
             estado: EstadoSolicitudOffline.enviadaSinConfirmar,
-            intentos: intentos,
+            intentos: metadata.intentos,
             ultimoError: e.mensaje,
-            proximoIntento: DateTime.now().add(Duration(seconds: segundos)),
+            proximoIntento: metadata.proximoIntento,
+            metadata: metadata,
           ),
         );
         return;
@@ -1221,23 +1998,19 @@ Future<void> _sincronizarSolicitudes(WidgetRef ref) async {
           e.solicitudId != null) {
         await cola.quitar(pendiente.idLocal);
       } else {
-        final transitorio = {408, 429, 500, 502, 503, 504}.contains(e.status);
+        final metadata = _metadataTrasError(pendiente.metadata, e);
         await cola.actualizar(
           pendiente.copiar(
-            estado: transitorio
+            estado: metadata.estado == EstadoOperacionOffline.errorTransitorio
                 ? EstadoSolicitudOffline.requiereReintento
-                : e.status == 409
+                : metadata.estado == EstadoOperacionOffline.conflicto ||
+                      metadata.estado == EstadoOperacionOffline.requiereRevision
                 ? EstadoSolicitudOffline.requiereRevision
                 : EstadoSolicitudOffline.fallidaPermanente,
-            intentos: pendiente.intentos + 1,
+            intentos: metadata.intentos,
             ultimoError: e.mensaje,
-            proximoIntento: transitorio
-                ? DateTime.now().add(
-                    Duration(
-                      seconds: 1 << (pendiente.intentos + 1).clamp(0, 8),
-                    ),
-                  )
-                : null,
+            proximoIntento: metadata.proximoIntento,
+            metadata: metadata,
           ),
         );
       }
@@ -1261,11 +2034,21 @@ Future<void> _sincronizarComprobarCarga(WidgetRef ref) async {
   if (pendientes.isEmpty) return;
 
   final repo = ref.read(operacionesRepositoryProvider);
+  final usuarioActualId = ref.read(sessionProvider)?.id;
 
   for (final pendiente in pendientes) {
-    if (!File(pendiente.fotoTicketPath).existsSync() ||
-        !File(pendiente.fotoTableroPath).existsSync()) {
-      await cola.quitar(pendiente.idLocal);
+    if (pendiente.choferId != usuarioActualId ||
+        pendiente.metadata.estado == EstadoOperacionOffline.errorPermanente ||
+        pendiente.metadata.estado == EstadoOperacionOffline.conflicto ||
+        pendiente.metadata.estado == EstadoOperacionOffline.requiereRevision ||
+        (pendiente.metadata.proximoIntento?.isAfter(DateTime.now()) ?? false)) {
+      continue;
+    }
+    if (!_archivoExiste(pendiente.fotoTicketPath) ||
+        !_archivoExiste(pendiente.fotoTableroPath)) {
+      await cola.actualizar(
+        pendiente.conMetadata(_metadataArchivoFaltante(pendiente.metadata)),
+      );
       AppLogger.error(
         'sincronizarSolicitudesOffline',
         'Una foto de la comprobación ${pendiente.idLocal} ya no existe en '
@@ -1274,7 +2057,8 @@ Future<void> _sincronizarComprobarCarga(WidgetRef ref) async {
       continue;
     }
     try {
-      await repo.registrarCarga(
+      await repo.registrarCargaIdempotente(
+        idempotencyKey: pendiente.idempotencyKey,
         choferId: pendiente.choferId,
         vehiculoId: pendiente.vehiculoId,
         folioAutorizacion: pendiente.folioAutorizacion,
@@ -1287,14 +2071,16 @@ Future<void> _sincronizarComprobarCarga(WidgetRef ref) async {
       );
       await cola.quitar(pendiente.idLocal);
     } on ApiException catch (e) {
-      if (e.status == null) return;
-      await cola.quitar(pendiente.idLocal);
+      await cola.actualizar(
+        pendiente.conMetadata(_metadataTrasError(pendiente.metadata, e)),
+      );
       await _registrarAviso(
         ref,
         idLocal: pendiente.idLocal,
         descripcion: 'Comprobación de carga',
         motivo: e.mensaje,
       );
+      if (e.status == null) return;
     }
     ref.read(operacionesTickProvider.notifier).state++;
   }
@@ -1311,9 +2097,17 @@ Future<void> _sincronizarCerrarDia(WidgetRef ref) async {
   final usuarioActualId = ref.read(sessionProvider)?.id;
 
   for (final pendiente in pendientes) {
-    if (pendiente.choferId != usuarioActualId) continue;
-    if (!File(pendiente.fotoTableroPath).existsSync()) {
-      await cola.quitar(pendiente.idLocal);
+    if (pendiente.choferId != usuarioActualId ||
+        pendiente.metadata.estado == EstadoOperacionOffline.errorPermanente ||
+        pendiente.metadata.estado == EstadoOperacionOffline.conflicto ||
+        pendiente.metadata.estado == EstadoOperacionOffline.requiereRevision ||
+        (pendiente.metadata.proximoIntento?.isAfter(DateTime.now()) ?? false)) {
+      continue;
+    }
+    if (!_archivoExiste(pendiente.fotoTableroPath)) {
+      await cola.actualizar(
+        pendiente.conMetadata(_metadataArchivoFaltante(pendiente.metadata)),
+      );
       AppLogger.error(
         'sincronizarSolicitudesOffline',
         'La foto del cierre de día ${pendiente.idLocal} ya no existe en '
@@ -1322,7 +2116,8 @@ Future<void> _sincronizarCerrarDia(WidgetRef ref) async {
       continue;
     }
     try {
-      await repo.cerrarDia(
+      await repo.cerrarDiaIdempotente(
+        idempotencyKey: pendiente.idempotencyKey,
         choferId: pendiente.choferId,
         cargaId: pendiente.cargaId,
         kmFinal: pendiente.kmFinal,
@@ -1330,14 +2125,16 @@ Future<void> _sincronizarCerrarDia(WidgetRef ref) async {
       );
       await cola.quitar(pendiente.idLocal);
     } on ApiException catch (e) {
-      if (e.status == null) return;
-      await cola.quitar(pendiente.idLocal);
+      await cola.actualizar(
+        pendiente.conMetadata(_metadataTrasError(pendiente.metadata, e)),
+      );
       await _registrarAviso(
         ref,
         idLocal: pendiente.idLocal,
         descripcion: 'Cierre de día',
         motivo: e.mensaje,
       );
+      if (e.status == null) return;
     }
     ref.read(operacionesTickProvider.notifier).state++;
   }
@@ -1356,23 +2153,180 @@ Future<void> _sincronizarIncidencias(WidgetRef ref) async {
   final usuarioActualId = ref.read(sessionProvider)?.id;
 
   for (final pendiente in pendientes) {
-    if (pendiente.usuarioId != usuarioActualId) continue;
+    if (pendiente.usuarioId != usuarioActualId ||
+        pendiente.metadata.estado == EstadoOperacionOffline.errorPermanente ||
+        pendiente.metadata.estado == EstadoOperacionOffline.conflicto ||
+        pendiente.metadata.estado == EstadoOperacionOffline.requiereRevision ||
+        (pendiente.metadata.proximoIntento?.isAfter(DateTime.now()) ?? false)) {
+      continue;
+    }
     final fotoSigueExistiendo =
-        pendiente.fotoPath != null && File(pendiente.fotoPath!).existsSync();
+        pendiente.fotoPath != null && _archivoExiste(pendiente.fotoPath);
+    if (pendiente.fotoPath != null && !fotoSigueExistiendo) {
+      await cola.actualizar(
+        pendiente.conMetadata(_metadataArchivoFaltante(pendiente.metadata)),
+      );
+      continue;
+    }
     try {
-      await repo.reportar(
+      await repo.reportarIdempotente(
+        idempotencyKey: pendiente.idempotencyKey,
         vehiculoId: pendiente.vehiculoId,
         descripcion: pendiente.descripcion,
         fotoPath: fotoSigueExistiendo ? pendiente.fotoPath : null,
       );
       await cola.quitar(pendiente.idLocal);
     } on ApiException catch (e) {
-      if (e.status == null) return;
-      await cola.quitar(pendiente.idLocal);
+      await cola.actualizar(
+        pendiente.conMetadata(_metadataTrasError(pendiente.metadata, e)),
+      );
       await _registrarAviso(
         ref,
         idLocal: pendiente.idLocal,
         descripcion: 'Reporte de incidencia',
+        motivo: e.mensaje,
+      );
+      if (e.status == null) return;
+    }
+    ref.read(operacionesTickProvider.notifier).state++;
+  }
+}
+
+/// Reintenta enviar cada evidencia encolada. Las evidencias son planas e
+/// independientes, pero requieren que su recurso padre (solicitud) ya
+/// tenga `idServidor` antes de ser elegibles. Si `folioId` es null
+/// (pendienteVincular), la evidencia no tiene dependencia y es elegible
+/// inmediatamente.
+///
+/// Los archivos se leen desde el almacenamiento durable (no de las rutas
+/// temporales originales que podrían no existir tras reinicio) y se
+/// escriben a archivos temporales para el envío multipart.
+Future<void> _sincronizarEvidencias(WidgetRef ref) async {
+  final cola = ref.read(colaEvidenciasOfflineProvider);
+  final pendientes = await cola.leer();
+  if (pendientes.isEmpty) return;
+
+  final repo = ref.read(evidenciasRepositoryProvider);
+  final usuarioActualId = ref.read(sessionProvider)?.id;
+  final almacenamiento = ref.read(almacenamientoOfflineProvider);
+
+  for (final pendiente in pendientes) {
+    if (pendiente.usuarioId != usuarioActualId ||
+        pendiente.metadata.estado == EstadoOperacionOffline.errorPermanente ||
+        pendiente.metadata.estado == EstadoOperacionOffline.conflicto ||
+        pendiente.metadata.estado == EstadoOperacionOffline.requiereRevision ||
+        (pendiente.metadata.proximoIntento?.isAfter(DateTime.now()) ??
+            false)) {
+      continue;
+    }
+
+    // Si tiene folioId, verificar que el padre (solicitud) ya tenga
+    // idServidor — no enviar evidencia cuya solicitud aún no existe en
+    // el servidor.
+    if (pendiente.folioId != null) {
+      final colaSolicitudes = ref.read(colaSolicitudesOfflineProvider);
+      final solicitudesPendientes = await colaSolicitudes.leer();
+      final padrePendiente = solicitudesPendientes.where(
+        (s) => s.idLocal == pendiente.folioId,
+      );
+      if (padrePendiente.isNotEmpty &&
+          padrePendiente.first.idRemoto == null) {
+        continue; // Padre aún sin resolver — esperar al siguiente ciclo.
+      }
+    }
+
+    // Verificar integridad de archivos durables.
+    bool archivosOk = true;
+    for (final arch in pendiente.archivosOffline) {
+      final verificacion = await almacenamiento.verificarIntegridad(
+        metadata: arch,
+        usuarioId: pendiente.usuarioId,
+        idLocalOperacion: pendiente.idLocal,
+      );
+      if (verificacion != VerificacionArchivo.ok) {
+        await cola.actualizar(
+          pendiente.conMetadata(_metadataArchivoFaltante(pendiente.metadata)),
+        );
+        archivosOk = false;
+        break;
+      }
+    }
+    if (!archivosOk || pendiente.archivosOffline.isEmpty) continue;
+
+    try {
+      await cola.actualizar(
+        pendiente.conMetadata(
+          pendiente.metadata.copiar(
+            estado: EstadoOperacionOffline.sincronizando,
+            leaseHasta: DateTime.now().add(duracionLease),
+            leaseSincronizador: 'evidencia',
+          ),
+        ),
+      );
+
+      // Leer bytes desde durable y escribir a archivos temporales.
+      final tempDir = Directory.systemTemp;
+      final tempPaths = <String>[];
+      for (final arch in pendiente.archivosOffline) {
+        final bytes = await almacenamiento.leer(
+          storageKey: arch.storageKey,
+          usuarioId: pendiente.usuarioId,
+          idLocalOperacion: pendiente.idLocal,
+        );
+        final tempFile = File(
+          '${tempDir.path}/${pendiente.idLocal}_${arch.storageKey}',
+        );
+        await tempFile.writeAsBytes(bytes, flush: true);
+        tempPaths.add(tempFile.path);
+      }
+
+      try {
+        await repo.subirEvidencia(
+          usuarioId: pendiente.usuarioId,
+          tipo: TipoEvidencia.values.byName(pendiente.tipo),
+          fotoPaths: tempPaths,
+          km: pendiente.km,
+          folioId: pendiente.folioId,
+          cargaId: pendiente.cargaId,
+          pendienteVincular: pendiente.pendienteVincular,
+          notas: pendiente.notas,
+          tipoCombustibleCargado: pendiente.tipoCombustibleCargado,
+          litros: pendiente.litros,
+          precioPorLitro: pendiente.precioPorLitro,
+          montoPagado: pendiente.montoPagado,
+          idempotencyKey: pendiente.idempotencyKey,
+        );
+
+        // Éxito — limpiar archivos durables y quitar de cola.
+        for (final arch in pendiente.archivosOffline) {
+          await almacenamiento.eliminar(
+            storageKey: arch.storageKey,
+            usuarioId: pendiente.usuarioId,
+            idLocalOperacion: pendiente.idLocal,
+          );
+        }
+        await cola.quitar(pendiente.idLocal);
+      } finally {
+        // Limpiar archivos temporales independientemente del resultado.
+        for (final path in tempPaths) {
+          final tempFile = File(path);
+          if (await tempFile.exists()) {
+            await tempFile.delete();
+          }
+        }
+      }
+    } on ApiException catch (e) {
+      if (e.status == null) {
+        await cola.actualizar(
+          pendiente.conMetadata(_metadataTrasError(pendiente.metadata, e)),
+        );
+        return;
+      }
+      await cola.registrarError(pendiente.idLocal, e);
+      await _registrarAviso(
+        ref,
+        idLocal: pendiente.idLocal,
+        descripcion: 'Evidencia fotográfica',
         motivo: e.mensaje,
       );
     }
@@ -1411,6 +2365,12 @@ Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
     if (recorrido.usuarioId != perfil.id || recorrido.rol != perfil.rol.name) {
       continue;
     }
+    if (recorrido.metadata.estado == EstadoOperacionOffline.errorPermanente ||
+        recorrido.metadata.estado == EstadoOperacionOffline.conflicto ||
+        recorrido.metadata.estado == EstadoOperacionOffline.requiereRevision ||
+        (recorrido.metadata.proximoIntento?.isAfter(DateTime.now()) ?? false)) {
+      continue;
+    }
     var idServidor = recorrido.idServidor;
     if (idServidor == null) {
       if (recorrido.tipoCombustible.isEmpty) {
@@ -1421,7 +2381,8 @@ Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
         continue;
       }
       try {
-        final creado = await repo.abrirRecorrido(
+        final creado = await repo.abrirRecorridoIdempotente(
+          idempotencyKey: recorrido.idempotencyKey,
           marimbaId: recorrido.marimbaId,
           tipoCombustible: recorrido.tipoCombustible,
           frente: recorrido.frente,
@@ -1438,7 +2399,10 @@ Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
         // pendientes fallarían igual ahora mismo, se reintenta en el
         // próximo evento de reconexión.
         if (e.status == null) return;
-        await colaRecorridos.registrarError(recorrido.idLocal, e.mensaje);
+        await colaRecorridos.actualizarMetadata(
+          recorrido.idLocal,
+          _metadataTrasError(recorrido.metadata, e),
+        );
         ref.read(operacionesTickProvider.notifier).state++;
         continue;
       }
@@ -1454,21 +2418,30 @@ Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
         .toList();
     var despachoFallido = false;
     for (final despacho in despachosDelRecorrido) {
+      if (despacho.metadata.estado == EstadoOperacionOffline.errorPermanente ||
+          despacho.metadata.estado == EstadoOperacionOffline.conflicto ||
+          despacho.metadata.estado == EstadoOperacionOffline.requiereRevision ||
+          (despacho.metadata.proximoIntento?.isAfter(DateTime.now()) ??
+              false)) {
+        despachoFallido = true;
+        break;
+      }
       final archivos = <String?>[
         despacho.fotoHorometroPath,
         despacho.fotoMedidorPath,
         despacho.fotoEvidenciaPath,
       ].whereType<String>();
-      if (archivos.any((ruta) => ruta.isEmpty || !File(ruta).existsSync())) {
-        await colaDespachos.registrarError(
+      if (archivos.any((ruta) => ruta.isEmpty || !_archivoExiste(ruta))) {
+        await colaDespachos.actualizarMetadata(
           despacho.idLocal,
-          'Una evidencia del despacho ya no existe en el dispositivo.',
+          _metadataArchivoFaltante(despacho.metadata),
         );
         despachoFallido = true;
         break;
       }
       try {
-        await repo.agregarDespacho(
+        await repo.agregarDespachoIdempotente(
+          idempotencyKey: despacho.idempotencyKey,
           recorridoId: idServidor,
           tipoCombustible: despacho.tipoCombustible,
           vehiculoDestinoId: despacho.vehiculoDestinoId,
@@ -1488,7 +2461,10 @@ Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
         if (e.status == null) {
           return;
         }
-        await colaDespachos.registrarError(despacho.idLocal, e.mensaje);
+        await colaDespachos.actualizarMetadata(
+          despacho.idLocal,
+          _metadataTrasError(despacho.metadata, e),
+        );
         despachoFallido = true;
         break;
       }
@@ -1512,16 +2488,27 @@ Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
     if (cierre.isEmpty) continue;
     final pendienteCierre = cierre.first;
 
-    if (!File(pendienteCierre.fotoCierrePath).existsSync() ||
-        !File(pendienteCierre.fotoNivelPath).existsSync()) {
-      await colaCierres.registrarError(
+    if (pendienteCierre.metadata.estado ==
+            EstadoOperacionOffline.errorPermanente ||
+        pendienteCierre.metadata.estado == EstadoOperacionOffline.conflicto ||
+        pendienteCierre.metadata.estado ==
+            EstadoOperacionOffline.requiereRevision ||
+        (pendienteCierre.metadata.proximoIntento?.isAfter(DateTime.now()) ??
+            false)) {
+      continue;
+    }
+
+    if (!_archivoExiste(pendienteCierre.fotoCierrePath) ||
+        !_archivoExiste(pendienteCierre.fotoNivelPath)) {
+      await colaCierres.actualizarMetadata(
         pendienteCierre.idLocal,
-        'Una evidencia del cierre ya no existe en el dispositivo.',
+        _metadataArchivoFaltante(pendienteCierre.metadata),
       );
       continue;
     }
     try {
-      await repo.cerrarRecorrido(
+      await repo.cerrarRecorridoIdempotente(
+        idempotencyKey: pendienteCierre.idempotencyKey,
         recorridoId: idServidor,
         kmCierre: pendienteCierre.kmCierre,
         horasEquipoMenorCierre: pendienteCierre.horasEquipoMenorCierre,
@@ -1534,7 +2521,10 @@ Future<void> _sincronizarRecorridosMarimba(WidgetRef ref) async {
       await colaRecorridos.quitar(recorrido.idLocal);
     } on ApiException catch (e) {
       if (e.status == null) return;
-      await colaCierres.registrarError(pendienteCierre.idLocal, e.mensaje);
+      await colaCierres.actualizarMetadata(
+        pendienteCierre.idLocal,
+        _metadataTrasError(pendienteCierre.metadata, e),
+      );
     }
     ref.read(operacionesTickProvider.notifier).state++;
   }
@@ -1569,6 +2559,7 @@ Future<void> sincronizarSolicitudesOffline(WidgetRef ref) async {
   await _sincronizarComprobarCarga(ref);
   await _sincronizarCerrarDia(ref);
   await _sincronizarIncidencias(ref);
+  await _sincronizarEvidencias(ref);
   await _sincronizarRecorridosMarimba(ref);
 }
 

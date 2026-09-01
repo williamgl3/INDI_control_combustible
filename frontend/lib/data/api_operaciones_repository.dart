@@ -325,6 +325,39 @@ class ApiOperacionesRepository implements OperacionesRepository {
     List<SolicitudPartida>? partidas,
     List<ComprobanteEstacionCarga>? comprobantes,
   }) async {
+    return registrarCargaIdempotente(
+      idempotencyKey: '',
+      choferId: choferId,
+      vehiculoId: vehiculoId,
+      folioAutorizacion: folioAutorizacion,
+      foliosAdicionales: foliosAdicionales,
+      litrosCargados: litrosCargados,
+      kmAlCargar: kmAlCargar,
+      gasolinera: gasolinera,
+      fotoTicketPath: fotoTicketPath,
+      fotoTableroPath: fotoTableroPath,
+      litrosDetectadosOcr: litrosDetectadosOcr,
+      partidas: partidas,
+      comprobantes: comprobantes,
+    );
+  }
+
+  @override
+  Future<Carga> registrarCargaIdempotente({
+    required String idempotencyKey,
+    required String choferId,
+    required String vehiculoId,
+    required String folioAutorizacion,
+    List<String>? foliosAdicionales,
+    required double litrosCargados,
+    required double kmAlCargar,
+    required String gasolinera,
+    String? fotoTicketPath,
+    String? fotoTableroPath,
+    double? litrosDetectadosOcr,
+    List<SolicitudPartida>? partidas,
+    List<ComprobanteEstacionCarga>? comprobantes,
+  }) async {
     final data = await _client.postMultipart(
       '/cargas',
       campos: {
@@ -349,6 +382,9 @@ class ApiOperacionesRepository implements OperacionesRepository {
           'litrosDetectadosOcr': '$litrosDetectadosOcr',
       },
       archivos: {'fotoTicket': fotoTicketPath, 'fotoTablero': fotoTableroPath},
+      headers: {
+        if (idempotencyKey.isNotEmpty) 'Idempotency-Key': idempotencyKey,
+      },
     );
     final respuesta = data as Map<String, dynamic>;
     final carga = Carga.fromJson(
@@ -370,10 +406,30 @@ class ApiOperacionesRepository implements OperacionesRepository {
     required double kmFinal,
     required String fotoTableroPath,
   }) async {
+    return cerrarDiaIdempotente(
+      idempotencyKey: '',
+      choferId: choferId,
+      cargaId: cargaId,
+      kmFinal: kmFinal,
+      fotoTableroPath: fotoTableroPath,
+    );
+  }
+
+  @override
+  Future<CierreDia> cerrarDiaIdempotente({
+    required String idempotencyKey,
+    required String choferId,
+    required String cargaId,
+    required double kmFinal,
+    required String fotoTableroPath,
+  }) async {
     final data = await _client.postMultipart(
       '/cierres-dia',
       campos: {'cargaId': cargaId, 'kmFinal': '$kmFinal'},
       archivos: {'fotoTablero': fotoTableroPath},
+      headers: {
+        if (idempotencyKey.isNotEmpty) 'Idempotency-Key': idempotencyKey,
+      },
     );
     final cierre = CierreDia.fromJson(data as Map<String, dynamic>);
     _cierres = [..._cierres, cierre];
