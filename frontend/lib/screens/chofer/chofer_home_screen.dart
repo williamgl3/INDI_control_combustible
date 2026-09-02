@@ -615,7 +615,7 @@ class _SolicitudTile extends StatelessWidget {
                     solicitud.comentario!,
                     style: Theme.of(
                       context,
-                    ).textTheme.bodySmall?.copyWith(color: colors.error),
+                    ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
                   ),
                 ],
               ],

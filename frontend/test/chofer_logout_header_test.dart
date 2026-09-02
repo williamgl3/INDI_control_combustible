@@ -8,9 +8,12 @@ import 'package:indi_combustible/core/session_provider.dart';
 import 'package:indi_combustible/data/auth_repository.dart';
 import 'package:indi_combustible/router/app_router.dart';
 import 'package:indi_combustible/router/route_paths.dart';
+import 'package:indi_combustible/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'mocks/mock_auth_repository.dart';
+import 'mocks/mock_operaciones_repository.dart';
+import 'mocks/mock_vehiculos_repository.dart';
 import 'test_helpers.dart';
 
 void main() {
@@ -173,6 +176,82 @@ void main() {
     await tester.tap(find.text('Cancelar'));
     await tester.pumpAndSettle();
     expect(await cola.leer(), hasLength(1));
+  });
+
+  testWidgets('comentario contextual usa neutral y rechazo conserva error', (
+    tester,
+  ) async {
+    final operaciones = MockOperacionesRepository();
+    final vehiculos = MockVehiculosRepository();
+    await tester.runAsync(() async {
+      final contextual = await operaciones.enviarSolicitud(
+        idempotencyKey: '00000000-0000-4000-8000-000000000101',
+        payloadFingerprint: 'b' * 64,
+        choferId: 'mock-chofer-1',
+        vehiculo: vehiculos.todos.first,
+        litrosSolicitados: 20,
+        actividad: 'Prueba contextual',
+        fechaProgramada: DateTime(2026, 9, 5),
+      );
+      await operaciones.resolverSolicitud(
+        solicitudId: contextual.id,
+        aprobar: true,
+        resueltaPor: 'mock-admin-1',
+        litrosAutorizados: 10,
+        motivo: 'Es fin de semana',
+      );
+      final rechazada = await operaciones.enviarSolicitud(
+        idempotencyKey: '00000000-0000-4000-8000-000000000102',
+        payloadFingerprint: 'c' * 64,
+        choferId: 'mock-chofer-1',
+        vehiculo: vehiculos.todos.first,
+        litrosSolicitados: 30,
+        actividad: 'Prueba rechazada',
+        fechaProgramada: DateTime(2026, 9, 5),
+      );
+      await operaciones.resolverSolicitud(
+        solicitudId: rechazada.id,
+        aprobar: false,
+        resueltaPor: 'mock-admin-1',
+        motivo: 'Solicitud rechazada por prueba',
+      );
+    });
+
+    final container = makeTestContainer(
+      overridesExtra: [
+        operacionesRepositoryProvider.overrideWithValue(operaciones),
+        vehiculosRepositoryProvider.overrideWithValue(vehiculos),
+      ],
+    );
+    addTearDown(container.dispose);
+    await pumpTestApp(tester, container: container);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Usuario'),
+      'chofer1',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Contrase\u00f1a'),
+      'chofer123',
+    );
+    await tester.tap(find.text('Ingresar'));
+    // El Inicio con una carga aprobada conserva una animacion operativa;
+    // avanzar un tiempo acotado evita que el test dependa de que todas las
+    // animaciones queden inactivas para comprobar este estilo estatico.
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+
+    final aviso = find.text('Es fin de semana');
+    expect(aviso, findsOneWidget);
+    final textoAviso = tester.widget<Text>(aviso);
+    expect(textoAviso.style?.color, tester.element(aviso).colors.textMuted);
+    final badgeRechazado = find.text('RECHAZADO');
+    expect(badgeRechazado, findsOneWidget);
+    final textoRechazado = tester.widget<Text>(badgeRechazado);
+    expect(
+      textoRechazado.style?.color,
+      tester.element(badgeRechazado).colors.error,
+    );
+    expect(tester.takeException(), isNull);
   });
 }
 
