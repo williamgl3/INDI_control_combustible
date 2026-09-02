@@ -3,43 +3,68 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/session_provider.dart';
+import '../core/catalogos_vehiculo.dart';
+import '../core/capacidades_rol.dart';
 import '../models/carga.dart';
 import '../models/perfil.dart';
 import '../models/solicitud_autorizacion.dart';
 import '../screens/administrativo/administrativo_home_screen.dart';
 import '../screens/administrativo/chofer_detalle_screen.dart';
+import '../screens/bienvenida/bienvenida_screen.dart';
+import '../screens/chofer/centro_sincronizacion_screen.dart';
 import '../screens/chofer/cerrar_dia_screen.dart';
+import '../screens/chofer/chofer_dashboard_screen.dart';
 import '../screens/chofer/chofer_home_screen.dart';
+import '../screens/chofer/chofer_home_shell.dart';
 import '../screens/chofer/comprobar_carga_screen.dart';
+import '../screens/chofer/estadisticas_carga_screen.dart';
+import '../screens/chofer/mi_perfil_screen.dart';
+import '../screens/chofer/mis_solicitudes_screen.dart';
 import '../screens/chofer/respuesta_solicitud_screen.dart';
 import '../screens/chofer/solicitar_carga_screen.dart';
+import '../screens/chofer/subir_evidencias_screen.dart';
+import '../screens/chofer/recorrido_marimba_screen.dart';
+import '../screens/chofer/tipo_operacion_screen.dart';
 import '../screens/login/login_screen.dart';
 import '../screens/recuperar_password/recuperar_password_screen.dart';
+import '../screens/recuperar_password/restablecer_password_screen.dart';
 import '../screens/registro_chofer/registro_chofer_screen.dart';
+import 'app_route_transitions.dart';
 import 'placeholder_screen.dart';
 import 'route_paths.dart';
 
-/// Transición fade + slide sutil compartida por todas las rutas, para que
-/// la navegación se sienta consistente en vez del slide por defecto de la
-/// plataforma.
-CustomTransitionPage<void> _conTransicion(GoRouterState state, Widget child) {
-  return CustomTransitionPage<void>(
-    key: state.pageKey,
-    child: child,
-    transitionDuration: const Duration(milliseconds: 260),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curva = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-      return FadeTransition(
-        opacity: curva,
-        child: SlideTransition(
-          position: Tween<Offset>(begin: const Offset(0, 0.03), end: Offset.zero)
-              .animate(curva),
-          child: child,
-        ),
-      );
-    },
-  );
-}
+Page<void> _paginaAuth(
+  BuildContext context,
+  GoRouterState state,
+  Widget child,
+) => buildAppTransitionPage(
+  context: context,
+  pageKey: state.pageKey,
+  child: child,
+  kind: AppRouteTransitionKind.authentication,
+);
+
+Page<void> _paginaPrincipal(
+  BuildContext context,
+  GoRouterState state,
+  Widget child,
+) => buildAppTransitionPage(
+  context: context,
+  pageKey: state.pageKey,
+  child: child,
+  kind: AppRouteTransitionKind.primary,
+);
+
+Page<void> _paginaDetalle(
+  BuildContext context,
+  GoRouterState state,
+  Widget child,
+) => buildAppTransitionPage(
+  context: context,
+  pageKey: state.pageKey,
+  child: child,
+  kind: AppRouteTransitionKind.detail,
+);
 
 /// Notifica a GoRouter cuando cambia la sesión, para que reevalúe el
 /// guard de rutas (`redirect`) sin necesidad de navegación manual.
@@ -59,20 +84,41 @@ String? _redirigirSegunSesion(Perfil? perfil, GoRouterState state) {
 
   if (perfil == null) {
     // Sin sesión: solo se permite ver rutas públicas.
-    return esPublica ? null : RoutePaths.login;
+    return esPublica ? null : RoutePaths.bienvenida;
   }
 
   // Con sesión: no debe poder volver a login/registro/recuperar.
+  // El supervisor opera la marimba con las mismas pantallas que un chofer
+  // (solicitar/comprobar carga + su propia pantalla de despacho) — ver
+  // `Perfil.esSupervisor`.
+  final esDelPanelDeChofer = perfil.esChofer || perfil.esSupervisor;
   if (esPublica) {
-    return perfil.esChofer ? RoutePaths.chofer : RoutePaths.administrativo;
+    return esDelPanelDeChofer ? RoutePaths.chofer : RoutePaths.administrativo;
   }
 
   final esRutaDeChofer = destino.startsWith(RoutePaths.chofer);
   final esRutaDeAdministrativo = destino.startsWith(RoutePaths.administrativo);
-  if (esRutaDeChofer && !perfil.esChofer) {
+  final esRutaExclusivaSupervisor =
+      destino == RoutePaths.choferRegistrarDespacho ||
+      destino == RoutePaths.choferRecorridoMarimba;
+  if (destino == RoutePaths.choferSolicitar) {
+    return RoutePaths.choferTipoOperacion;
+  }
+  if (destino.startsWith('${RoutePaths.choferSolicitar}/')) {
+    final categoria = categoriaSolicitudDesdeRuta(
+      state.pathParameters['categoria'],
+    );
+    if (categoria == null || !puedeSolicitarCategoria(perfil.rol, categoria)) {
+      return RoutePaths.choferTipoOperacion;
+    }
+  }
+  if (esRutaDeChofer && !esDelPanelDeChofer) {
     return RoutePaths.administrativo;
   }
   if (esRutaDeAdministrativo && !perfil.esAdministrativo) {
+    return RoutePaths.chofer;
+  }
+  if (esRutaExclusivaSupervisor && !perfil.esSupervisor) {
     return RoutePaths.chofer;
   }
 
@@ -83,7 +129,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = _SessionRefreshNotifier(ref);
 
   return GoRouter(
-    initialLocation: RoutePaths.login,
     refreshListenable: refreshNotifier,
     redirect: (context, state) {
       final perfil = ref.read(sessionProvider);
@@ -91,40 +136,157 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(
+        path: RoutePaths.bienvenida,
+        pageBuilder: (context, state) =>
+            _paginaAuth(context, state, const BienvenidaScreen()),
+      ),
+      GoRoute(
         path: RoutePaths.login,
-        pageBuilder: (context, state) => _conTransicion(state, const LoginScreen()),
+        pageBuilder: (context, state) =>
+            _paginaAuth(context, state, const LoginScreen()),
       ),
       GoRoute(
         path: RoutePaths.registroChofer,
         pageBuilder: (context, state) =>
-            _conTransicion(state, const RegistroChoferScreen()),
+            _paginaAuth(context, state, const RegistroChoferScreen()),
       ),
       GoRoute(
         path: RoutePaths.recuperarPassword,
         pageBuilder: (context, state) =>
-            _conTransicion(state, const RecuperarPasswordScreen()),
+            _paginaAuth(context, state, const RecuperarPasswordScreen()),
       ),
       GoRoute(
-        path: RoutePaths.chofer,
+        path: RoutePaths.restablecerPassword,
+        pageBuilder: (context, state) => _paginaAuth(
+          context,
+          state,
+          RestablecerPasswordScreen(
+            token: state.uri.queryParameters['token'] ?? '',
+          ),
+        ),
+      ),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) =>
+            ChoferHomeShell(navigationShell: navigationShell),
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RoutePaths.chofer,
+                pageBuilder: (context, state) =>
+                    _paginaPrincipal(context, state, const ChoferHomeScreen()),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RoutePaths.choferSolicitudes,
+                pageBuilder: (context, state) => _paginaPrincipal(
+                  context,
+                  state,
+                  const MisSolicitudesScreen(mostrarComoTab: true),
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RoutePaths.choferSubirEvidencias,
+                pageBuilder: (context, state) => _paginaPrincipal(
+                  context,
+                  state,
+                  const SubirEvidenciasScreen(mostrarComoTab: true),
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: RoutePaths.choferPerfil,
+                pageBuilder: (context, state) => _paginaPrincipal(
+                  context,
+                  state,
+                  const MiPerfilScreen(
+                    mostrarComoTab: true,
+                    mostrarCerrarSesion: true,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      GoRoute(
+        path: RoutePaths.choferTipoOperacion,
+        // Sin `ChoferMobileWrapper` — a diferencia de las demás rutas de
+        // chofer, esta pantalla ya maneja su propio ancho responsivo
+        // (sidebar + contenido, igual que `ChoferHomeShell`, que tampoco
+        // lo usa a este nivel). Envolverla aquí encogía la pantalla
+        // completa (sidebar y contenido juntos) a 480px, en vez de
+        // dejar solo el contenido capado.
         pageBuilder: (context, state) =>
-            _conTransicion(state, const ChoferHomeScreen()),
+            _paginaPrincipal(context, state, const TipoOperacionScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.choferSolicitarConCategoria,
+        // Sin `ChoferMobileWrapper` — igual que `choferTipoOperacion`, esta
+        // pantalla ya maneja su propio ancho con `ContenidoResponsivo`.
+        // Envolverla aquí anidaba dos `Center`/`ConstrainedBox` (el de
+        // `ChoferMobileWrapper` a 720px + el propio de la pantalla), lo que
+        // además rompía la apertura del menú de `SelectorVehiculo` en
+        // pruebas de widget (el toque no llegaba a abrir el dropdown).
+        pageBuilder: (context, state) {
+          final categoria = categoriaSolicitudDesdeRuta(
+            state.pathParameters['categoria'],
+          );
+          if (categoria == null) {
+            return _paginaDetalle(
+              context,
+              state,
+              RutaInvalidaScreen(
+                onVolver: () => context.go(RoutePaths.choferTipoOperacion),
+              ),
+            );
+          }
+          return _paginaDetalle(
+            context,
+            state,
+            SolicitarCargaScreen(categoria: categoria),
+          );
+        },
       ),
       GoRoute(
         path: RoutePaths.choferSolicitar,
+        redirect: (_, _) => RoutePaths.choferTipoOperacion,
+      ),
+      GoRoute(
+        path: RoutePaths.choferRegistrarDespacho,
+        redirect: (_, _) => RoutePaths.choferRecorridoMarimba,
+      ),
+      GoRoute(
+        path: RoutePaths.choferRecorridoMarimba,
         pageBuilder: (context, state) =>
-            _conTransicion(state, const SolicitarCargaScreen()),
+            _paginaDetalle(context, state, const RecorridoMarimbaScreen()),
       ),
       GoRoute(
         path: RoutePaths.choferRespuesta,
         pageBuilder: (context, state) {
           final solicitud = state.extra;
           if (solicitud is! SolicitudAutorizacion) {
-            return _conTransicion(
+            return _paginaDetalle(
+              context,
               state,
               RutaInvalidaScreen(onVolver: () => context.go(RoutePaths.chofer)),
             );
           }
-          return _conTransicion(state, RespuestaSolicitudScreen(solicitud: solicitud));
+          return _paginaDetalle(
+            context,
+            state,
+            RespuestaSolicitudScreen(solicitud: solicitud),
+          );
         },
       ),
       GoRoute(
@@ -132,12 +294,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) {
           final folio = state.extra;
           if (folio is! String) {
-            return _conTransicion(
+            return _paginaDetalle(
+              context,
               state,
               RutaInvalidaScreen(onVolver: () => context.go(RoutePaths.chofer)),
             );
           }
-          return _conTransicion(state, ComprobarCargaScreen(folioAutorizacion: folio));
+          return _paginaDetalle(
+            context,
+            state,
+            ComprobarCargaScreen(folioAutorizacion: folio),
+          );
         },
       ),
       GoRoute(
@@ -145,30 +312,78 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) {
           final carga = state.extra;
           if (carga is! Carga) {
-            return _conTransicion(
+            return _paginaDetalle(
+              context,
               state,
               RutaInvalidaScreen(onVolver: () => context.go(RoutePaths.chofer)),
             );
           }
-          return _conTransicion(state, CerrarDiaScreen(carga: carga));
+          return _paginaDetalle(context, state, CerrarDiaScreen(carga: carga));
         },
       ),
       GoRoute(
-        path: RoutePaths.administrativo,
+        path: RoutePaths.choferDashboard,
         pageBuilder: (context, state) =>
-            _conTransicion(state, const AdministrativoHomeScreen()),
+            _paginaPrincipal(context, state, const ChoferDashboardScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.choferCentroSincronizacion,
+        pageBuilder: (context, state) => _paginaPrincipal(
+          context,
+          state,
+          const CentroSincronizacionScreen(),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.choferEstadisticasCarga,
+        pageBuilder: (context, state) =>
+            _paginaPrincipal(context, state, const EstadisticasCargaScreen()),
+      ),
+      GoRoute(
+        path: RoutePaths.administrativo,
+        pageBuilder: (context, state) => _paginaPrincipal(
+          context,
+          state,
+          AdministrativoHomeScreen(
+            seccionInicial: state.uri.queryParameters['seccion'],
+            solicitudIdInicial: state.uri.queryParameters['solicitudId'],
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.administrativoPerfil,
+        pageBuilder: (context, state) => _paginaPrincipal(
+          context,
+          state,
+          const AdministrativoHomeScreen(seccionInicial: 'perfil'),
+        ),
+      ),
+      GoRoute(
+        path: RoutePaths.administrativoMarimba,
+        pageBuilder: (context, state) => _paginaPrincipal(
+          context,
+          state,
+          const AdministrativoHomeScreen(mostrarMarimba: true),
+        ),
       ),
       GoRoute(
         path: RoutePaths.administrativoChoferDetalle,
         pageBuilder: (context, state) {
           final chofer = state.extra;
           if (chofer is! Perfil) {
-            return _conTransicion(
+            return _paginaDetalle(
+              context,
               state,
-              RutaInvalidaScreen(onVolver: () => context.go(RoutePaths.administrativo)),
+              RutaInvalidaScreen(
+                onVolver: () => context.go(RoutePaths.administrativo),
+              ),
             );
           }
-          return _conTransicion(state, ChoferDetalleScreen(chofer: chofer));
+          return _paginaDetalle(
+            context,
+            state,
+            ChoferDetalleScreen(chofer: chofer),
+          );
         },
       ),
     ],

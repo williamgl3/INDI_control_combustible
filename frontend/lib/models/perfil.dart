@@ -1,17 +1,20 @@
 import 'package:flutter/foundation.dart';
 
-import 'vehiculo.dart';
-
-/// Rol del usuario autenticado. Solo existen estos dos roles.
-enum RolUsuario { chofer, administrativo }
+/// Rol del usuario autenticado. `superadmin` puede todo lo que
+/// `administrativo` más crear cuentas `administrativo` (ver
+/// `AuthRepository.crearAdministrativo`) — la restricción real vive en el
+/// backend (`requireRole('superadmin')`), esto solo controla qué ve/puede
+/// tocar la UI.
+enum RolUsuario { chofer, administrativo, superadmin, supervisor }
 
 /// Perfil de un usuario autenticado.
 ///
-/// Si [rol] es [RolUsuario.chofer], [vehiculo] siempre está presente:
-/// sus datos se capturan una sola vez en /registro-chofer, en la misma
-/// transacción que crea el perfil, y quedan embebidos aquí (no como
-/// referencia a un catálogo externo). Esto permite precargarlos en
-/// /chofer/comprobar sin volver a pedirlos.
+/// Ya NO incluye un vehículo embebido: los vehículos viven en un
+/// catálogo compartido (`Vehiculo`, administrado por el área
+/// administrativa) porque varios choferes pueden usar distintas unidades
+/// en días distintos — fijar un vehículo por chofer generaba
+/// incongruencias. El chofer elige su vehículo en cada solicitud/
+/// comprobación de carga, no al registrarse.
 ///
 /// Dato que vendrá del backend en el futuro (hoy solo existe vía mocks).
 @immutable
@@ -19,46 +22,108 @@ class Perfil {
   const Perfil({
     required this.id,
     required this.usuario,
-    required this.nombreCompleto,
+    required this.nombre,
+    this.apellidoPaterno,
+    this.apellidoMaterno,
     required this.correo,
-    required this.edad,
+    this.fechaNacimiento,
     required this.rol,
-    this.vehiculo,
-  }) : assert(
-          rol != RolUsuario.chofer || vehiculo != null,
-          'Un perfil de chofer siempre debe tener vehículo embebido.',
-        );
+    this.activo = true,
+    this.creadoEn,
+    this.ultimaActividad,
+    this.version = '0',
+  });
 
   final String id;
   final String usuario;
-  final String nombreCompleto;
+  final String nombre;
+
+  /// `null` para cuentas administrativas dadas de alta desde el panel
+  /// (`AuthRepository.crearAdministrativo`), que solo piden
+  /// nombre/usuario/correo/password — un chofer siempre lo trae.
+  final String? apellidoPaterno;
+  final String? apellidoMaterno;
   final String correo;
-  final int edad;
+
+  /// `null` para cuentas administrativas dadas de alta desde el panel,
+  /// por el mismo motivo que [apellidoPaterno].
+  final DateTime? fechaNacimiento;
   final RolUsuario rol;
 
-  /// Solo presente (y obligatorio) cuando [rol] == [RolUsuario.chofer].
-  final Vehiculo? vehiculo;
+  /// `false` si el usuario fue desactivado por un administrativo (ver
+  /// `AuthRepository.cambiarEstado`). Un usuario inactivo no puede
+  /// iniciar sesión — lo valida el backend, aquí solo se refleja en la UI
+  /// (badge en el directorio de choferes/administrativos).
+  final bool activo;
+  final DateTime? creadoEn;
+  final DateTime? ultimaActividad;
+  final String version;
 
   bool get esChofer => rol == RolUsuario.chofer;
-  bool get esAdministrativo => rol == RolUsuario.administrativo;
+
+  /// `true` para `administrativo` Y para `superadmin` — un superadmin
+  /// tiene todos los permisos operativos de un administrativo, así que
+  /// cualquier chequeo de "¿es del área administrativa?" (ej. el guard de
+  /// rutas) debe incluirlo. Para la acción exclusiva de superadmin (crear/
+  /// gestionar cuentas admin), usa [esSuperAdmin] en vez de este getter.
+  bool get esAdministrativo =>
+      rol == RolUsuario.administrativo || rol == RolUsuario.superadmin;
+
+  bool get esSuperAdmin => rol == RolUsuario.superadmin;
+
+  /// Opera la marimba en campo: carga a granel + despachos hacia maquinaria.
+  /// Usa las mismas pantallas de solicitar/comprobar carga que un chofer
+  /// (ver guard de rutas), más su propia pantalla de despacho.
+  bool get esSupervisor => rol == RolUsuario.supervisor;
+
+  String get nombreCompleto => [
+    nombre,
+    if (apellidoPaterno != null && apellidoPaterno!.isNotEmpty) apellidoPaterno,
+    if (apellidoMaterno != null && apellidoMaterno!.isNotEmpty) apellidoMaterno,
+  ].join(' ');
+
+  /// Edad calculada desde [fechaNacimiento] — no se guarda por separado.
+  /// `null` si el perfil no trae fecha de nacimiento (cuentas
+  /// administrativas dadas de alta desde el panel).
+  int? get edad {
+    final nacimiento = fechaNacimiento;
+    if (nacimiento == null) return null;
+    final hoy = DateTime.now();
+    var edad = hoy.year - nacimiento.year;
+    final aunNoCumple =
+        hoy.month < nacimiento.month ||
+        (hoy.month == nacimiento.month && hoy.day < nacimiento.day);
+    if (aunNoCumple) edad--;
+    return edad;
+  }
 
   Perfil copyWith({
     String? id,
     String? usuario,
-    String? nombreCompleto,
+    String? nombre,
+    String? apellidoPaterno,
+    String? apellidoMaterno,
     String? correo,
-    int? edad,
+    DateTime? fechaNacimiento,
     RolUsuario? rol,
-    Vehiculo? vehiculo,
+    bool? activo,
+    DateTime? creadoEn,
+    DateTime? ultimaActividad,
+    String? version,
   }) {
     return Perfil(
       id: id ?? this.id,
       usuario: usuario ?? this.usuario,
-      nombreCompleto: nombreCompleto ?? this.nombreCompleto,
+      nombre: nombre ?? this.nombre,
+      apellidoPaterno: apellidoPaterno ?? this.apellidoPaterno,
+      apellidoMaterno: apellidoMaterno ?? this.apellidoMaterno,
       correo: correo ?? this.correo,
-      edad: edad ?? this.edad,
+      fechaNacimiento: fechaNacimiento ?? this.fechaNacimiento,
       rol: rol ?? this.rol,
-      vehiculo: vehiculo ?? this.vehiculo,
+      activo: activo ?? this.activo,
+      creadoEn: creadoEn ?? this.creadoEn,
+      ultimaActividad: ultimaActividad ?? this.ultimaActividad,
+      version: version ?? this.version,
     );
   }
 
@@ -66,13 +131,22 @@ class Perfil {
     return Perfil(
       id: json['id'] as String,
       usuario: json['usuario'] as String,
-      nombreCompleto: json['nombreCompleto'] as String,
+      nombre: json['nombre'] as String,
+      apellidoPaterno: json['apellidoPaterno'] as String?,
+      apellidoMaterno: json['apellidoMaterno'] as String?,
       correo: json['correo'] as String,
-      edad: json['edad'] as int,
+      fechaNacimiento: json['fechaNacimiento'] != null
+          ? DateTime.parse(json['fechaNacimiento'] as String)
+          : null,
       rol: RolUsuario.values.byName(json['rol'] as String),
-      vehiculo: json['vehiculo'] == null
+      activo: json['activo'] as bool? ?? true,
+      creadoEn: json['creadoEn'] == null
           ? null
-          : Vehiculo.fromJson(json['vehiculo'] as Map<String, dynamic>),
+          : DateTime.parse(json['creadoEn'] as String),
+      ultimaActividad: json['ultimaActividad'] == null
+          ? null
+          : DateTime.parse(json['ultimaActividad'] as String),
+      version: json['version'] as String? ?? '0',
     );
   }
 
@@ -80,11 +154,20 @@ class Perfil {
     return {
       'id': id,
       'usuario': usuario,
-      'nombreCompleto': nombreCompleto,
+      'nombre': nombre,
+      'apellidoPaterno': apellidoPaterno,
+      'apellidoMaterno': apellidoMaterno,
       'correo': correo,
-      'edad': edad,
+      'fechaNacimiento': fechaNacimiento == null
+          ? null
+          : '${fechaNacimiento!.year.toString().padLeft(4, '0')}-'
+                '${fechaNacimiento!.month.toString().padLeft(2, '0')}-'
+                '${fechaNacimiento!.day.toString().padLeft(2, '0')}',
       'rol': rol.name,
-      'vehiculo': vehiculo?.toJson(),
+      'activo': activo,
+      'creadoEn': creadoEn?.toIso8601String(),
+      'ultimaActividad': ultimaActividad?.toIso8601String(),
+      'version': version,
     };
   }
 
@@ -93,14 +176,31 @@ class Perfil {
     return other is Perfil &&
         other.id == id &&
         other.usuario == usuario &&
-        other.nombreCompleto == nombreCompleto &&
+        other.nombre == nombre &&
+        other.apellidoPaterno == apellidoPaterno &&
+        other.apellidoMaterno == apellidoMaterno &&
         other.correo == correo &&
-        other.edad == edad &&
+        other.fechaNacimiento == fechaNacimiento &&
         other.rol == rol &&
-        other.vehiculo == vehiculo;
+        other.activo == activo &&
+        other.creadoEn == creadoEn &&
+        other.ultimaActividad == ultimaActividad &&
+        other.version == version;
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, usuario, nombreCompleto, correo, edad, rol, vehiculo);
+  int get hashCode => Object.hash(
+    id,
+    usuario,
+    nombre,
+    apellidoPaterno,
+    apellidoMaterno,
+    correo,
+    fechaNacimiento,
+    rol,
+    activo,
+    creadoEn,
+    ultimaActividad,
+    version,
+  );
 }

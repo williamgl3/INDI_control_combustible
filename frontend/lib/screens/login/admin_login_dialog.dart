@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth_controller.dart';
 import '../../core/validators.dart';
-import '../../data/mock_auth_repository.dart';
-import '../../theme/app_radii.dart';
+import '../../data/auth_repository.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_dialog.dart';
+import '../../widgets/logo_glass.dart';
 
 /// Modal de "Acceso de administrador": la cuenta de administrador es
 /// ÚNICA y la crea el equipo (no hay registro de administrativos), por
@@ -14,8 +15,8 @@ class AdminLoginDialog extends ConsumerStatefulWidget {
   const AdminLoginDialog({super.key});
 
   static Future<void> show(BuildContext context) {
-    return showDialog<void>(
-      context: context,
+    return mostrarDialogoApp<void>(
+      context,
       builder: (_) => const AdminLoginDialog(),
     );
   }
@@ -49,7 +50,9 @@ class _AdminLoginDialogState extends ConsumerState<AdminLoginDialog> {
     });
 
     try {
-      await ref.read(authControllerProvider).login(
+      await ref
+          .read(authControllerProvider)
+          .login(
             usuario: _usuarioController.text.trim(),
             password: _passwordController.text,
           );
@@ -66,114 +69,101 @@ class _AdminLoginDialogState extends ConsumerState<AdminLoginDialog> {
   Widget build(BuildContext context) {
     final colors = context.colors;
 
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: AppRadii.cardRadius),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Form(
-          key: _formKey,
-          autovalidateMode: AutovalidateMode.onUserInteraction,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: colors.primary,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(AppRadii.card),
-                    topRight: Radius.circular(AppRadii.card),
+    return AppDialogShell(
+      header: Container(
+        padding: const EdgeInsets.all(20),
+        color: colors.sidebarBackground,
+        child: Row(
+          children: [
+            const IndiLogo(width: 32),
+            const SizedBox(width: 8),
+            Icon(Icons.shield_outlined, color: colors.sidebarText, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Acceso de administrador',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(color: colors.sidebarText),
+              ),
+            ),
+          ],
+        ),
+      ),
+      child: Form(
+        key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _usuarioController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Usuario del administrador',
+                prefixIcon: Icon(Icons.person_outline),
+              ),
+              validator: Validators.usuario,
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 20),
+            TextFormField(
+              controller: _passwordController,
+              decoration: InputDecoration(
+                labelText: 'Contraseña',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _passwordVisible
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
                   ),
-                ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: colors.primaryOn.withValues(alpha: 0.15),
-                      child: Icon(Icons.admin_panel_settings, color: colors.primaryOn),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Acceso de administrador',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleLarge
-                            ?.copyWith(color: colors.primaryOn),
-                      ),
-                    ),
-                  ],
+                  tooltip: _passwordVisible ? 'Ocultar' : 'Ver',
+                  onPressed: () =>
+                      setState(() => _passwordVisible = !_passwordVisible),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('USUARIO', style: Theme.of(context).textTheme.labelMedium),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _usuarioController,
-                      decoration:
-                          const InputDecoration(hintText: 'Usuario del administrador'),
-                      validator: Validators.usuario,
-                      textInputAction: TextInputAction.next,
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Text('CONTRASEÑA', style: Theme.of(context).textTheme.labelMedium),
-                        const Spacer(),
-                        TextButton(
-                          onPressed: () =>
-                              setState(() => _passwordVisible = !_passwordVisible),
-                          child: Text(_passwordVisible ? 'Ocultar' : 'Ver'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    TextFormField(
-                      controller: _passwordController,
-                      decoration: const InputDecoration(hintText: '••••••••'),
-                      obscureText: !_passwordVisible,
-                      validator: Validators.password,
-                      onFieldSubmitted: (_) => _enviar(),
-                    ),
-                    if (_errorGeneral != null) ...[
-                      const SizedBox(height: 12),
-                      Text(_errorGeneral!, style: TextStyle(color: colors.error)),
-                    ],
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed:
-                                _cargando ? null : () => Navigator.of(context).pop(),
-                            child: const Text('Cancelar'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: _cargando ? null : _enviar,
-                            child: _cargando
-                                ? const SizedBox(
-                                    height: 18,
-                                    width: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : const Text('Ingresar'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              obscureText: !_passwordVisible,
+              validator: Validators.password,
+              onFieldSubmitted: (_) => _enviar(),
+            ),
+            if (_errorGeneral != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorGeneral!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.error),
               ),
             ],
-          ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _cargando
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: const Text('Cancelar'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _cargando ? null : _enviar,
+                    child: _cargando
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Ingresar'),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

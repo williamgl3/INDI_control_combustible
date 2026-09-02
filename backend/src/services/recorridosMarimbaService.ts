@@ -1,0 +1,226 @@
+import Decimal from 'decimal.js';
+import { pool } from '../db/pool';
+import { ApiError } from '../utils/asyncHandler';
+import type { DespachoMarimba, EstadoRecorridoMarimba, RecorridoMarimba, RolUsuario } from '../types';
+import { registrarAuditoria } from './auditoriaService';
+import type { PoolClient } from 'pg';
+import * as despachosService from './despachosMarimbaService';
+import { bloquearInventario } from '../db/inventarioLock';
+
+interface FilaRecorrido {
+  id: string; marimba_id: string; operador_id: string; frente: string; carga_id: string | null;
+  litros_iniciales: string; km_inicio: string | null; km_cierre: string | null;
+  horas_equipo_menor_inicio: string | null; horas_equipo_menor_cierre: string | null;
+  estado: EstadoRecorridoMarimba; litros_despachados_total: string | null;
+  existencia_calculada: string | null; diferencia_conciliacion: string | null;
+  tolerancia_usada: string | null; requiere_revision: boolean; foto_cierre_path: string | null;
+  iniciado_en: Date; cerrado_en: Date | null; registrado_por: string | null;
+  entradas_granel_total: string | null; existencia_fisica: string | null;
+  estado_conciliacion: 'conciliado' | 'diferencia_pendiente' | null;
+  observaciones_cierre: string | null; foto_nivel_path: string | null;
+  tipo_combustible: string | null;
+  responsable_nombre?: string | null; marimba_etiqueta?: string | null;
+}
+const n = (v: string | null): number | null => v === null ? null : Number(v);
+function aRecorrido(f: FilaRecorrido): RecorridoMarimba {
+  return { id:f.id, marimbaId:f.marimba_id, operadorId:f.operador_id, frente:f.frente,
+    cargaId:f.carga_id, litrosIniciales:Number(f.litros_iniciales), kmInicio:n(f.km_inicio),
+    kmCierre:n(f.km_cierre), horasEquipoMenorInicio:n(f.horas_equipo_menor_inicio),
+    horasEquipoMenorCierre:n(f.horas_equipo_menor_cierre), estado:f.estado,
+    litrosDespachadosTotal:n(f.litros_despachados_total), existenciaCalculada:n(f.existencia_calculada),
+    diferenciaConciliacion:n(f.diferencia_conciliacion), toleranciaUsada:n(f.tolerancia_usada),
+    requiereRevision:f.requiere_revision, fotoCierrePath:f.foto_cierre_path,
+    iniciadoEn:f.iniciado_en.toISOString(), cerradoEn:f.cerrado_en?.toISOString() ?? null,
+    registradoPor:f.registrado_por, entradasGranelTotal:n(f.entradas_granel_total),
+    existenciaFisica:n(f.existencia_fisica), estadoConciliacion:f.estado_conciliacion,
+    observacionesCierre:f.observaciones_cierre, fotoNivelPath:f.foto_nivel_path,
+    tipoCombustible:f.tipo_combustible,responsableNombre:f.responsable_nombre??null,
+    marimbaEtiqueta:f.marimba_etiqueta??null };
+}
+
+export async function buscarRecorridoPorId(id:string):Promise<RecorridoMarimba|null>{
+  const {rows}=await pool.query<FilaRecorrido>(`SELECT r.*,
+    NULLIF(trim(concat_ws(' ',u.nombre,u.apellido_paterno,u.apellido_materno)),'') responsable_nombre,
+    COALESCE(v.modelo,v.placas,v.numero_economico) marimba_etiqueta
+    FROM recorridos_marimba r JOIN vehiculos v ON v.id=r.marimba_id
+    JOIN usuarios u ON u.id=r.operador_id WHERE r.id=$1`,[id]);
+  return rows[0]?aRecorrido(rows[0]):null;
+}
+export async function buscarRecorridoAccesible(
+  id:string,actorId:string,rol:RolUsuario,
+):Promise<RecorridoMarimba|null>{
+  const recorrido=await buscarRecorridoPorId(id);
+  if(!recorrido)return null;
+  if(rol==='supervisor'&&recorrido.operadorId!==actorId)return null;
+  if(!['supervisor','administrativo','superadmin'].includes(rol))return null;
+  return recorrido;
+}
+export async function listarRecorridos(f?:{
+  marimbaId?:string|undefined;requiereRevision?:boolean|undefined;
+}):Promise<RecorridoMarimba[]>{
+  const condiciones:string[]=[]; const valores:unknown[]=[];
+  if(f?.marimbaId){valores.push(f.marimbaId);condiciones.push(`marimba_id=$${valores.length}`);}
+  if(f?.requiereRevision!==undefined){valores.push(f.requiereRevision);condiciones.push(`requiere_revision=$${valores.length}`);}
+  const where=condiciones.length?`WHERE ${condiciones.join(' AND ')}`:'';
+  const {rows}=await pool.query<FilaRecorrido>(`SELECT * FROM recorridos_marimba ${where} ORDER BY iniciado_en DESC`,valores);
+  return rows.map(aRecorrido);
+}
+
+export interface ResumenUnidadMarimba {
+  id:string; tipoUnidad:string; placas:string|null; numeroEconomico:string|null;
+  modelo:string|null; activo:boolean; recorridoAbiertoId:string|null;
+  responsableId:string|null;responsableNombre:string|null;fechaApertura:string|null;
+  saldoMagna:string|null;saldoDiesel:string|null;ultimaActividad:string|null;
+  requiereRevision:boolean;
+}
+
+export async function resumenUnidadesAdministrativo():Promise<ResumenUnidadMarimba[]>{
+  const {rows}=await pool.query<{
+    id:string;tipo_unidad:string;placas:string|null;numero_economico:string|null;
+    modelo:string|null;activo:boolean;recorrido_abierto_id:string|null;
+    responsable_id:string|null;responsable_nombre:string|null;fecha_apertura:Date|null;
+    saldo_magna:string|null;saldo_diesel:string|null;ultima_actividad:Date|null;
+    requiere_revision:boolean;
+  }>(`SELECT v.id,v.tipo_unidad,v.placas,v.numero_economico,v.modelo,v.activo,
+      r.id recorrido_abierto_id,r.operador_id responsable_id,
+      NULLIF(trim(concat_ws(' ',u.nombre,u.apellido_paterno,u.apellido_materno)),'') responsable_nombre,
+      r.iniciado_en fecha_apertura,s.saldo_magna,s.saldo_diesel,COALESCE(r.requiere_revision,false) requiere_revision,
+      GREATEST(r.iniciado_en,a.ultima_actividad) ultima_actividad
+    FROM vehiculos v
+    LEFT JOIN LATERAL (
+      SELECT
+        SUM(CASE WHEN tipo_combustible='Magna' THEN CASE WHEN tipo='entrada_granel' THEN litros ELSE -litros END END)::text saldo_magna,
+        SUM(CASE WHEN tipo_combustible='Diésel' THEN CASE WHEN tipo='entrada_granel' THEN litros ELSE -litros END END)::text saldo_diesel
+      FROM movimientos_inventario_marimba WHERE marimba_id=v.id
+    ) s ON true
+    LEFT JOIN LATERAL (
+      SELECT * FROM recorridos_marimba WHERE marimba_id=v.id AND estado='abierto'
+      ORDER BY iniciado_en DESC LIMIT 1
+    ) r ON true
+    LEFT JOIN usuarios u ON u.id=r.operador_id
+    LEFT JOIN LATERAL (
+      SELECT MAX(creado_en) ultima_actividad FROM movimientos_inventario_marimba WHERE marimba_id=v.id
+    ) a ON true
+    WHERE v.tipo_unidad IN ('Marimba','Pipa') ORDER BY v.activo DESC,v.numero_economico,v.placas`);
+  return rows.map((fila)=>({
+    id:fila.id,tipoUnidad:fila.tipo_unidad,placas:fila.placas,
+    numeroEconomico:fila.numero_economico,modelo:fila.modelo,activo:fila.activo,
+    recorridoAbiertoId:fila.recorrido_abierto_id,responsableId:fila.responsable_id,
+    responsableNombre:fila.responsable_nombre,fechaApertura:fila.fecha_apertura?.toISOString()??null,
+    saldoMagna:fila.saldo_magna,saldoDiesel:fila.saldo_diesel,
+    ultimaActividad:fila.ultima_actividad?.toISOString()??null,
+    requiereRevision:fila.requiere_revision,
+  }));
+}
+
+export async function listarRecorridosAdministrativo(f:{
+  marimbaId?:string|undefined;categoria?:'Marimba'|'Pipa'|undefined;tipoCombustible?:string|undefined;
+  estado?:EstadoRecorridoMarimba|undefined;responsableId?:string|undefined;
+  requiereRevision?:boolean|undefined;fechaDesde?:Date|undefined;fechaHasta?:Date|undefined;
+  page:number;limit:number;
+}):Promise<{items:RecorridoMarimba[];total:number;page:number;limit:number;totalPages:number}>{
+  const condiciones:string[]=[];const valores:unknown[]=[];
+  const agregar=(sql:string,valor:unknown)=>{valores.push(valor);condiciones.push(`${sql}$${valores.length}`);};
+  if(f.marimbaId)agregar('r.marimba_id=',f.marimbaId);
+  if(f.categoria)agregar('v.tipo_unidad=',f.categoria);
+  if(f.tipoCombustible)agregar('r.tipo_combustible=',f.tipoCombustible);
+  if(f.estado)agregar('r.estado=',f.estado);
+  if(f.responsableId)agregar('r.operador_id=',f.responsableId);
+  if(f.requiereRevision!==undefined)agregar('r.requiere_revision=',f.requiereRevision);
+  if(f.fechaDesde)agregar('r.iniciado_en>=',f.fechaDesde);
+  if(f.fechaHasta)agregar('r.iniciado_en<=',f.fechaHasta);
+  const where=condiciones.length?`WHERE ${condiciones.join(' AND ')}`:'';
+  const base='FROM recorridos_marimba r JOIN vehiculos v ON v.id=r.marimba_id';
+  const {rows:totalRows}=await pool.query<{total:string}>(`SELECT count(*) total ${base} ${where}`,valores);
+  valores.push(f.limit,(f.page-1)*f.limit);
+  const {rows}=await pool.query<FilaRecorrido>(`SELECT r.*,
+    NULLIF(trim(concat_ws(' ',u.nombre,u.apellido_paterno,u.apellido_materno)),'') responsable_nombre,
+    COALESCE(v.modelo,v.placas,v.numero_economico) marimba_etiqueta
+    ${base} JOIN usuarios u ON u.id=r.operador_id ${where}
+    ORDER BY r.iniciado_en DESC LIMIT $${valores.length-1} OFFSET $${valores.length}`,valores);
+  const total=Number(totalRows[0]?.total??0);
+  return {items:rows.map(aRecorrido),total,page:f.page,limit:f.limit,totalPages:Math.ceil(total/f.limit)};
+}
+
+export async function crearRecorrido(datos:{marimbaId:string;operadorId:string;registradoPor:string;frente:string;
+  tipoCombustible:string;
+  kmInicio?:number|null|undefined;horasEquipoMenorInicio?:number|null|undefined;},clienteExterno?:PoolClient):Promise<RecorridoMarimba>{
+  const cliente=clienteExterno??await pool.connect(); const propia=clienteExterno===undefined;
+  try{
+    if(propia)await cliente.query('BEGIN');
+    await bloquearInventario(cliente,datos.marimbaId,datos.tipoCombustible);
+    const {rows:unidad}=await cliente.query<{tipo_unidad:string;activo:boolean}>(
+      'SELECT tipo_unidad,activo FROM vehiculos WHERE id=$1 FOR UPDATE',[datos.marimbaId]);
+    if(!unidad[0]||!unidad[0].activo||!['Marimba','Pipa'].includes(unidad[0].tipo_unidad))
+      throw new ApiError(404,'La unidad abastecedora no está disponible.');
+    const {rows:operador}=await cliente.query<{rol:string;activo:boolean}>(
+      'SELECT rol,activo FROM usuarios WHERE id=$1 FOR UPDATE',[datos.operadorId]);
+    if(!operador[0]||!operador[0].activo||operador[0].rol!=='supervisor')
+      throw new ApiError(404,'El operador responsable no está disponible.');
+    const saldo=await despachosService.saldoDeMarimba(datos.marimbaId,datos.tipoCombustible,cliente);
+    const {rows}=await cliente.query<FilaRecorrido>(
+      `INSERT INTO recorridos_marimba(marimba_id,operador_id,registrado_por,frente,tipo_combustible,
+       litros_iniciales,km_inicio,horas_equipo_menor_inicio)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [datos.marimbaId,datos.operadorId,datos.registradoPor,datos.frente,datos.tipoCombustible,
+       saldo.toFixed(2),datos.kmInicio??null,datos.horasEquipoMenorInicio??null]);
+    const recorrido=aRecorrido(rows[0]!);
+    await registrarAuditoria({usuarioId:datos.registradoPor,accion:'abrir_recorrido_marimba',
+      entidad:'recorrido_marimba',entidadId:recorrido.id,
+      detalle:{operadorId:datos.operadorId,existenciaInicial:saldo.toString()}},cliente);
+    if(propia)await cliente.query('COMMIT');
+    return recorrido;
+  }catch(e){if(propia)await cliente.query('ROLLBACK');throw e;}finally{if(propia)cliente.release();}
+}
+
+export async function agregarDespacho(recorridoId:string,datos:Omit<Parameters<typeof despachosService.crearDespacho>[0],
+  'recorridoId'|'responsableId'>):Promise<DespachoMarimba>{
+  const recorrido=await buscarRecorridoPorId(recorridoId);
+  if(!recorrido)throw new ApiError(404,'El recorrido no está disponible.');
+  return despachosService.crearDespacho({...datos,recorridoId,responsableId:recorrido.operadorId});
+}
+
+export async function cerrarRecorrido(recorridoId:string,datos:{existenciaFisica:number;fotoCierrePath:string;
+  fotoNivelPath:string;observaciones?:string|null|undefined;kmCierre?:number|null|undefined;
+  horasEquipoMenorCierre?:number|null|undefined;},
+  actorId:string,actorRol:RolUsuario,clienteExterno?:PoolClient):Promise<RecorridoMarimba>{
+  const cliente=clienteExterno??await pool.connect(); const propia=clienteExterno===undefined;
+  try{
+    if(propia)await cliente.query('BEGIN');
+    const {rows}=await cliente.query<FilaRecorrido>('SELECT * FROM recorridos_marimba WHERE id=$1 FOR UPDATE',[recorridoId]);
+    const actual=rows[0]; if(!actual)throw new ApiError(404,'El recorrido no está disponible.');
+    if(actorRol==='supervisor'&&actual.operador_id!==actorId)
+      throw new ApiError(404,'El recorrido no está disponible.');
+    if(actual.estado!=='abierto')throw new ApiError(409,'El recorrido ya está cerrado.');
+    if(!actual.tipo_combustible)throw new ApiError(409,'El recorrido histórico no tiene combustible configurado.');
+    await bloquearInventario(cliente,actual.marimba_id,actual.tipo_combustible);
+    const inicial=new Decimal(actual.litros_iniciales);
+    const totalDespachado=await despachosService.totalDespachadoDeRecorrido(recorridoId,cliente);
+    const {rows:entradasRows}=await cliente.query<{total:string}>(
+      `SELECT COALESCE(SUM(litros),0) total FROM movimientos_inventario_marimba
+       WHERE recorrido_id=$1 AND tipo='entrada_granel'`,[recorridoId]);
+    const entradas=new Decimal(entradasRows[0]!.total);
+    const teorico=inicial.plus(entradas).minus(totalDespachado);
+    const fisico=new Decimal(datos.existenciaFisica);
+    if(fisico.isNegative())throw new ApiError(400,'La existencia física no es válida.');
+    const diferencia=fisico.minus(teorico);
+    const pendiente=!diferencia.equals(0);
+    if(pendiente&&(!datos.observaciones?.trim()||!datos.fotoNivelPath))
+      throw new ApiError(400,'Una diferencia requiere observación y evidencia.');
+    const {rows:cerrado}=await cliente.query<FilaRecorrido>(
+      `UPDATE recorridos_marimba SET estado='cerrado',km_cierre=$1,horas_equipo_menor_cierre=$2,
+       foto_cierre_path=$3,foto_nivel_path=$4,litros_despachados_total=$5,entradas_granel_total=$6,
+       existencia_calculada=$7,existencia_fisica=$8,diferencia_conciliacion=$9,tolerancia_usada=NULL,
+       requiere_revision=$10,estado_conciliacion=$11,observaciones_cierre=$12,cerrado_en=now()
+       WHERE id=$13 RETURNING *`,
+      [datos.kmCierre??null,datos.horasEquipoMenorCierre??null,datos.fotoCierrePath,datos.fotoNivelPath,
+       totalDespachado.toString(),entradas.toString(),teorico.toString(),fisico.toString(),diferencia.toString(),
+       pendiente,pendiente?'diferencia_pendiente':'conciliado',datos.observaciones?.trim()||null,recorridoId]);
+    const resultado=aRecorrido(cerrado[0]!);
+    await registrarAuditoria({usuarioId:actorId,accion:'cerrar_recorrido_marimba',entidad:'recorrido_marimba',
+      entidadId:recorridoId,detalle:{operadorId:actual.operador_id,diferencia:diferencia.toString(),
+        estadoConciliacion:resultado.estadoConciliacion}},cliente);
+    if(propia)await cliente.query('COMMIT');
+    return resultado;
+  }catch(e){if(propia)await cliente.query('ROLLBACK');throw e;}finally{if(propia)cliente.release();}
+}

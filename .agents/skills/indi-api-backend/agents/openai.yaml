@@ -1,0 +1,5 @@
+interface:
+  display_name: "INDI API Backend"
+  short_description: "API Express/PostgreSQL segura y comprobable"
+  default_prompt: "Usa $indi-api-backend para implementar este cambio en la API de INDI Combustible."
+

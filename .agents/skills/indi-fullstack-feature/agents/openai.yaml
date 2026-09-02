@@ -1,0 +1,5 @@
+interface:
+  display_name: "INDI Fullstack Feature"
+  short_description: "Features completas entre Flutter, API y PostgreSQL"
+  default_prompt: "Usa $indi-fullstack-feature para implementar esta feature de extremo a extremo en INDI Combustible."
+

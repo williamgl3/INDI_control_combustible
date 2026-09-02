@@ -4,117 +4,480 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:indi_combustible/core/session_provider.dart';
+import 'package:indi_combustible/core/providers.dart';
 import 'package:indi_combustible/models/perfil.dart';
-import 'package:indi_combustible/models/vehiculo.dart';
+import 'package:indi_combustible/models/panel_marimba.dart';
 import 'package:indi_combustible/router/app_router.dart';
+import 'package:indi_combustible/router/route_paths.dart';
 import 'package:indi_combustible/theme/app_theme.dart';
+import 'mocks/mock_vehiculos_repository.dart';
 
 void main() {
-  Future<GoRouter> pumpApp(WidgetTester tester, {required ProviderContainer container}) async {
+  Future<GoRouter> pumpApp(
+    WidgetTester tester, {
+    required ProviderContainer container,
+  }) async {
     final router = container.read(appRouterProvider);
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: MaterialApp.router(routerConfig: router, theme: AppTheme.light()),
+        child: MaterialApp.router(
+          routerConfig: router,
+          theme: AppTheme.light(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
     return router;
   }
 
-  testWidgets('sin sesión: rutas públicas se muestran, /chofer redirige a /login', (tester) async {
-    final container = ProviderContainer();
-    addTearDown(container.dispose);
-    final router = await pumpApp(tester, container: container);
-
-    router.go('/registro-chofer');
-    await tester.pumpAndSettle();
-    expect(find.text('Registro de chofer'), findsOneWidget);
-
-    router.go('/recuperar-password');
-    await tester.pumpAndSettle();
-    expect(find.text('Recuperar contraseña'), findsOneWidget);
-
-    router.go('/chofer');
-    await tester.pumpAndSettle();
-    expect(find.text('INDI Combustible'), findsOneWidget);
-
-    router.go('/administrativo');
-    await tester.pumpAndSettle();
-    expect(find.text('INDI Combustible'), findsOneWidget);
+  testWidgets('la ruta administrativa de Marimba/Pipa respeta cada rol', (
+    tester,
+  ) async {
+    for (final rol in RolUsuario.values) {
+      final container = ProviderContainer(
+        overrides: [
+          resumenUnidadesMarimbaProvider.overrideWith((ref) async => const []),
+          recorridosAdministrativosMarimbaProvider.overrideWith(
+            (ref, filtros) async => const PaginaRecorridosMarimba(
+              items: [],
+              total: 0,
+              page: 1,
+              limit: 25,
+              totalPages: 0,
+            ),
+          ),
+        ],
+      );
+      container
+          .read(sessionProvider.notifier)
+          .iniciarSesion(
+            Perfil(
+              id: 'panel-${rol.name}',
+              usuario: rol.name,
+              nombre: 'Cuenta',
+              correo: '${rol.name}@example.com',
+              rol: rol,
+            ),
+          );
+      final router = await pumpApp(tester, container: container);
+      router.go('/administrativo/marimba-pipa');
+      await tester.pumpAndSettle();
+      if (rol == RolUsuario.administrativo || rol == RolUsuario.superadmin) {
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          '/administrativo/marimba-pipa',
+        );
+        expect(find.text('Marimba/Pipa'), findsWidgets);
+        router.go(router.routeInformationProvider.value.uri.toString());
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          '/administrativo/marimba-pipa',
+        );
+      } else {
+        expect(router.routeInformationProvider.value.uri.path, '/chofer');
+      }
+      container.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
   });
 
-  testWidgets('con sesión de chofer: puede ver /chofer, no /administrativo, y /login redirige a /chofer', (tester) async {
+  testWidgets(
+    'sin sesión: rutas públicas se muestran, /chofer redirige a /login',
+    (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final router = await pumpApp(tester, container: container);
+
+      router.go('/registro-chofer');
+      await tester.pumpAndSettle();
+      expect(find.text('Regístrate'), findsOneWidget);
+
+      router.go('/recuperar-password');
+      await tester.pumpAndSettle();
+      expect(find.text('Recuperar contraseña'), findsOneWidget);
+
+      router.go('/chofer');
+      await tester.pumpAndSettle();
+      expect(find.text('INDI Combustible'), findsOneWidget);
+
+      router.go('/administrativo');
+      await tester.pumpAndSettle();
+      expect(find.text('INDI Combustible'), findsOneWidget);
+    },
+  );
+
+  testWidgets('chofer no entra por deep link a recorridos de supervisor', (
+    tester,
+  ) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    final router = await pumpApp(tester, container: container);
-
-    container.read(sessionProvider.notifier).iniciarSesion(
+    container
+        .read(sessionProvider.notifier)
+        .iniciarSesion(
           const Perfil(
             id: '1',
             usuario: 'chofer1',
-            nombreCompleto: 'Juan Pérez',
+            nombre: 'Juan',
             correo: 'juan@example.com',
-            edad: 30,
             rol: RolUsuario.chofer,
-            vehiculo: Vehiculo(
-              tipoUnidad: 'camión',
-              modelo: 'NPR 2020',
-              placaONumeroEconomico: 'ABC-123',
-              tipoCombustible: 'diésel',
-              topeSemanal: 500,
-            ),
           ),
         );
+    final router = await pumpApp(tester, container: container);
+    router.go('/chofer/recorrido-marimba');
     await tester.pumpAndSettle();
-
-    router.go('/chofer');
-    await tester.pumpAndSettle();
-    expect(find.text('Hola, Juan'), findsOneWidget);
-
-    router.go('/administrativo');
-    await tester.pumpAndSettle();
-    expect(find.text('Hola, Juan'), findsOneWidget);
-
-    router.go('/login');
-    await tester.pumpAndSettle();
-    expect(find.text('Hola, Juan'), findsOneWidget);
-
-    // Sub-rutas de /administrativo también deben quedar bloqueadas para un
-    // chofer, no solo la ruta exacta.
-    router.go('/administrativo/chofer');
-    await tester.pumpAndSettle();
-    expect(find.text('Hola, Juan'), findsOneWidget);
+    expect(router.routeInformationProvider.value.uri.path, '/chofer');
   });
 
-  testWidgets('extra inválido en /chofer/respuesta y /chofer/comprobar muestra RutaInvalidaScreen', (tester) async {
+  testWidgets('supervisor entra a tipo de operación y ve granel', (
+    tester,
+  ) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    container.read(sessionProvider.notifier).iniciarSesion(
+    container
+        .read(sessionProvider.notifier)
+        .iniciarSesion(
           const Perfil(
-            id: '1',
-            usuario: 'chofer1',
-            nombreCompleto: 'Juan Pérez',
-            correo: 'juan@example.com',
-            edad: 30,
-            rol: RolUsuario.chofer,
-            vehiculo: Vehiculo(
-              tipoUnidad: 'camión',
-              modelo: 'NPR 2020',
-              placaONumeroEconomico: 'ABC-123',
-              tipoCombustible: 'diésel',
-              topeSemanal: 500,
-            ),
+            id: '2',
+            usuario: 'supervisor1',
+            nombre: 'Supervisión',
+            correo: 'supervisor@example.com',
+            rol: RolUsuario.supervisor,
+          ),
+        );
+    final router = await pumpApp(tester, container: container);
+    router.go('/chofer/tipo-operacion');
+    await tester.pumpAndSettle();
+    expect(find.text('Cargar la marimba'), findsOneWidget);
+    expect(find.text('Registrar despacho'), findsOneWidget);
+  });
+
+  testWidgets('supervisor puede abrir evidencias y conserva recorridos', (
+    tester,
+  ) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .iniciarSesion(
+          const Perfil(
+            id: '2',
+            usuario: 'supervisor1',
+            nombre: 'Supervisión',
+            correo: 'supervisor@example.com',
+            rol: RolUsuario.supervisor,
           ),
         );
     final router = await pumpApp(tester, container: container);
 
-    router.go('/chofer/respuesta');
+    router.go('/chofer/subir-evidencias');
     await tester.pumpAndSettle();
-    expect(find.text('Esta pantalla no recibió la información esperada.'), findsOneWidget);
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/chofer/subir-evidencias',
+    );
 
-    await tester.tap(find.text('Volver'));
+    router.go('/chofer/recorrido-marimba');
     await tester.pumpAndSettle();
-    expect(find.text('Hola, Juan'), findsOneWidget);
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/chofer/recorrido-marimba',
+    );
   });
+
+  for (final rol in [RolUsuario.administrativo, RolUsuario.superadmin]) {
+    testWidgets('${rol.name} no abre rutas operativas manualmente', (
+      tester,
+    ) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      container
+          .read(sessionProvider.notifier)
+          .iniciarSesion(
+            Perfil(
+              id: '3',
+              usuario: rol.name,
+              nombre: 'Cuenta administrativa',
+              correo: '${rol.name}@example.com',
+              rol: rol,
+            ),
+          );
+      final router = await pumpApp(tester, container: container);
+
+      for (final ruta in [
+        '/chofer/cerrar-dia',
+        '/chofer/subir-evidencias',
+        '/chofer/recorrido-marimba',
+      ]) {
+        router.go(ruta);
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.path,
+          '/administrativo',
+        );
+      }
+    });
+  }
+
+  testWidgets('rutas semánticas sobreviven deep link y respetan el rol', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        vehiculosRepositoryProvider.overrideWithValue(
+          MockVehiculosRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .iniciarSesion(
+          const Perfil(
+            id: '1',
+            usuario: 'chofer1',
+            nombre: 'Juan',
+            correo: 'juan@example.com',
+            rol: RolUsuario.chofer,
+          ),
+        );
+    final router = await pumpApp(tester, container: container);
+
+    router.go('/chofer/solicitar/vehiculo');
+    await tester.pumpAndSettle();
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/chofer/solicitar/vehiculo',
+    );
+
+    router.go('/chofer/solicitar');
+    await tester.pumpAndSettle();
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/chofer/tipo-operacion',
+    );
+
+    router.go('/chofer/solicitar/inexistente');
+    await tester.pumpAndSettle();
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/chofer/tipo-operacion',
+    );
+
+    router.go('/chofer/solicitar/granel');
+    await tester.pumpAndSettle();
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/chofer/tipo-operacion',
+    );
+  });
+
+  testWidgets('supervisor conserva granel en entrada directa y refresh', (
+    tester,
+  ) async {
+    final repo = MockVehiculosRepository();
+    final container = ProviderContainer(
+      overrides: [vehiculosRepositoryProvider.overrideWithValue(repo)],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .iniciarSesion(
+          const Perfil(
+            id: '2',
+            usuario: 'supervisor1',
+            nombre: 'Supervisión',
+            correo: 'supervisor@example.com',
+            rol: RolUsuario.supervisor,
+          ),
+        );
+    final router = await pumpApp(tester, container: container);
+    router.go('/chofer/solicitar/granel');
+    await tester.pumpAndSettle();
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/chofer/solicitar/granel',
+    );
+    router.go(router.routeInformationProvider.value.uri.toString());
+    await tester.pumpAndSettle();
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/chofer/solicitar/granel',
+    );
+  });
+
+  testWidgets('ruta antigua de despacho redirige al recorrido sin escribir', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        vehiculosRepositoryProvider.overrideWithValue(
+          MockVehiculosRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .iniciarSesion(
+          const Perfil(
+            id: '2',
+            usuario: 'supervisor1',
+            nombre: 'Supervisión',
+            correo: 'supervisor@example.com',
+            rol: RolUsuario.supervisor,
+          ),
+        );
+    final router = await pumpApp(tester, container: container);
+
+    router.go('/chofer/registrar-despacho');
+    await tester.pumpAndSettle();
+
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/chofer/recorrido-marimba',
+    );
+  });
+
+  testWidgets('regreso desde solicitud sin historial usa fallback seguro', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        vehiculosRepositoryProvider.overrideWithValue(
+          MockVehiculosRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .iniciarSesion(
+          const Perfil(
+            id: '1',
+            usuario: 'chofer1',
+            nombre: 'Juan',
+            correo: 'juan@example.com',
+            rol: RolUsuario.chofer,
+          ),
+        );
+    final router = await pumpApp(tester, container: container);
+    router.go('/chofer/solicitar/vehiculo');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, '/chofer');
+  });
+
+  testWidgets('Inicio abre Solicitar con historial y AtrÃ¡s regresa a Inicio', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        vehiculosRepositoryProvider.overrideWithValue(
+          MockVehiculosRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(sessionProvider.notifier)
+        .iniciarSesion(
+          const Perfil(
+            id: '1',
+            usuario: 'chofer1',
+            nombre: 'Juan',
+            correo: 'juan@example.com',
+            rol: RolUsuario.chofer,
+          ),
+        );
+    final router = await pumpApp(tester, container: container);
+    router.go(RoutePaths.chofer);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Solicitar carga'));
+    await tester.pumpAndSettle();
+    expect(router.state.uri.path, RoutePaths.choferTipoOperacion);
+    expect(router.canPop(), isTrue);
+
+    await tester.tap(find.byIcon(Icons.arrow_back));
+    await tester.pumpAndSettle();
+    expect(router.state.uri.path, RoutePaths.chofer);
+  });
+
+  testWidgets(
+    'con sesión de chofer: puede ver /chofer, no /administrativo, y /login redirige a /chofer',
+    (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final router = await pumpApp(tester, container: container);
+
+      container
+          .read(sessionProvider.notifier)
+          .iniciarSesion(
+            Perfil(
+              id: '1',
+              usuario: 'chofer1',
+              nombre: 'Juan',
+              apellidoPaterno: 'Pérez',
+              correo: 'juan@example.com',
+              fechaNacimiento: DateTime(1996, 3, 10),
+              rol: RolUsuario.chofer,
+            ),
+          );
+      await tester.pumpAndSettle();
+
+      router.go('/chofer');
+      await tester.pumpAndSettle();
+      expect(find.text('Hola, Juan'), findsOneWidget);
+
+      router.go('/administrativo');
+      await tester.pumpAndSettle();
+      expect(find.text('Hola, Juan'), findsOneWidget);
+
+      router.go('/login');
+      await tester.pumpAndSettle();
+      expect(find.text('Hola, Juan'), findsOneWidget);
+
+      // Sub-rutas de /administrativo también deben quedar bloqueadas para un
+      // chofer, no solo la ruta exacta.
+      router.go('/administrativo/chofer');
+      await tester.pumpAndSettle();
+      expect(find.text('Hola, Juan'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'extra inválido en /chofer/respuesta y /chofer/comprobar muestra RutaInvalidaScreen',
+    (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      container
+          .read(sessionProvider.notifier)
+          .iniciarSesion(
+            Perfil(
+              id: '1',
+              usuario: 'chofer1',
+              nombre: 'Juan',
+              apellidoPaterno: 'Pérez',
+              correo: 'juan@example.com',
+              fechaNacimiento: DateTime(1996, 3, 10),
+              rol: RolUsuario.chofer,
+            ),
+          );
+      final router = await pumpApp(tester, container: container);
+
+      router.go('/chofer/respuesta');
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Esta pantalla no recibió la información esperada.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Volver'));
+      await tester.pumpAndSettle();
+      expect(find.text('Hola, Juan'), findsOneWidget);
+    },
+  );
 }

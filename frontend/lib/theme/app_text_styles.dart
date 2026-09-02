@@ -5,16 +5,15 @@ import 'app_typography.dart';
 /// Estilos de texto compuestos reutilizados por varias pantallas, para no
 /// reconstruirlos formulario por formulario.
 ///
-/// TODO-SPEC: `formLabel` refleja el patrón "label superior en mayúsculas,
-/// 13px, w800" mencionado por el usuario; falta confirmar letterSpacing y
-/// color exactos contra SPEC.md.
+/// `formLabel` refleja el patrón "label superior en mayúsculas, 13px, w800"
+/// confirmado en SPEC.md.
 class AppTextStyles {
   const AppTextStyles._();
 
   /// Label de formulario en mayúsculas (ej. encabezados de campo en
   /// Login / Registro de chofer / EditarChoferDialog).
   static TextStyle formLabel(Color color) {
-    return AppTypography.manrope(
+    return AppTypography.inter(
       fontSize: 13,
       fontWeight: FontWeight.w800,
       color: color,

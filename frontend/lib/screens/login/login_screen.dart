@@ -1,13 +1,18 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/auth_controller.dart';
 import '../../core/validators.dart';
-import '../../data/mock_auth_repository.dart';
+import '../../data/auth_repository.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_radii.dart';
+import '../../theme/app_spacing.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_elevated_button.dart';
+import '../../widgets/auth_screen_shell.dart';
+import '../../widgets/aviso_error.dart';
 import 'admin_login_dialog.dart';
 
 /// Login de chofer (flujo principal). El acceso de administrador vive en
@@ -24,6 +29,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usuarioController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _passwordFocusNode = FocusNode();
 
   bool _passwordVisible = false;
   bool _cargando = false;
@@ -33,6 +39,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void dispose() {
     _usuarioController.dispose();
     _passwordController.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
@@ -45,7 +52,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
-      await ref.read(authControllerProvider).login(
+      await ref
+          .read(authControllerProvider)
+          .login(
             usuario: _usuarioController.text.trim(),
             password: _passwordController.text,
           );
@@ -61,140 +70,217 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final colors = context.colors;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // TODO-SPEC: gradiente de header PLACEHOLDER hasta tener SPEC.md.
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [colors.info, colors.primary],
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'INDI Combustible',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineLarge
-                              ?.copyWith(color: colors.primaryOn),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Control de combustible en obra',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyLarge
-                              ?.copyWith(color: colors.primaryOn.withValues(alpha: 0.9)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Form(
-                      key: _formKey,
-                      autovalidateMode: AutovalidateMode.onUserInteraction,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('USUARIO', style: Theme.of(context).textTheme.labelMedium),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _usuarioController,
-                            decoration: const InputDecoration(labelText: 'Usuario'),
-                            validator: Validators.usuario,
-                            textInputAction: TextInputAction.next,
-                          ),
-                          const SizedBox(height: 20),
-                          Row(
-                            children: [
-                              Text('CONTRASEÑA',
-                                  style: Theme.of(context).textTheme.labelMedium),
-                              const Spacer(),
-                              TextButton(
-                                onPressed: () =>
-                                    setState(() => _passwordVisible = !_passwordVisible),
-                                child: Text(_passwordVisible ? 'Ocultar' : 'Ver'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          TextFormField(
-                            controller: _passwordController,
-                            decoration: const InputDecoration(labelText: 'Contraseña'),
-                            obscureText: !_passwordVisible,
-                            validator: Validators.password,
-                            onFieldSubmitted: (_) => _enviar(),
-                          ),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: () => context.go(RoutePaths.recuperarPassword),
-                              child: const Text('¿Olvidaste tu contraseña?'),
-                            ),
-                          ),
-                          if (_errorGeneral != null) ...[
-                            const SizedBox(height: 8),
-                            Text(_errorGeneral!, style: TextStyle(color: colors.error)),
-                          ],
-                          const SizedBox(height: 12),
-                          ElevatedButton(
-                            onPressed: _cargando ? null : _enviar,
-                            child: _cargando
-                                ? const SizedBox(
-                                    height: 18,
-                                    width: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : const Text('Ingresar'),
-                          ),
-                          const SizedBox(height: 24),
-                          Row(
-                            children: [
-                              Expanded(child: Divider(color: colors.border)),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                child: Text('o',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.copyWith(color: colors.textMuted)),
-                              ),
-                              Expanded(child: Divider(color: colors.border)),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                          _AccesoAdministradorButton(
-                            onTap: () => AdminLoginDialog.show(context),
-                          ),
-                          const SizedBox(height: 16),
-                          _RegistroChoferButton(
-                            onTap: () => context.go(RoutePaths.registroChofer),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+    return AuthScreenShell(
+      subtitulo: null,
+      centrarContenido: false,
+      child: AutofillGroup(
+        child: Form(
+          key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Iniciar sesión',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
+              const SizedBox(height: AppSpacing.lg),
+              TextFormField(
+                controller: _usuarioController,
+                decoration: const InputDecoration(
+                  labelText: 'Usuario',
+                  prefixIcon: Icon(Icons.person_outline),
+                ),
+                autofillHints: const [AutofillHints.username],
+                validator: Validators.usuario,
+                textInputAction: TextInputAction.next,
+                onFieldSubmitted: (_) => _passwordFocusNode.requestFocus(),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              TextFormField(
+                controller: _passwordController,
+                focusNode: _passwordFocusNode,
+                decoration: InputDecoration(
+                  labelText: 'Contraseña',
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: Semantics(
+                    label: _passwordVisible
+                        ? 'Ocultar contraseña'
+                        : 'Mostrar contraseña',
+                    button: true,
+                    child: IconButton(
+                      icon: Icon(
+                        _passwordVisible
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                      ),
+                      tooltip: _passwordVisible ? 'Ocultar' : 'Ver',
+                      onPressed: () =>
+                          setState(() => _passwordVisible = !_passwordVisible),
+                    ),
+                  ),
+                ),
+                autofillHints: const [AutofillHints.password],
+                obscureText: !_passwordVisible,
+                validator: Validators.password,
+                onFieldSubmitted: (_) => _enviar(),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => context.go(RoutePaths.recuperarPassword),
+                  child: const Text('¿Olvidaste tu contraseña?'),
+                ),
+              ),
+              if (_errorGeneral != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                AvisoError(mensaje: _errorGeneral!),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              AppElevatedButton(
+                onPressed: _enviar,
+                cargando: _cargando,
+                child: const Text('Ingresar'),
+              ),
+              const SizedBox(height: 18),
+              _EnlaceRegistro(
+                onTap: () => context.go(RoutePaths.registroChofer),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Usa tu cuenta para acceder al panel de trabajo.',
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.textMuted),
+              ),
+              const SizedBox(height: AppSpacing.xxl),
+              _AccesoAdministradorButton(
+                onTap: () => AdminLoginDialog.show(context),
+              ),
+              const SizedBox(height: AppSpacing.xxl),
+              const _TextoLegal(),
+            ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// "¿No tienes cuenta? Regístrate" — acceso rápido justo debajo del botón
+/// de login, navega a la pantalla de registro de chofer.
+class _EnlaceRegistro extends StatelessWidget {
+  const _EnlaceRegistro({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final estiloBase = Theme.of(context).textTheme.bodyMedium;
+
+    return Center(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Text.rich(
+          TextSpan(
+            style: estiloBase?.copyWith(color: colors.textMuted),
+            children: [
+              const TextSpan(text: '¿No tienes cuenta? '),
+              TextSpan(
+                text: 'Regístrate',
+                style: estiloBase?.copyWith(
+                  color: colors.primary,
+                  fontWeight: FontWeight.w700,
+                  decoration: TextDecoration.underline,
+                  decorationColor: colors.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Aviso legal al pie del login — "Términos de servicio"/"Política de
+/// privacidad" quedan como placeholders hasta que se defina a dónde
+/// deben abrir (navegación interna o `url_launcher` a una página real).
+class _TextoLegal extends StatefulWidget {
+  const _TextoLegal();
+
+  @override
+  State<_TextoLegal> createState() => _TextoLegalState();
+}
+
+class _TextoLegalState extends State<_TextoLegal> {
+  // `TapGestureRecognizer` necesita disposal manual — por eso este
+  // widget es Stateful en vez de crearlos sueltos dentro de `build`
+  // (StatelessWidget los recrearía y nunca los liberaría).
+  late final TapGestureRecognizer _tapTerminos = TapGestureRecognizer()
+    ..onTap = _abrirTerminos;
+  late final TapGestureRecognizer _tapPrivacidad = TapGestureRecognizer()
+    ..onTap = _abrirPrivacidad;
+
+  void _abrirTerminos() {
+    // TODO: navegar/abrir con url_launcher a la página real cuando exista.
+  }
+
+  void _abrirPrivacidad() {
+    // TODO: navegar/abrir con url_launcher a la página real cuando exista.
+  }
+
+  @override
+  void dispose() {
+    _tapTerminos.dispose();
+    _tapPrivacidad.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final estiloBase = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: colors.textMuted, fontSize: 11.5);
+    final estiloLink = estiloBase?.copyWith(
+      color: colors.info,
+      decoration: TextDecoration.underline,
+      decorationColor: colors.info,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      child: Text.rich(
+        TextSpan(
+          style: estiloBase,
+          children: [
+            const TextSpan(text: 'Al continuar, aceptas los '),
+            TextSpan(
+              text: 'Términos de servicio',
+              style: estiloLink,
+              recognizer: _tapTerminos,
+            ),
+            const TextSpan(text: ' y la '),
+            TextSpan(
+              text: 'Política de privacidad',
+              style: estiloLink,
+              recognizer: _tapPrivacidad,
+            ),
+            const TextSpan(
+              text:
+                  ', y recibir correos electrónicos periódicos con '
+                  'actualizaciones.',
+            ),
+          ],
+        ),
+        textAlign: TextAlign.center,
       ),
     );
   }
@@ -207,95 +293,22 @@ class _AccesoAdministradorButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    // TODO-SPEC: acento morado PLACEHOLDER para diferenciar del flujo de chofer.
-    const acento = Color(0xFF7C3AED);
 
-    return Material(
-      color: acento.withValues(alpha: 0.06),
-      borderRadius: AppRadii.cardRadius,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadii.cardRadius,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            borderRadius: AppRadii.cardRadius,
-            border: Border.all(color: acento.withValues(alpha: 0.25)),
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: acento.withValues(alpha: 0.15),
-                child: const Icon(Icons.admin_panel_settings, color: acento),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Acceso de administrador',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(color: colors.textPrimary),
-                ),
-              ),
-              Icon(Icons.chevron_right, color: acento),
-            ],
-          ),
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
         ),
+        shape: RoundedRectangleBorder(borderRadius: AppRadii.navButtonRadius),
       ),
-    );
-  }
-}
-
-class _RegistroChoferButton extends StatelessWidget {
-  const _RegistroChoferButton({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    return Material(
-      color: colors.primary,
-      borderRadius: AppRadii.cardRadius,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadii.cardRadius,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: colors.primaryOn.withValues(alpha: 0.15),
-                child: Icon(Icons.person_add_alt_1, color: colors.primaryOn),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '¿Eres chofer y no tienes cuenta?',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(color: colors.primaryOn),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Regístrate en un minuto',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: colors.primaryOn.withValues(alpha: 0.85)),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.arrow_forward, color: colors.primaryOn),
-            ],
-          ),
-        ),
+      icon: Icon(Icons.shield_outlined, color: colors.textSecondary),
+      label: Text(
+        'Entrar como administrador',
+        style: Theme.of(
+          context,
+        ).textTheme.labelLarge?.copyWith(color: colors.textSecondary),
       ),
     );
   }

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+uploads/
+*.log
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx

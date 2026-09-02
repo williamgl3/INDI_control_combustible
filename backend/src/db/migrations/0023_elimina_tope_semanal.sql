@@ -1,0 +1,12 @@
+-- Migración 0023 — elimina `tope_semanal` de `vehiculos`.
+--
+-- Motivo: el cliente confirmó que el tope semanal por unidad no existe
+-- como concepto de negocio. Nunca se usó para ninguna regla real (la
+-- aprobación automática de solicitudes evalúa presupuesto en pesos, no
+-- litros por vehículo — ver `solicitudesService.ts`); era puramente
+-- informativo/decorativo en el panel admin y el inicio del chofer.
+--
+-- Verificado antes de escribir esta migración: de las 40 filas
+-- existentes, 0 tienen `tope_semanal > 0` — todas están en el default
+-- `0` ("sin asignar"). No se pierde ningún dato real.
+ALTER TABLE vehiculos DROP COLUMN tope_semanal;

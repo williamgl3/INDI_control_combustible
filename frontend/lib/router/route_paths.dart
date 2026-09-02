@@ -1,20 +1,61 @@
+import '../core/catalogos_vehiculo.dart';
+
 /// Rutas de la app. Fuente de verdad de paths para evitar strings sueltos.
 class RoutePaths {
   const RoutePaths._();
 
+  static const bienvenida = '/';
   static const login = '/login';
   static const registroChofer = '/registro-chofer';
   static const recuperarPassword = '/recuperar-password';
+  static const restablecerPassword = '/restablecer-password';
 
   static const chofer = '/chofer';
+  static const choferTipoOperacion = '/chofer/tipo-operacion';
   static const choferSolicitar = '/chofer/solicitar';
+  static const choferSolicitarConCategoria = '/chofer/solicitar/:categoria';
+
+  static String solicitud(CategoriaSolicitud categoria) =>
+      '$choferSolicitar/${categoria.segmentoRuta}';
+  static const choferRegistrarDespacho = '/chofer/registrar-despacho';
+  static const choferRecorridoMarimba = '/chofer/recorrido-marimba';
   static const choferRespuesta = '/chofer/respuesta';
   static const choferComprobar = '/chofer/comprobar';
   static const choferCerrarDia = '/chofer/cerrar-dia';
+  static const choferSolicitudes = '/chofer/solicitudes';
+  static const choferPerfil = '/chofer/perfil';
+  static const choferDashboard = '/chofer/dashboard';
+  static const choferSubirEvidencias = '/chofer/subir-evidencias';
+  static const choferCentroSincronizacion =
+      '/chofer/centro-sincronizacion';
+  static const choferEstadisticasCarga = '/chofer/estadisticas-carga';
 
   static const administrativo = '/administrativo';
+  static const administrativoPerfil = '/administrativo/perfil';
+  static const administrativoMarimba = '/administrativo/marimba-pipa';
   static const administrativoChoferDetalle = '/administrativo/chofer';
 
+  /// Conserva en la URL la sección activa del shell administrativo sin
+  /// crear rutas paralelas ni apilar destinos principales.
+  static String administrativoSeccion(String seccion) => Uri(
+    path: administrativo,
+    queryParameters: {'seccion': seccion},
+  ).toString();
+
+  static String administrativoAutorizacion({String? solicitudId}) => Uri(
+    path: administrativo,
+    queryParameters: {
+      'seccion': 'autorizaciones',
+      ...?solicitudId == null ? null : {'solicitudId': solicitudId},
+    },
+  ).toString();
+
   /// Rutas accesibles sin sesión iniciada.
-  static const publicas = {login, registroChofer, recuperarPassword};
+  static const publicas = {
+    bienvenida,
+    login,
+    registroChofer,
+    recuperarPassword,
+    restablecerPassword,
+  };
 }

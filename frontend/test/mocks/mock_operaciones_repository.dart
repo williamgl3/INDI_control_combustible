@@ -1,0 +1,548 @@
+import 'package:indi_combustible/core/semana_util.dart';
+import 'package:indi_combustible/data/api_client.dart';
+import 'package:indi_combustible/data/operaciones_repository.dart';
+import 'package:indi_combustible/models/carga.dart';
+import 'package:indi_combustible/models/cierre_dia.dart';
+import 'package:indi_combustible/models/perfil.dart';
+import 'package:indi_combustible/models/precio_combustible.dart';
+import 'package:indi_combustible/models/solicitud_autorizacion.dart';
+import 'package:indi_combustible/models/vehiculo.dart';
+
+/// Repositorio MOCK de operaciones (solicitudes de autorización y cargas
+/// de combustible), en memoria.
+///
+/// La aprobación de una solicitud combina dos señales — ver
+/// [enviarSolicitud] — y solo se auto-resuelve cuando ambas son
+/// favorables; el resto queda [EstadoSolicitud.pendiente] para que un
+/// administrativo la revise y decida manualmente (ver [resolverSolicitud]),
+/// pudiendo autorizar menos de lo pedido con un motivo.
+///
+/// Útil para tests de widgets y como referencia de la interfaz que
+/// implementa `ApiOperacionesRepository`.
+class MockOperacionesRepository extends OperacionesRepository {
+  final List<SolicitudAutorizacion> _solicitudes = [];
+  final List<Carga> _cargas = [];
+  final List<CierreDia> _cierres = [];
+  int _folioSeq = 1000;
+  int _idSeq = 1;
+
+  /// Mínimo de solicitudes aprobadas previas que debe tener un chofer
+  /// antes de que su historial se considere "confiable" para auto-aprobar.
+  /// Confirmado por el usuario — no es un placeholder pendiente.
+  static const _historialMinimo = 4;
+
+  /// Margen sobre el máximo histórico que todavía se considera "dentro
+  /// de su patrón habitual" (15%). Confirmado por el usuario.
+  static const _margenPatron = 1.15;
+
+  /// Presupuesto semanal total de la obra, en pesos. Valor de prueba para
+  /// este repositorio mock — el backend real lo trae desde
+  /// `/solicitudes/resumen-presupuesto`, configurable por el admin.
+  @override
+  double presupuestoSemanalTotal = 50000;
+
+  /// Ej. "15 al 21 jul" — a qué semana corresponden
+  /// [presupuestoEjercido]/[litrosAutorizadosAcumulados].
+  @override
+  String get etiquetaSemanaActual => etiquetaRangoSemana(DateTime.now());
+
+  /// Ya están "cargados" desde el constructor — no hace nada.
+  @override
+  Future<void> cargarDatosIniciales({required Perfil perfil}) async {}
+
+  /// Ya calculado en memoria a partir de [_solicitudes] — no hace nada.
+  @override
+  Future<void> cargarAcumuladoDeVehiculo(String vehiculoId) async {}
+
+  /// Ya calculado en memoria a partir de [_cargas]/[_cierres] — no hace
+  /// nada.
+  @override
+  Future<void> cargarHistorialLecturas(String vehiculoId) async {}
+
+  final List<PrecioCombustible> _precios = [
+    PrecioCombustible(
+      tipoCombustible: 'Diésel',
+      precioPorLitro: 24.50,
+      actualizadoEn: DateTime(2026, 7, 1),
+    ),
+    PrecioCombustible(
+      tipoCombustible: 'Magna',
+      precioPorLitro: 23.80,
+      actualizadoEn: DateTime(2026, 7, 1),
+    ),
+    PrecioCombustible(
+      tipoCombustible: 'Premium',
+      precioPorLitro: 25.90,
+      actualizadoEn: DateTime(2026, 7, 1),
+    ),
+  ];
+
+  @override
+  List<PrecioCombustible> get precios => List.unmodifiable(_precios);
+
+  /// `null` si no hay precio configurado para ese tipo — a diferencia de
+  /// antes, YA NO cae al primer precio de la lista (de otro tipo de
+  /// combustible): ese fallback silencioso era el mismo bug real que se
+  /// encontró en `concentrado_tab.dart` (ver migración backend 0029).
+  /// Réplica exacta de `preciosService.precioDeDecimal` en el backend.
+  double? _precioDe(String tipoCombustible) {
+    for (final p in _precios) {
+      if (p.tipoCombustible == tipoCombustible) return p.precioPorLitro;
+    }
+    return null;
+  }
+
+  /// Actualiza el precio por litro de un tipo de combustible ya existente
+  /// en el catálogo (panel administrativo).
+  @override
+  Future<PrecioCombustible> actualizarPrecio({
+    required String tipoCombustible,
+    required double nuevoPrecio,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    final indice = _precios.indexWhere(
+      (p) => p.tipoCombustible == tipoCombustible,
+    );
+    final actualizado = PrecioCombustible(
+      tipoCombustible: tipoCombustible,
+      precioPorLitro: nuevoPrecio,
+      actualizadoEn: DateTime.now(),
+    );
+    _precios[indice] = actualizado;
+    return actualizado;
+  }
+
+  @override
+  Future<void> actualizarPresupuestoSemanalTotal(double nuevoValor) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    presupuestoSemanalTotal = nuevoValor;
+  }
+
+  @override
+  Future<Carga> editarCarga({
+    required String cargaId,
+    double? litrosCargados,
+    double? kmAlCargar,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    final indice = _cargas.indexWhere((c) => c.id == cargaId);
+    if (indice == -1) {
+      throw ApiException('Carga no encontrada.', status: 404);
+    }
+    final actualizada = _cargas[indice].copyWith(
+      litrosCargados: litrosCargados,
+      kmAlCargar: kmAlCargar,
+    );
+    _cargas[indice] = actualizada;
+    return actualizada;
+  }
+
+  @override
+  List<SolicitudAutorizacion> solicitudesDeChofer(String choferId) {
+    final propias = _solicitudes.where((s) => s.choferId == choferId).toList();
+    propias.sort((a, b) => b.creadaEn.compareTo(a.creadaEn));
+    return propias;
+  }
+
+  @override
+  List<SolicitudAutorizacion> get todasLasSolicitudes {
+    final todas = List<SolicitudAutorizacion>.from(_solicitudes);
+    todas.sort((a, b) => b.creadaEn.compareTo(a.creadaEn));
+    return todas;
+  }
+
+  @override
+  List<Carga> cargasDeChofer(String choferId) {
+    final propias = _cargas.where((c) => c.choferId == choferId).toList();
+    propias.sort((a, b) => b.creadaEn.compareTo(a.creadaEn));
+    return propias;
+  }
+
+  /// Suma de litros ya autorizados (solicitudes aprobadas) para un
+  /// VEHÍCULO (no un chofer — varios choferes pueden compartirlo) EN LA
+  /// SEMANA ACTUAL (lunes-domingo) — ver [inicioDeSemana].
+  @override
+  double litrosAutorizadosAcumulados(String vehiculoId) {
+    final hoy = DateTime.now();
+    return _solicitudesAprobadasDeVehiculo(vehiculoId)
+        .where((s) => estaEnSemanaDe(s.creadaEn, hoy))
+        .fold(
+          0.0,
+          (suma, s) => suma + (s.litrosAutorizados ?? s.litrosSolicitados),
+        );
+  }
+
+  /// Dinero ya comprometido de [presupuestoSemanalTotal] EN LA SEMANA
+  /// ACTUAL. Usa el costo estimado al momento de pedir aunque un admin
+  /// haya autorizado menos después — simplificación de mock, no vuelve
+  /// a prorratear el costo real.
+  @override
+  double get presupuestoEjercido {
+    final hoy = DateTime.now();
+    return _solicitudes
+        .where(
+          (s) =>
+              s.estado == EstadoSolicitud.aprobada &&
+              estaEnSemanaDe(s.creadaEn, hoy),
+        )
+        .fold(0.0, (suma, s) => suma + (s.costoEstimado ?? 0));
+  }
+
+  @override
+  double get presupuestoRestante =>
+      presupuestoSemanalTotal - presupuestoEjercido;
+
+  List<SolicitudAutorizacion> _solicitudesAprobadasDeVehiculo(
+    String vehiculoId,
+  ) {
+    return _solicitudes
+        .where(
+          (s) =>
+              s.vehiculoId == vehiculoId &&
+              s.estado == EstadoSolicitud.aprobada,
+        )
+        .toList();
+  }
+
+  bool _tieneHistorialSuficiente(String vehiculoId) {
+    return _solicitudesAprobadasDeVehiculo(vehiculoId).length >=
+        _historialMinimo;
+  }
+
+  /// Máximo autorizado históricamente — el "patrón habitual" de consumo
+  /// de este VEHÍCULO (no del chofer que lo maneje ese día).
+  double _consumoHabitualDe(String vehiculoId) {
+    final historial = _solicitudesAprobadasDeVehiculo(vehiculoId);
+    if (historial.isEmpty) return 0;
+    return historial
+        .map((s) => s.litrosAutorizados ?? s.litrosSolicitados)
+        .reduce((a, b) => a > b ? a : b);
+  }
+
+  bool _seSaleDePatron(String vehiculoId, double litrosPedidos) {
+    if (!_tieneHistorialSuficiente(vehiculoId)) return true;
+    return litrosPedidos > _consumoHabitualDe(vehiculoId) * _margenPatron;
+  }
+
+  /// Crea una solicitud para un [vehiculo] elegido en el momento (no es
+  /// fijo del chofer). Se auto-aprueba SOLO si ESE VEHÍCULO ya tiene
+  /// historial confiable (≥4 solicitudes aprobadas), lo pedido no se sale
+  /// de su patrón habitual de consumo, y no rebasa el presupuesto semanal
+  /// en pesos disponible — cualquier otro caso queda pendiente de
+  /// revisión manual (ver [resolverSolicitud]). El tope semanal en
+  /// litros del vehículo NO bloquea aquí: queda como referencia visible
+  /// para el admin al revisar.
+  @override
+  Future<SolicitudAutorizacion> enviarSolicitud({
+    required String idempotencyKey,
+    required String payloadFingerprint,
+    required String choferId,
+    required Vehiculo vehiculo,
+    required double litrosSolicitados,
+    bool esUrgente = false,
+    String? motivoChofer,
+    required String actividad,
+    required DateTime fechaProgramada,
+    String? fotoTableroPath,
+    List<SolicitudPartida>? partidas,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 400));
+
+    // Bifurcación (réplica de `solicitudesService.enviarSolicitud` en el
+    // backend, ver migración 0029): "sin tipoCombustible confirmado" ya
+    // NO bloquea la solicitud — 55 de 96 unidades del catálogo real
+    // (maquinaria/pipa) no tienen el dato, y bloquearlas dejaba a más de
+    // la mitad de la flota sin poder pedir combustible. Se crea con
+    // `costoEstimado = null` y nunca se auto-aprueba (va a revisión
+    // manual). Si el tipo SÍ está confirmado pero no hay precio
+    // configurado para él (ej. Premium), sí se lanza — es una
+    // configuración faltante real, no un dato pendiente del chofer.
+    final tipoCombustible = vehiculo.tipoCombustible;
+    double? costoEstimado;
+    if (tipoCombustible != null) {
+      final precio = _precioDe(tipoCombustible);
+      if (precio == null) {
+        throw ApiException(
+          'No hay precio vigente configurado para $tipoCombustible — pide '
+          'a un administrativo que lo capture antes de continuar.',
+          status: 409,
+        );
+      }
+      costoEstimado = litrosSolicitados * precio;
+    }
+    final tieneHistorial = _tieneHistorialSuficiente(vehiculo.id);
+    final seSalePatron = _seSaleDePatron(vehiculo.id, litrosSolicitados);
+    final presupuestoOk =
+        costoEstimado != null && costoEstimado <= presupuestoRestante;
+
+    final seAutoAprueba = tieneHistorial && !seSalePatron && presupuestoOk;
+
+    String? comentario;
+    if (!seAutoAprueba) {
+      if (tipoCombustible == null) {
+        comentario =
+            'Esta unidad no tiene combustible confirmado en el catálogo — '
+            'un administrativo revisará y completará el dato.';
+      } else if (!tieneHistorial) {
+        comentario =
+            'Este vehículo aún no tiene historial suficiente — un '
+            'administrativo revisará esta solicitud.';
+      } else if (seSalePatron) {
+        comentario =
+            'Se pidió más de lo habitual para este vehículo — un '
+            'administrativo revisará esta solicitud.';
+      } else {
+        comentario =
+            'Se excede el presupuesto semanal disponible — un '
+            'administrativo revisará esta solicitud.';
+      }
+    }
+
+    final solicitud = SolicitudAutorizacion(
+      id: 'sol-${_idSeq++}',
+      choferId: choferId,
+      vehiculoId: vehiculo.id,
+      litrosSolicitados: litrosSolicitados,
+      costoEstimado: costoEstimado,
+      estado: seAutoAprueba
+          ? EstadoSolicitud.aprobada
+          : EstadoSolicitud.pendiente,
+      creadaEn: DateTime.now(),
+      esUrgente: esUrgente,
+      motivoChofer: motivoChofer,
+      actividad: actividad,
+      fechaProgramada: fechaProgramada,
+      litrosAutorizados: seAutoAprueba ? litrosSolicitados : null,
+      aprobadaPor: seAutoAprueba ? 'Automático (historial)' : null,
+      folioAutorizacion: seAutoAprueba ? 'FA-${_folioSeq++}' : null,
+      comentario: comentario,
+      fotoTableroPath: fotoTableroPath,
+    );
+
+    _solicitudes.add(solicitud);
+    return solicitud;
+  }
+
+  /// Busca una solicitud por su folio (ej. para precargar el vehículo
+  /// elegido al momento de comprobar la carga). `null` si no existe.
+  @override
+  SolicitudAutorizacion? solicitudPorFolio(String folio) {
+    try {
+      return _solicitudes.firstWhere((s) => s.folioAutorizacion == folio);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<SolicitudAutorizacion> cancelarSolicitud(String solicitudId) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    final indice = _solicitudes.indexWhere((s) => s.id == solicitudId);
+    if (indice == -1) {
+      throw ApiException('Solicitud no encontrada.', status: 404);
+    }
+    final actual = _solicitudes[indice];
+    if (actual.estado != EstadoSolicitud.pendiente) {
+      throw ApiException(
+        'Solo se puede cancelar una solicitud que sigue pendiente.',
+        status: 400,
+      );
+    }
+    final cancelada = actual.copyWith(
+      estado: EstadoSolicitud.rechazada,
+      comentario: 'Cancelada por el chofer.',
+    );
+    _solicitudes[indice] = cancelada;
+    return cancelada;
+  }
+
+  /// Resolución MANUAL de una solicitud pendiente por un administrativo:
+  /// puede autorizar menos litros de los pedidos (con [motivo]) o
+  /// rechazarla (también con [motivo]).
+  @override
+  Future<SolicitudAutorizacion> resolverSolicitud({
+    required String solicitudId,
+    required bool aprobar,
+    required String resueltaPor,
+    double? litrosAutorizados,
+    String? motivo,
+    List<ResolucionPartida>? partidas,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    final indice = _solicitudes.indexWhere((s) => s.id == solicitudId);
+    final original = _solicitudes[indice];
+
+    final resuelta = original.copyWith(
+      estado: aprobar ? EstadoSolicitud.aprobada : EstadoSolicitud.rechazada,
+      litrosAutorizados: aprobar
+          ? (litrosAutorizados ?? original.litrosSolicitados)
+          : 0,
+      aprobadaPor: resueltaPor,
+      folioAutorizacion: aprobar ? 'FA-${_folioSeq++}' : null,
+      comentario: motivo,
+    );
+    _solicitudes[indice] = resuelta;
+    return resuelta;
+  }
+
+  /// Registro 1 del día: se llena justo después de cargar combustible.
+  /// [creadaEn] la pone el dispositivo (no el chofer) para que sirva de
+  /// registro de auditoría.
+  /// Inserta una carga directamente en la lista interna, sin delay —
+  /// para tests de widget que usan `testWidgets` (FakeAsync) donde un
+  /// `await Future.delayed` bloquearía el event loop.
+  void precargarCarga(Carga carga) => _cargas.add(carga);
+
+  @override
+  Future<Carga> registrarCarga({
+    required String choferId,
+    required String vehiculoId,
+    required String folioAutorizacion,
+    List<String>? foliosAdicionales,
+    required double litrosCargados,
+    required double kmAlCargar,
+    required String gasolinera,
+    String? fotoTicketPath,
+    String? fotoTableroPath,
+    double? litrosDetectadosOcr,
+    List<SolicitudPartida>? partidas,
+    List<ComprobanteEstacionCarga>? comprobantes,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 400));
+    // Sin snapshot de precio de referencia aquí: a diferencia del
+    // backend real (`cargasService.registrarCarga`), este mock no recibe
+    // el `Vehiculo` completo, solo su id — no tiene de dónde resolver
+    // `tipoCombustible` sin depender de `VehiculosRepository`. Las filas
+    // de Concentrado construidas en tests quedan en
+    // `FuenteGasto.sinDato` a menos que el test arme la `Carga`
+    // directamente con estos campos poblados.
+    final carga = Carga(
+      id: 'carga-${_idSeq++}',
+      choferId: choferId,
+      vehiculoId: vehiculoId,
+      folioAutorizacion: folioAutorizacion,
+      foliosAdicionales: foliosAdicionales ?? const [],
+      litrosCargados: litrosCargados,
+      kmAlCargar: kmAlCargar,
+      gasolinera: gasolinera,
+      creadaEn: DateTime.now(),
+      fotoTicketPath: fotoTicketPath,
+      fotoTableroPath: fotoTableroPath,
+      litrosDetectadosOcr: litrosDetectadosOcr,
+    );
+    _cargas.add(carga);
+    return carga;
+  }
+
+  /// La [Carga] (registro 1) de hoy que todavía no tiene su [CierreDia]
+  /// (registro 2), si existe. `null` si no ha cargado hoy o si su carga
+  /// de hoy ya quedó cerrada.
+  @override
+  Carga? cargaAbiertaDeHoy(String choferId) {
+    final hoy = DateTime.now();
+    final cerradas = _cierres.map((c) => c.cargaId).toSet();
+    final cargasDeHoy = _cargas.where(
+      (c) =>
+          c.choferId == choferId &&
+          !cerradas.contains(c.id) &&
+          c.creadaEn.year == hoy.year &&
+          c.creadaEn.month == hoy.month &&
+          c.creadaEn.day == hoy.day,
+    );
+    return cargasDeHoy.isEmpty ? null : cargasDeHoy.first;
+  }
+
+  /// Registro 2 del día: se llena cuando el chofer termina de trabajar.
+  /// [registradaEn] la pone el dispositivo, igual que [Carga.creadaEn].
+  @override
+  Future<CierreDia> cerrarDia({
+    required String choferId,
+    required String cargaId,
+    required double kmFinal,
+    required String fotoTableroPath,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 400));
+    final cierre = CierreDia(
+      id: 'cierre-${_idSeq++}',
+      choferId: choferId,
+      cargaId: cargaId,
+      kmFinal: kmFinal,
+      fotoTableroPath: fotoTableroPath,
+      registradaEn: DateTime.now(),
+    );
+    _cierres.add(cierre);
+    return cierre;
+  }
+
+  @override
+  List<CierreDia> cierresDeChofer(String choferId) {
+    final propios = _cierres.where((c) => c.choferId == choferId).toList();
+    propios.sort((a, b) => b.registradaEn.compareTo(a.registradaEn));
+    return propios;
+  }
+
+  /// Todas las cargas (registro 1) de todos los choferes — para el
+  /// concentrado del panel administrativo.
+  @override
+  List<Carga> get todasLasCargas {
+    final todas = List<Carga>.from(_cargas);
+    todas.sort((a, b) => b.creadaEn.compareTo(a.creadaEn));
+    return todas;
+  }
+
+  /// Busca la [Carga] de referencia de un [CierreDia] para calcular su
+  /// rendimiento. `null` si por alguna razón la carga ya no existe.
+  @override
+  Carga? cargaDe(CierreDia cierre) {
+    try {
+      return _cargas.firstWhere((c) => c.id == cierre.cargaId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Busca el [CierreDia] (registro 2) de una [Carga], si ya se cerró el
+  /// día. `null` mientras siga abierta.
+  @override
+  CierreDia? cierreDe(Carga carga) {
+    try {
+      return _cierres.firstWhere((c) => c.cargaId == carga.id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  RendimientoDia? rendimientoDe(CierreDia cierre) {
+    final carga = cargaDe(cierre);
+    if (carga == null) return null;
+    final kmRecorridos = cierre.kmFinal - carga.kmAlCargar;
+    if (kmRecorridos <= 0) {
+      return const RendimientoDia(kmRecorridos: 0, rendimiento: null);
+    }
+    return RendimientoDia(
+      kmRecorridos: kmRecorridos,
+      rendimiento: kmRecorridos / carga.litrosCargados,
+    );
+  }
+
+  /// Historial de lecturas del medidor (km u horómetro) de un vehículo,
+  /// ordenado ascendente por fecha — junta las lecturas de [Carga]
+  /// (`kmAlCargar`) y de [CierreDia] (`kmFinal`) de ese vehículo, para el
+  /// reporte de mantenimiento preventivo.
+  @override
+  List<({DateTime fecha, double lectura})> historialLecturas(
+    String vehiculoId,
+  ) {
+    final lecturas = <({DateTime fecha, double lectura})>[];
+    for (final carga in _cargas.where((c) => c.vehiculoId == vehiculoId)) {
+      lecturas.add((fecha: carga.creadaEn, lectura: carga.kmAlCargar));
+      final cierre = cierreDe(carga);
+      if (cierre != null) {
+        lecturas.add((fecha: cierre.registradaEn, lectura: cierre.kmFinal));
+      }
+    }
+    lecturas.sort((a, b) => a.fecha.compareTo(b.fecha));
+    return lecturas;
+  }
+}

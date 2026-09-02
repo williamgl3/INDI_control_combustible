@@ -4,9 +4,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/auth_controller.dart';
 import '../../core/validators.dart';
-import '../../data/mock_auth_repository.dart';
+import '../../data/auth_repository.dart';
 import '../../router/route_paths.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_elevated_button.dart';
+import '../../widgets/auth_screen_shell.dart';
+import '../../widgets/aviso_error.dart';
 
 /// Flujo de "¿Olvidaste tu contraseña?": captura → confirmación.
 ///
@@ -21,7 +24,8 @@ class RecuperarPasswordScreen extends ConsumerStatefulWidget {
       _RecuperarPasswordScreenState();
 }
 
-class _RecuperarPasswordScreenState extends ConsumerState<RecuperarPasswordScreen> {
+class _RecuperarPasswordScreenState
+    extends ConsumerState<RecuperarPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usuarioOCorreoController = TextEditingController();
 
@@ -46,7 +50,9 @@ class _RecuperarPasswordScreenState extends ConsumerState<RecuperarPasswordScree
     try {
       await ref
           .read(authControllerProvider)
-          .recuperarPassword(usuarioOCorreo: _usuarioOCorreoController.text.trim());
+          .recuperarPassword(
+            usuarioOCorreo: _usuarioOCorreoController.text.trim(),
+          );
       setState(() => _enviado = true);
     } on AuthException catch (e) {
       setState(() => _errorGeneral = e.mensaje);
@@ -57,27 +63,19 @@ class _RecuperarPasswordScreenState extends ConsumerState<RecuperarPasswordScree
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Recuperar contraseña'),
-        leading: BackButton(onPressed: () => context.go(RoutePaths.login)),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: _enviado ? _buildConfirmacion(context) : _buildFormulario(context),
-            ),
-          ),
-        ),
-      ),
+    return AuthScreenShell(
+      onBack: () => context.go(RoutePaths.login),
+      titulo: 'Recuperar contraseña',
+      subtitulo:
+          'Ingresa tu usuario o correo y te enviaremos instrucciones '
+          'para restablecer tu contraseña.',
+      mostrarMarca: false,
+      centrarContenido: false,
+      child: _enviado ? _buildConfirmacion(context) : _buildFormulario(context),
     );
   }
 
   Widget _buildFormulario(BuildContext context) {
-    final colors = context.colors;
     return Form(
       key: _formKey,
       autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -85,32 +83,24 @@ class _RecuperarPasswordScreenState extends ConsumerState<RecuperarPasswordScree
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'Ingresa tu usuario o correo y te enviaremos instrucciones '
-            'para restablecer tu contraseña.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 24),
           TextFormField(
             controller: _usuarioOCorreoController,
-            decoration: const InputDecoration(labelText: 'Usuario o correo'),
+            decoration: const InputDecoration(
+              labelText: 'Usuario o correo',
+              prefixIcon: Icon(Icons.person_outline),
+            ),
             validator: (v) => Validators.requerido(v, etiqueta: 'Este campo'),
             onFieldSubmitted: (_) => _enviar(),
           ),
           if (_errorGeneral != null) ...[
             const SizedBox(height: 12),
-            Text(_errorGeneral!, style: TextStyle(color: colors.error)),
+            AvisoError(mensaje: _errorGeneral!),
           ],
           const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: _cargando ? null : _enviar,
-            child: _cargando
-                ? const SizedBox(
-                    height: 18,
-                    width: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Enviar instrucciones'),
+          AppElevatedButton(
+            onPressed: _enviar,
+            cargando: _cargando,
+            child: const Text('Enviar instrucciones'),
           ),
         ],
       ),
