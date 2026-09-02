@@ -1,5 +1,23 @@
 # Estado actual del proyecto
 
+## Preparación de preproducción — 2 de septiembre de 2026
+
+La fase de preparación detectó y corrigió requisitos que no cubrían los builds
+debug: la imagen Backend ahora incluye las migraciones SQL y comandos runtime,
+ejecuta como usuario no-root y configura límites/timeouts del pool; Android
+release declara red, exige HTTPS y contiene reglas R8 acotadas para los módulos
+opcionales de ML Kit; el Web Docker usa Flutter 3.44.4 oficial verificado por
+SHA-256, lockfile estricto y Nginx con caché/headers operativos.
+
+Se añadió `docs/DEPLOYMENT.md` con variables, migración, persistencia,
+SMTP, firma, HTTPS, backup/restore, smoke y rollback. En validación local:
+Backend compiló, 212 tests pasaron y 21 quedaron omitidos; PostgreSQL 18
+efímero aplicó 34 migraciones, la segunda ejecución quedó sin pendientes y la
+integración terminó 233/233; Flutter Analyze quedó sin issues y Flutter Test
+terminó 416/416; Web release, las imágenes Docker y el AAB release sin firma
+compilaron. La firma Android física, dominio, servidor, SMTP y secretos reales
+continúan siendo dependencias externas antes de desplegar.
+
 Fecha de consolidación: 31 de agosto de 2026.
 
 Este documento describe el estado local consolidado de la rama `dev-frontend`.

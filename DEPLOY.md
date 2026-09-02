@@ -36,8 +36,9 @@ docker compose up -d
 Primera vez (crear el esquema y poblar datos base):
 
 ```bash
-docker compose exec backend npm run migrate
-docker compose exec backend npm run seed              # usuarios de prueba chofer1/admin1
+docker compose run --rm backend npm run migrate:prod
+# NO ejecutar `npm run seed` fuera de desarrollo: crea usuarios de prueba.
+# Para crear el primer administrador real, consultar docs/DEPLOYMENT.md.
 # y/o el catálogo real de flotilla:
 docker compose exec backend npm run importar:vehiculos -- data/catalogo_vehiculos_gami.csv
 docker compose exec backend npm run importar:vehiculos -- data/catalogo_maquinaria_gami.csv
