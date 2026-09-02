@@ -39,6 +39,19 @@ export function parseDatabaseSSL(raw: string | undefined): boolean {
   );
 }
 
+export function parsePoolInteger(
+  name: string,
+  raw: string | undefined,
+  defaultValue: number,
+): number {
+  if (raw === undefined || raw.trim() === '') return defaultValue;
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${name} debe ser un entero positivo.`);
+  }
+  return value;
+}
+
 function normalizePem(raw: string): string {
   // Si contiene `\n` literales (backslash + n) sin saltos reales,
   // convertir a saltos reales — algunos orquestadores los guardan así.
@@ -136,6 +149,17 @@ const sslConfig = buildDatabaseSSLConfig({
 export const pool = new Pool({
   connectionString: rawUrl,
   ssl: sslConfig,
+  max: parsePoolInteger('DATABASE_POOL_MAX', process.env.DATABASE_POOL_MAX, 10),
+  connectionTimeoutMillis: parsePoolInteger(
+    'DATABASE_CONNECTION_TIMEOUT_MS',
+    process.env.DATABASE_CONNECTION_TIMEOUT_MS,
+    5000,
+  ),
+  idleTimeoutMillis: parsePoolInteger(
+    'DATABASE_IDLE_TIMEOUT_MS',
+    process.env.DATABASE_IDLE_TIMEOUT_MS,
+    30000,
+  ),
 });
 
 pool.on('error', (err) => {

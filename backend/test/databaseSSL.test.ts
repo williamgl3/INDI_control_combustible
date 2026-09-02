@@ -18,9 +18,25 @@ vi.mock('../src/utils/logger', () => ({
   logger: { info: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
 
-const { buildDatabaseSSLConfig, parseDatabaseSSL } = await import(
+const { buildDatabaseSSLConfig, parseDatabaseSSL, parsePoolInteger } = await import(
   '../src/db/pool'
 );
+
+describe('parsePoolInteger', () => {
+  it('usa el valor por defecto si no está configurado', () => {
+    expect(parsePoolInteger('DATABASE_POOL_MAX', undefined, 10)).toBe(10);
+  });
+
+  it('acepta un entero positivo', () => {
+    expect(parsePoolInteger('DATABASE_POOL_MAX', '20', 10)).toBe(20);
+  });
+
+  it.each(['0', '-1', '1.5', 'abc'])('rechaza el valor inválido %s', (raw) => {
+    expect(() => parsePoolInteger('DATABASE_POOL_MAX', raw, 10)).toThrow(
+      'DATABASE_POOL_MAX debe ser un entero positivo',
+    );
+  });
+});
 
 // ── parseDatabaseSSL ─────────────────────────────────────────────
 

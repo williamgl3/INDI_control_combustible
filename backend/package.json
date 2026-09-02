@@ -10,10 +10,12 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "migrate": "ts-node src/db/migrate.ts",
+    "migrate:prod": "node dist/db/migrate.js",
     "audit:idempotency": "ts-node src/db/auditarIdempotenciaSolicitudes.ts",
     "test:idempotency:db": "ts-node src/db/probarConcurrenciaSolicitudes.ts",
     "seed": "ts-node src/db/seed.ts",
     "seed:superadmin": "ts-node src/db/seedSuperadmin.ts",
+    "seed:superadmin:prod": "node dist/db/seedSuperadmin.js",
     "importar:vehiculos": "ts-node src/db/importarVehiculos.ts",
     "db:up": "docker compose up -d"
   },
