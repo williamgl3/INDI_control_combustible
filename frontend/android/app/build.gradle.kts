@@ -51,6 +51,10 @@ android {
             // android/key.properties Gradle genera un artefacto sin firmar;
             // el keystore real se inyecta localmente o desde CI.
             signingConfig = signingConfigs.findByName("release")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }
